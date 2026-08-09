@@ -11,6 +11,7 @@ from math import atan2, cos, sin
 from tkinter import filedialog, messagebox, simpledialog
 
 from config import HEIGHT, LANE_HEIGHT, LANES, MERGE_END, MERGE_START, POST_MERGE_END, ROAD_BOTTOM, ROAD_TOP, WIDTH
+from city import CityMap
 from models import Car, Lane, Point, SpeedLimit
 from simulation import TrafficSimulation
 
@@ -25,10 +26,14 @@ class FreewaySimulator:
         self.running = True
         self.simulation_speed = 1.0
         self.simulation = TrafficSimulation()
+        self.city_map = CityMap()
+        self.blank_map = True
         self.analytics_window: tk.Toplevel | None = None
         self.analytics_canvas: tk.Canvas | None = None
         self.recent_window: tk.Toplevel | None = None
         self.recent_canvas: tk.Canvas | None = None
+        self.debug_window: tk.Toplevel | None = None
+        self.debug_canvas: tk.Canvas | None = None
         self.recent_errors: list[str] = []
         self.selected_lane = self.simulation.lanes[0]
         self.last_time = time.perf_counter()
@@ -37,10 +42,8 @@ class FreewaySimulator:
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, highlightthickness=0, bg="#8fc3e6")
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<Button-3>", self.show_lane_menu)
-        self.select_lane(self.selected_lane)
         self.draw_scene()
-        for _ in range(12):
-            self.add_car(start_random=True)
+        self.create_debug_window()
         self.create_recent_changes_window()
         self.tick()
 
@@ -98,6 +101,13 @@ class FreewaySimulator:
     def draw_scene(self) -> None:
         c = self.canvas
         c.delete("static")
+        if self.blank_map:
+            c.create_text(
+                WIDTH / 2, HEIGHT / 2,
+                text="Blank map\nLoad saves/current-merge-demo.json to restore the merge scenario",
+                fill="#ffffff", font=("Arial", 16, "bold"), justify="center", tags="static",
+            )
+            return
         c.create_polygon(0, ROAD_TOP, POST_MERGE_END, ROAD_TOP, POST_MERGE_END, ROAD_TOP + LANE_HEIGHT,
                          MERGE_END, ROAD_TOP + LANE_HEIGHT, MERGE_START, ROAD_BOTTOM, 0, ROAD_BOTTOM,
                          fill="#4d535a", outline="", tags="static")
@@ -197,6 +207,8 @@ class FreewaySimulator:
         return body
 
     def add_car(self, start_random: bool = False) -> None:
+        if self.blank_map:
+            return
         car = self.simulation.add_car(start_random)
         
         car.item = self.create_car_details(car)
@@ -234,6 +246,8 @@ class FreewaySimulator:
             self.simulation.record_event(f"{self.selected_lane.name} gap {gap:.0f}px")
 
     def lane_at(self, position: Point) -> Lane | None:
+        if self.blank_map:
+            return None
         lane = min(self.simulation.lanes, key=lambda candidate: candidate.distance_to(position))
         return lane if lane.distance_to(position) <= LANE_HEIGHT / 2 else None
 
@@ -454,7 +468,7 @@ class FreewaySimulator:
         path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")])
         if not path:
             return
-        state = {"time": self.simulation.simulation_time, "lanes": {lane.name: lane.following_gap for lane in self.simulation.lanes},
+        state = {"scenario": "merge_demo", "time": self.simulation.simulation_time, "lanes": {lane.name: lane.following_gap for lane in self.simulation.lanes},
                  "speed_limits": [{"speed": sign.speed, "lane": sign.lane.name, "x": sign.x, "y": sign.y} for sign in self.simulation.speed_limits],
                  "cars": [{"lane": car.lane.name, "x": car.x, "y": car.y, "speed": car.speed, "cruise": car.cruise_speed, "color": car.color, "next": car.next_point, "preference": car.speed_preference_mph} for car in self.simulation.cars]}
         with open(path, "w", encoding="utf-8") as output:
@@ -466,7 +480,10 @@ class FreewaySimulator:
             return
         with open(path, encoding="utf-8") as source:
             state = json.load(source)
+        if state.get("scenario", "merge_demo") != "merge_demo":
+            return
         self.clear_cars()
+        self.blank_map = False
         lanes = {lane.name: lane for lane in self.simulation.lanes}
         for name, gap in state["lanes"].items(): lanes[name].following_gap = gap
         self.simulation.speed_limits.clear()
@@ -475,6 +492,7 @@ class FreewaySimulator:
             car = Car(lanes[saved["lane"]], saved["x"], saved["y"], saved["speed"], saved["cruise"], saved["color"], next_point=saved["next"], speed_preference_mph=saved["preference"])
             self.simulation.cars.append(car); car.item = self.create_car_details(car); self.draw_car(car)
         self.simulation.simulation_time = state["time"]
+        self.draw_scene()
         self.draw_speed_limits()
 
     def exit_app(self) -> None:
@@ -482,21 +500,34 @@ class FreewaySimulator:
             self.root.destroy()
 
     def draw_merge_debug(self) -> None:
-        self.canvas.delete("merge_debug")
-        self.canvas.create_rectangle(12, ROAD_BOTTOM + 20, WIDTH - 12, HEIGHT - 16,
-                                     fill="#182028", outline="#54616e", tags="merge_debug")
+        if self.debug_canvas is None or not self.debug_canvas.winfo_exists():
+            return
+        self.debug_canvas.delete("all")
+        self.debug_canvas.create_rectangle(0, 0, 500, 260, fill="#182028", outline="#54616e")
         lines = self.simulation.merge_debug_lines()
         if self.recent_errors:
             lines.extend(("", "PYTHON ERRORS:", *self.recent_errors[-1].splitlines()[-3:]))
-        self.canvas.create_text(26, ROAD_BOTTOM + 34, anchor="nw",
+        self.debug_canvas.create_text(14, 14, anchor="nw",
                                 text="\n".join(lines), fill="#d9e7f2",
-                                font=("Courier", 10), tags="merge_debug")
+                                font=("Courier", 10))
+
+    def create_debug_window(self) -> None:
+        """Create a separate live window for merge state and captured errors."""
+        if self.debug_window is not None and self.debug_window.winfo_exists():
+            return
+        self.debug_window = tk.Toplevel(self.root)
+        self.debug_window.title("Simulator debug")
+        bottom_y = self.root.winfo_screenheight() - 310
+        self.debug_window.geometry(f"500x260+0+{bottom_y}")
+        self.debug_canvas = tk.Canvas(self.debug_window, width=500, height=260, highlightthickness=0)
+        self.debug_canvas.pack(fill="both", expand=True)
+        self.draw_merge_debug()
 
     def tick(self) -> None:
         now = time.perf_counter()
         dt = min(now - self.last_time, 0.1)
         self.last_time = now
-        if self.running:
+        if self.running and not self.blank_map:
             for car in self.simulation.update(dt * self.simulation_speed):
                 self.canvas.delete(car.item)
                 for item in car.detail_items:

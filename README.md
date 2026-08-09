@@ -14,4 +14,6 @@ Right-click a lane and choose **Add speed-limit sign** to post a limit from that
 
 The toolbar reports the active fleet's average speed in MPH (using one pixel as one foot of roadway). The code is split by responsibility: `models.py` contains lane and car data, `simulation.py` contains traffic rules, and `ui.py` contains the Tkinter interface.
 
+`saves/current-merge-demo.json` preserves the current fixed merge scenario as a loadable baseline. It is intentionally traffic-free so each load starts from the same road configuration.
+
 Requires Python with tkinter (included by default with most desktop Python installations).
