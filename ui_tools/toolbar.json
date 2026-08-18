@@ -1,0 +1,7 @@
+[
+  {"id": "file", "enabled": true},
+  {"id": "simulation", "enabled": true},
+  {"id": "units", "enabled": true},
+  {"id": "inspect", "enabled": true},
+  {"id": "reset_view", "enabled": true}
+]

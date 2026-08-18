@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from random import Random
 
 from models import Road
 
@@ -21,6 +22,12 @@ class Terrain:
 
     grass_color: str = "#78b85a"
     trees: list[tuple[float, float]] = field(default_factory=list)
+
+    @classmethod
+    def starter_terrain(cls) -> "Terrain":
+        """Create a repeatable, lightly wooded buildable landscape."""
+        random = Random(41)
+        return cls(trees=[(random.randrange(80, 4920), random.randrange(80, 3420)) for _ in range(180)])
 
 
 @dataclass
@@ -44,7 +51,9 @@ class Building:
 class CityMap:
     """Own terrain and city objects; traffic uses its roads later."""
 
-    terrain: Terrain = field(default_factory=Terrain)
+    width: float = 5000
+    height: float = 3500
+    terrain: Terrain = field(default_factory=Terrain.starter_terrain)
     roads: list[Road] = field(default_factory=list)
     parcels: list[Parcel] = field(default_factory=list)
     buildings: list[Building] = field(default_factory=list)

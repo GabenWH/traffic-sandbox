@@ -10,24 +10,81 @@ import tkinter as tk
 from math import atan2, cos, sin
 from tkinter import filedialog, messagebox, simpledialog
 
-from config import HEIGHT, LANE_HEIGHT, LANES, MERGE_END, MERGE_START, POST_MERGE_END, ROAD_BOTTOM, ROAD_TOP, WIDTH
+from config import (
+    DEFAULT_SPEED_LIMIT_MPH,
+    DEFAULT_UNIT_SYSTEM,
+    HEIGHT,
+    LANE_DASH_HALF_HEIGHT,
+    LANE_DASH_LENGTH,
+    LANE_DASH_SPACING,
+    LANE_DASH_START_X,
+    LANE_HEIGHT,
+    LANE_LABEL_FONT_SIZE,
+    LANE_LABEL_MIN_FONT_SIZE,
+    LANE_LABEL_X,
+    LANE_LABEL_Y_OFFSET,
+    LANES,
+    MERGE_END,
+    MERGE_START,
+    POST_MERGE_END,
+    ROAD_BOTTOM,
+    ROAD_EDGE_WIDTH,
+    ROAD_START_X,
+    ROAD_TOP,
+    MIN_SCALED_STROKE_WIDTH,
+    WIDTH,
+)
 from city import CityMap
 from models import Car, Lane, Point, SpeedLimit
 from simulation import TrafficSimulation
+from ui_tools import CanvasTool, ToolbarTool, load_toolbar_tools
+from units import (
+    display_distance_to_pixels,
+    display_to_mph,
+    distance_unit,
+    mph_to_display,
+    pixels_to_display_distance,
+    speed_limit_bounds,
+    speed_unit,
+    validate_unit_system,
+)
+
+# Vehicle-detail proportions are based on the original 54 × 25 car art.  They
+# intentionally scale with each Car's dimensions, so the current 14 × 6 model
+# and future vehicle sizes keep the same visual design.
+WHEEL_CENTER_LENGTH_RATIO = 0.28
+WHEEL_CENTER_WIDTH_RATIO = 0.50
+WHEEL_HALF_LENGTH_RATIO = 6 / 54
+WHEEL_HALF_WIDTH_RATIO = 2 / 25
+HEADLIGHT_CENTER_LENGTH_RATIO = 0.46
+HEADLIGHT_CENTER_WIDTH_RATIO = 0.27
+HEADLIGHT_HALF_LENGTH_RATIO = 2.5 / 54
+HEADLIGHT_HALF_WIDTH_RATIO = 3 / 25
 
 
 class FreewaySimulator:
-    """Present a TrafficSimulation in an interactive canvas."""
+    """Present and control a :class:`TrafficSimulation` with Tkinter.
+
+    This class owns only presentation state: widgets, camera position, canvas
+    item IDs, dialogs, and exports. The traffic rules and persistent domain
+    data stay in ``TrafficSimulation`` and the model classes.
+    """
 
     def __init__(self, root: tk.Tk) -> None:
+        """Build the windows, initialize the blank city view, and start ticks."""
         self.root = root
         root.title("Freeway Simulator")
         root.report_callback_exception = self.report_callback_exception
         self.running = True
         self.simulation_speed = 1.0
+        self.unit_system = validate_unit_system(DEFAULT_UNIT_SYSTEM)
         self.simulation = TrafficSimulation()
         self.city_map = CityMap()
         self.blank_map = True
+        self.camera_x = (self.city_map.width - WIDTH) / 2
+        self.camera_y = (self.city_map.height - HEIGHT) / 2
+        self.camera_zoom = 1.0
+        self._pan_anchor: tuple[int, int] | None = None
         self.analytics_window: tk.Toplevel | None = None
         self.analytics_canvas: tk.Canvas | None = None
         self.recent_window: tk.Toplevel | None = None
@@ -36,98 +93,232 @@ class FreewaySimulator:
         self.debug_canvas: tk.Canvas | None = None
         self.recent_errors: list[str] = []
         self.selected_lane = self.simulation.lanes[0]
+        # toolbar.json controls which independently defined tools appear and
+        # their order.  The registry discovers the concrete modules in
+        # ui_tools/tools and constructs only the enabled entries here.
+        self.tools: list[ToolbarTool] = load_toolbar_tools(self)
+        self.active_tool: CanvasTool | None = None
         self.last_time = time.perf_counter()
         self.last_dashboard_refresh = 0.0
         self.build_toolbar()
-        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, highlightthickness=0, bg="#8fc3e6")
+        # This is the canvas fallback color, not part of the world. It can show
+        # briefly during startup because ``draw_scene`` runs before ``pack`` has
+        # finalized an expanded canvas that may be larger than WIDTH × HEIGHT.
+        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, highlightthickness=0, bg="#e83ccb")
         self.canvas.pack(fill="both", expand=True)
+        self.canvas.bind("<Button-1>", self.handle_tool_click)
         self.canvas.bind("<Button-3>", self.show_lane_menu)
-        self.draw_scene()
+        self.canvas.bind("<ButtonPress-2>", self.start_pan)
+        self.canvas.bind("<B2-Motion>", self.pan_camera)
+        self.canvas.bind("<ButtonRelease-2>", self.end_pan)
+        self.canvas.bind("<MouseWheel>", self.zoom_camera)
+        self.canvas.bind("<Button-4>", lambda event: self.zoom_camera(event, 1))
+        self.canvas.bind("<Button-5>", lambda event: self.zoom_camera(event, -1))
+        self.canvas.bind("<Configure>", lambda _event: self.redraw_world())
+        self.root.after_idle(self.draw_scene)
         self.create_debug_window()
         self.create_recent_changes_window()
         self.tick()
 
     def build_toolbar(self) -> None:
+        """Build the toolbar from registered dropdown, canvas, and command tools."""
         toolbar = tk.Frame(self.root, padx=10, pady=8, bg="#e8edf2")
         toolbar.pack(fill="x")
-        file_button = tk.Menubutton(toolbar, text="File", relief="raised", bg="#e8edf2")
-        file_menu = tk.Menu(file_button, tearoff=False)
-        file_menu.add_command(label="Save…", command=self.save_state)
-        file_menu.add_command(label="Load…", command=self.load_state)
-        file_menu.add_separator()
-        file_menu.add_command(label="Export graph CSV…", command=self.export_csv)
-        file_menu.add_command(label="Export graph SVG…", command=self.export_svg)
-        file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.exit_app)
-        file_button.config(menu=file_menu)
-        file_button.pack(side="left")
+        for index, tool in enumerate(self.tools):
+            tool.build(toolbar).pack(side="left", padx=(8, 0) if index else 0)
+        self.camera_label = tk.Label(toolbar, text="Pan: middle-drag · Zoom: wheel", bg="#e8edf2")
+        self.camera_label.pack(side="left", padx=(12, 0))
 
-        simulation_button = tk.Menubutton(toolbar, text="Simulation", relief="raised", bg="#e8edf2")
-        simulation_menu = tk.Menu(simulation_button, tearoff=False)
-        simulation_menu.add_command(label="Pause / resume", command=self.toggle_running)
-        simulation_menu.add_command(label="Add car", command=self.add_car)
-        simulation_menu.add_command(label="Clear traffic", command=self.clear_cars)
-        simulation_menu.add_separator()
-        simulation_menu.add_command(label="Analytics graph", command=self.show_analytics)
-        simulation_menu.add_command(label="Recent changes", command=self.create_recent_changes_window)
-        simulation_button.config(menu=simulation_menu)
-        simulation_button.pack(side="left", padx=(8, 0))
-        tk.Label(toolbar, text="Simulation speed:", bg="#e8edf2").pack(side="left", padx=(24, 4))
-        self.speed_label = tk.Label(toolbar, bg="#e8edf2")
-        self.speed_label.pack(side="right")
-        self.average_speed_label = tk.Label(toolbar, bg="#e8edf2")
-        self.average_speed_label.pack(side="right", padx=(0, 24))
-        self.exit_label = tk.Label(toolbar, bg="#e8edf2")
-        self.exit_label.pack(side="right", padx=(0, 24))
-        self.speed_control = tk.Scale(toolbar, from_=0.25, to=3.0, resolution=0.25,
-                                      orient="horizontal", length=190,
-                                      command=self.set_simulation_speed, showvalue=False, bg="#e8edf2")
-        self.speed_control.set(1.0)
-        self.speed_control.pack(side="left")
-        tk.Label(toolbar, text="Traffic:", bg="#e8edf2").pack(side="left", padx=(24, 4))
-        self.traffic_control = tk.Scale(toolbar, from_=1, to=30, resolution=1,
-                                        orient="horizontal", length=190,
-                                        command=self.set_traffic, bg="#e8edf2")
-        self.traffic_control.set(12)
-        self.traffic_control.pack(side="left")
-        self.gap_lane_label = tk.Label(toolbar, bg="#e8edf2")
-        self.gap_lane_label.pack(side="left", padx=(24, 4))
-        self.gap_control = tk.Scale(
-            toolbar, from_=30, to=180, resolution=5, orient="horizontal", length=150,
-            command=self.set_selected_lane_gap, bg="#e8edf2",
-        )
-        self.gap_control.pack(side="left")
+    def select_tool(self, tool: CanvasTool) -> None:
+        """Toggle one canvas tool while ensuring no other tool stays active."""
+        if self.active_tool is tool:
+            self.deactivate_tool(tool)
+            return
+        if self.active_tool is not None:
+            self.active_tool.deactivate()
+        self.active_tool = tool
+        self.update_tool_buttons()
+        tool.activate()
+
+    def deactivate_tool(self, tool: CanvasTool) -> None:
+        """Deactivate ``tool`` if it is the currently selected canvas tool."""
+        if self.active_tool is not tool:
+            return
+        tool.deactivate()
+        self.active_tool = None
+        self.update_tool_buttons()
+
+    def update_tool_buttons(self) -> None:
+        """Make toolbar button relief reflect the selected tool."""
+        for tool in self.tools:
+            if isinstance(tool, CanvasTool):
+                tool.set_active(self.active_tool is tool)
+
+    def handle_tool_click(self, event: tk.Event[tk.Misc]) -> None:
+        """Delegate a main-canvas left click to the selected tool, if any."""
+        if self.active_tool is not None:
+            self.active_tool.on_canvas_click(event)
 
     def draw_scene(self) -> None:
+        """Replace the static world layer for the current camera view.
+
+        Static items are deliberately rebuilt on camera changes and then sent
+        behind cars and signs with the ``static`` canvas tag.
+        """
         c = self.canvas
+        # Dynamic vehicle/sign items have no ``static`` tag and survive this.
         c.delete("static")
+        canvas_width = max(c.winfo_width(), WIDTH)
+        canvas_height = max(c.winfo_height(), HEIGHT)
+        # The grass is the actual world background; the canvas ``bg`` is only a
+        # fallback for area not covered by this rectangle.
+        c.create_rectangle(0, 0, canvas_width, canvas_height,
+                           fill=self.city_map.terrain.grass_color, outline="", tags="static")
+        left, top, right, bottom = self.visible_world_bounds()
+        # Cull trees outside the camera view instead of creating all of them.
+        for tree_x, tree_y in self.city_map.terrain.trees:
+            if left - 20 <= tree_x <= right + 20 and top - 20 <= tree_y <= bottom + 20:
+                x, y = self.world_to_screen((tree_x, tree_y))
+                canopy = max(4, 11 * self.camera_zoom)
+                trunk = max(2, 3 * self.camera_zoom)
+                c.create_rectangle(x - trunk, y + canopy * .45, x + trunk, y + canopy * 1.1,
+                                   fill="#71492b", outline="", tags="static")
+                c.create_oval(x - canopy, y - canopy, x + canopy, y + canopy,
+                              fill="#397a3e", outline="#2f6835", tags="static")
+        # A save switches out of this instructional city-builder placeholder.
         if self.blank_map:
+            center_x, center_y = self.world_to_screen((self.city_map.width / 2, self.city_map.height / 2))
             c.create_text(
-                WIDTH / 2, HEIGHT / 2,
-                text="Blank map\nLoad saves/current-merge-demo.json to restore the merge scenario",
-                fill="#ffffff", font=("Arial", 16, "bold"), justify="center", tags="static",
+                center_x, center_y,
+                text="City builder prototype\nMiddle-drag to pan · mouse wheel to zoom\nLoad saves/current-merge-demo.json to restore the merge scenario",
+                fill="#ffffff", font=("Arial", max(10, int(16 * self.camera_zoom)), "bold"), justify="center", tags="static",
             )
+            c.tag_lower("static")
             return
-        c.create_polygon(0, ROAD_TOP, POST_MERGE_END, ROAD_TOP, POST_MERGE_END, ROAD_TOP + LANE_HEIGHT,
-                         MERGE_END, ROAD_TOP + LANE_HEIGHT, MERGE_START, ROAD_BOTTOM, 0, ROAD_BOTTOM,
+        # Merge-demo road geometry is stored in world coordinates in config.py.
+        c.create_polygon(*self.world_points((0, ROAD_TOP), (POST_MERGE_END, ROAD_TOP),
+                         (POST_MERGE_END, ROAD_TOP + LANE_HEIGHT), (MERGE_END, ROAD_TOP + LANE_HEIGHT),
+                         (MERGE_START, ROAD_BOTTOM), (0, ROAD_BOTTOM)),
                          fill="#4d535a", outline="", tags="static")
-        c.create_rectangle(0, ROAD_TOP - 13, POST_MERGE_END, ROAD_TOP, fill="#c9cdd0", outline="", tags="static")
-        c.create_line(0, ROAD_BOTTOM, MERGE_START, ROAD_BOTTOM, MERGE_END, ROAD_TOP + LANE_HEIGHT,
-                      POST_MERGE_END, ROAD_TOP + LANE_HEIGHT, fill="#c9cdd0", width=13, tags="static")
+        # Paint the straight light-gray rim immediately above the dark road.
+        # It extends from the road's left edge to the end of the post-merge lane.
+        c.create_rectangle(
+            *self.world_box(ROAD_START_X, ROAD_TOP - ROAD_EDGE_WIDTH, POST_MERGE_END, ROAD_TOP),
+            fill="#c9cdd0", outline="", tags="static",
+        )
+        # Trace the light-gray rim along the lower edge, then up the outside of
+        # the merging lane, and finally along the post-merge lane's lower edge.
+        # This line is scenery only; it does not affect lane geometry or cars.
+        c.create_line(
+            *self.world_points(
+                (ROAD_START_X, ROAD_BOTTOM), (MERGE_START, ROAD_BOTTOM),
+                (MERGE_END, ROAD_TOP + LANE_HEIGHT), (POST_MERGE_END, ROAD_TOP + LANE_HEIGHT),
+            ),
+            fill="#c9cdd0", width=max(MIN_SCALED_STROKE_WIDTH, int(ROAD_EDGE_WIDTH * self.camera_zoom)),
+            tags="static",
+        )
         for lane_index in range(1, LANES):
             y = ROAD_TOP + lane_index * LANE_HEIGHT
-            for x in range(-20, MERGE_START, 70):
-                c.create_rectangle(x, y - 2, x + 38, y + 2, fill="#f4f0bd", outline="", tags="static")
+            for x in range(LANE_DASH_START_X, MERGE_START, LANE_DASH_SPACING):
+                c.create_rectangle(
+                    *self.world_box(
+                        x, y - LANE_DASH_HALF_HEIGHT,
+                        x + LANE_DASH_LENGTH, y + LANE_DASH_HALF_HEIGHT,
+                    ),
+                    fill="#f4f0bd", outline="", tags="static",
+                )
         for lane_index, lane in enumerate(self.simulation.entry_lanes):
-            c.create_text(26, ROAD_TOP + lane_index * LANE_HEIGHT + 18, text=lane.name,
-                          fill="#d9dde0", font=("Arial", 10, "bold"), tags="static")
+            x, y = self.world_to_screen((
+                LANE_LABEL_X,
+                ROAD_TOP + lane_index * LANE_HEIGHT + LANE_LABEL_Y_OFFSET,
+            ))
+            c.create_text(
+                x, y, text=lane.name, fill="#d9dde0",
+                font=("Arial", max(LANE_LABEL_MIN_FONT_SIZE, int(LANE_LABEL_FONT_SIZE * self.camera_zoom)), "bold"),
+                tags="static",
+            )
+        # Preserve scenery beneath the dynamic canvas items regardless of its
+        # recreation order during a pan, zoom, reset, or load.
+        c.tag_lower("static")
+
+    def world_to_screen(self, point: Point) -> Point:
+        """Project one world-space coordinate into the current canvas view."""
+        return ((point[0] - self.camera_x) * self.camera_zoom,
+                (point[1] - self.camera_y) * self.camera_zoom)
+
+    def screen_to_world(self, point: Point) -> Point:
+        """Convert a canvas coordinate back into the simulation's world space."""
+        return (point[0] / self.camera_zoom + self.camera_x,
+                point[1] / self.camera_zoom + self.camera_y)
+
+    def world_points(self, *points: Point) -> list[float]:
+        """Project points and flatten them for Tkinter polygon/line APIs."""
+        return [coordinate for point in points for coordinate in self.world_to_screen(point)]
+
+    def world_box(self, left: float, top: float, right: float, bottom: float) -> tuple[float, float, float, float]:
+        """Project the opposite corners of a world-aligned rectangle."""
+        return (*self.world_to_screen((left, top)), *self.world_to_screen((right, bottom)))
+
+    def visible_world_bounds(self) -> tuple[float, float, float, float]:
+        """Return the world-space rectangle currently visible on the canvas."""
+        width = max(self.canvas.winfo_width(), WIDTH)
+        height = max(self.canvas.winfo_height(), HEIGHT)
+        return (*self.screen_to_world((0, 0)), *self.screen_to_world((width, height)))
+
+    def redraw_world(self) -> None:
+        """Rebuild static/sign layers and reproject every vehicle after camera movement."""
+        self.draw_scene()
+        self.draw_speed_limits()
+        for car in self.simulation.cars:
+            self.draw_car(car)
+
+    def start_pan(self, event: tk.Event[tk.Misc]) -> None:
+        """Begin a middle-button pan from the event's screen position."""
+        self._pan_anchor = (event.x, event.y)
+        self.canvas.configure(cursor="fleur")
+
+    def pan_camera(self, event: tk.Event[tk.Misc]) -> None:
+        """Move the camera opposite a middle-drag, then redraw the world."""
+        if self._pan_anchor is None:
+            return
+        previous_x, previous_y = self._pan_anchor
+        self.camera_x -= (event.x - previous_x) / self.camera_zoom
+        self.camera_y -= (event.y - previous_y) / self.camera_zoom
+        self._pan_anchor = (event.x, event.y)
+        self.redraw_world()
+
+    def end_pan(self, _event: tk.Event[tk.Misc]) -> None:
+        """Finish a middle-button pan and restore the default cursor."""
+        self._pan_anchor = None
+        self.canvas.configure(cursor="")
+
+    def zoom_camera(self, event: tk.Event[tk.Misc], direction: int | None = None) -> None:
+        """Zoom around the pointer while keeping its world coordinate fixed."""
+        direction = direction if direction is not None else (1 if event.delta > 0 else -1)
+        old_world = self.screen_to_world((event.x, event.y))
+        self.camera_zoom = max(0.35, min(3.0, self.camera_zoom * (1.15 if direction > 0 else 1 / 1.15)))
+        self.camera_x = old_world[0] - event.x / self.camera_zoom
+        self.camera_y = old_world[1] - event.y / self.camera_zoom
+        self.redraw_world()
+
+    def reset_camera(self) -> None:
+        """Restore the blank-map center or merge-demo origin at 1× zoom."""
+        if self.blank_map:
+            self.camera_x = (self.city_map.width - WIDTH) / 2
+            self.camera_y = (self.city_map.height - HEIGHT) / 2
+        else:
+            self.camera_x = self.camera_y = 0.0
+        self.camera_zoom = 1.0
+        self.redraw_world()
 
     def draw_car(self, car: Car) -> None:
+        """Create if needed and update all canvas polygons for one vehicle."""
         if car.item is None or not car.detail_items:
             if car.item is not None:
                 self.canvas.delete(car.item)
             car.item = self.create_car_details(car)
         assert car.item is not None
+        # The next lane point gives the car's heading; completed paths face right.
         if car.next_point < len(car.lane.points):
             target_x, target_y = car.lane.points[car.next_point]
             angle = atan2(target_y - car.y, target_x - car.x)
@@ -135,46 +326,45 @@ class FreewaySimulator:
             angle = 0.0
         forward_x, forward_y = cos(angle), sin(angle)
         side_x, side_y = -forward_y, forward_x
-        self.canvas.coords(
-            car.item,
-            *self.oriented_box(car.x, car.y, forward_x, forward_y, side_x, side_y,
-                               car.length / 2, car.width / 2),
-        )
+        self.canvas.coords(car.item, *self.screen_oriented_box(
+            car.x, car.y, forward_x, forward_y, side_x, side_y, car.length / 2, car.width / 2,
+        ))
         self.canvas.itemconfigure(car.item, fill=car.color)
-        wheelLenghtMult = 0.28
-        wheelWidthMult = 0.50
         wheel_positions = (
-            (car.length * wheelLenghtMult, car.width * wheelWidthMult),
-            (car.length * wheelLenghtMult, -car.width * wheelWidthMult),
-            (-car.length * wheelLenghtMult, car.width * wheelWidthMult),
-            (-car.length * wheelLenghtMult, -car.width * wheelWidthMult),
+            (car.length * WHEEL_CENTER_LENGTH_RATIO, car.width * WHEEL_CENTER_WIDTH_RATIO),
+            (car.length * WHEEL_CENTER_LENGTH_RATIO, -car.width * WHEEL_CENTER_WIDTH_RATIO),
+            (-car.length * WHEEL_CENTER_LENGTH_RATIO, car.width * WHEEL_CENTER_WIDTH_RATIO),
+            (-car.length * WHEEL_CENTER_LENGTH_RATIO, -car.width * WHEEL_CENTER_WIDTH_RATIO),
         )
+        # The first four detail IDs are wheels; later IDs are lights and glass.
         for item, (forward, side) in zip(car.detail_items[:4], wheel_positions):
             x = car.x + forward_x * forward + side_x * side
             y = car.y + forward_y * forward + side_y * side
-            self.canvas.coords(
-                item,
-                *self.oriented_box(x, y, forward_x, forward_y, side_x, side_y, 6, 2),
-            )
-
-        for item, side in zip(car.detail_items[4:], (car.width * 0.27, -car.width * 0.27)):
-            x = car.x + forward_x * (car.length * 0.46) + side_x * side
-            y = car.y + forward_y * (car.length * 0.46) + side_y * side
-            self.canvas.coords(
-                item,
-                *self.oriented_box(x, y, forward_x, forward_y, side_x, side_y, 2.5, 3),
-            )
+            self.canvas.coords(item, *self.screen_oriented_box(
+                x, y, forward_x, forward_y, side_x, side_y,
+                car.length * WHEEL_HALF_LENGTH_RATIO,
+                car.width * WHEEL_HALF_WIDTH_RATIO,
+            ))
+        # Headlights are detail items four and five; the windshield follows.
+        for item, side in zip(car.detail_items[4:6], (
+            car.width * HEADLIGHT_CENTER_WIDTH_RATIO,
+            -car.width * HEADLIGHT_CENTER_WIDTH_RATIO,
+        )):
+            x = car.x + forward_x * (car.length * HEADLIGHT_CENTER_LENGTH_RATIO) + side_x * side
+            y = car.y + forward_y * (car.length * HEADLIGHT_CENTER_LENGTH_RATIO) + side_y * side
+            self.canvas.coords(item, *self.screen_oriented_box(
+                x, y, forward_x, forward_y, side_x, side_y,
+                car.length * HEADLIGHT_HALF_LENGTH_RATIO,
+                car.width * HEADLIGHT_HALF_WIDTH_RATIO,
+            ))
 
         windshield = car.detail_items[6]
         windshield_x = car.x + forward_x * (car.length * 0.20)
         windshield_y = car.y + forward_y * (car.length * 0.10)
-        self.canvas.coords(
-            windshield,
-            *self.oriented_box(
-                windshield_x, windshield_y, forward_x, forward_y, side_x, side_y,
-                car.length * 0.08, car.width * 0.34,
-            ),
-        )
+        self.canvas.coords(windshield, *self.screen_oriented_box(
+            windshield_x, windshield_y, forward_x, forward_y, side_x, side_y,
+            car.length * 0.08, car.width * 0.34,
+        ))
 
     @staticmethod
     def oriented_box(
@@ -189,8 +379,20 @@ class FreewaySimulator:
                            y + forward_y * forward + side_y * side))
         return points
 
+    def screen_oriented_box(
+        self, x: float, y: float, forward_x: float, forward_y: float,
+        side_x: float, side_y: float, half_length: float, half_width: float,
+    ) -> list[float]:
+        """Project a world-space vehicle rectangle into the current camera view."""
+        coordinates = self.oriented_box(x, y, forward_x, forward_y, side_x, side_y, half_length, half_width)
+        return self.world_points(*list(zip(coordinates[::2], coordinates[1::2])))
+
     def create_car_details(self, car: Car) -> int:
-        """Create a complete car visual and return its body canvas-item ID."""
+        """Create a complete car visual and return its body canvas-item ID.
+
+        Creation order is also render order: wheels sit behind the body, then
+        headlights and windshield sit above it.
+        """
         wheels = [
             self.canvas.create_polygon(0, 0, 0, 0, fill="#16191c", outline="#08090a")
             for _ in range(4)
@@ -207,6 +409,7 @@ class FreewaySimulator:
         return body
 
     def add_car(self, start_random: bool = False) -> None:
+        """Ask the simulation for a car and create its visual in merge-demo mode."""
         if self.blank_map:
             return
         car = self.simulation.add_car(start_random)
@@ -215,6 +418,7 @@ class FreewaySimulator:
         self.draw_car(car)
 
     def clear_cars(self) -> None:
+        """Delete every car visual, empty the fleet, and record the action."""
         for car in self.simulation.cars:
             self.canvas.delete(car.item)
             for item in car.detail_items:
@@ -223,20 +427,28 @@ class FreewaySimulator:
         self.simulation.record_event("cleared traffic")
 
     def toggle_running(self) -> None:
+        """Pause or resume updates; canvas/event windows continue refreshing."""
         self.running = not self.running
 
     def set_simulation_speed(self, value: str) -> None:
-        self.simulation_speed = float(value)
+        """Apply an Inspector speed slider value and log it as an event."""
+        speed = float(value)
+        if self.simulation_speed == speed:
+            return
+        self.simulation_speed = speed
         self.simulation.record_event(f"simulation speed {self.simulation_speed:g}x")
 
     def set_traffic(self, value: str) -> None:
-        self.simulation.max_cars = int(float(value))
+        """Apply an Inspector target-fleet slider value and log it as an event."""
+        target = int(float(value))
+        if self.simulation.max_cars == target:
+            return
+        self.simulation.max_cars = target
         self.simulation.record_event(f"traffic target {self.simulation.max_cars}")
 
     def select_lane(self, lane: Lane) -> None:
+        """Make ``lane`` the selected lane for Inspector global stats."""
         self.selected_lane = lane
-        self.gap_lane_label.config(text=f"{lane.name.title()} gap:")
-        self.gap_control.set(lane.following_gap)
 
     def set_selected_lane_gap(self, value: str) -> None:
         """Update and record a genuine following-gap change for one lane."""
@@ -245,18 +457,33 @@ class FreewaySimulator:
             self.selected_lane.following_gap = gap
             self.simulation.record_event(f"{self.selected_lane.name} gap {gap:.0f}px")
 
+    def set_unit_system(self, unit_system: str) -> None:
+        """Switch UI units while preserving canonical model values and saves."""
+        unit_system = validate_unit_system(unit_system)
+        if self.unit_system == unit_system:
+            return
+        self.unit_system = unit_system
+        self.draw_speed_limits()
+        if self.active_tool is not None:
+            self.active_tool.refresh()
+        self.draw_analytics()
+
     def lane_at(self, position: Point) -> Lane | None:
+        """Return a nearby merge-demo lane, or ``None`` if the click is off-road."""
         if self.blank_map:
             return None
         lane = min(self.simulation.lanes, key=lambda candidate: candidate.distance_to(position))
         return lane if lane.distance_to(position) <= LANE_HEIGHT / 2 else None
 
     def show_lane_menu(self, event: tk.Event[tk.Misc]) -> None:
-        speed_limit = self.speed_limit_at(event.x, event.y)
+        """Open the appropriate right-click menu for a sign or lane."""
+        world_position = self.screen_to_world((event.x, event.y))
+        # Signs take precedence over their underlying lane when hit-testing.
+        speed_limit = self.speed_limit_at(*world_position)
         if speed_limit is not None:
             self.show_speedlimit_menu(event, speed_limit)
             return
-        lane = self.lane_at((event.x, event.y))
+        lane = self.lane_at(world_position)
         if lane is None:
             return
         self.select_lane(lane)
@@ -264,7 +491,7 @@ class FreewaySimulator:
         menu.add_command(label=f"Set {lane.name} lane gap…", command=lambda: self.prompt_for_gap(lane))
         menu.add_command(
             label=f"Add {lane.name} speed-limit sign",
-            command=lambda x=event.x, y=event.y, selected_lane=lane: self.add_speedlimit(
+            command=lambda x=world_position[0], y=world_position[1], selected_lane=lane: self.add_speedlimit(
                 x, y, selected_lane
             ),
         )
@@ -285,7 +512,7 @@ class FreewaySimulator:
         """Offer edits for an existing sign instead of adding another one."""
         menu = tk.Menu(self.root, tearoff=False)
         menu.add_command(
-            label=f"Change {speed_limit.speed:.0f} mph limit",
+            label=f"Change {mph_to_display(speed_limit.speed, self.unit_system):.0f} {speed_unit(self.unit_system)} limit",
             command=lambda: self.change_speed_limit(speed_limit),
         )
         menu.add_command(
@@ -298,53 +525,76 @@ class FreewaySimulator:
             menu.grab_release()
 
     def prompt_for_gap(self, lane: Lane) -> None:
-        gap = simpledialog.askfloat("Following gap", f"Preferred following gap for the {lane.name} lane (pixels):",
-                                    parent=self.root, initialvalue=lane.following_gap, minvalue=30.0, maxvalue=180.0)
+        """Prompt for a lane following gap, record a change, and select that lane."""
+        unit = distance_unit(self.unit_system)
+        gap = simpledialog.askfloat(
+            "Following gap", f"Preferred following gap for the {lane.name} lane ({unit}):",
+            parent=self.root,
+            initialvalue=pixels_to_display_distance(lane.following_gap, self.unit_system),
+            minvalue=pixels_to_display_distance(30.0, self.unit_system),
+            maxvalue=pixels_to_display_distance(180.0, self.unit_system),
+        )
         if gap is not None:
-            if lane.following_gap != gap:
-                lane.following_gap = gap
-                self.simulation.record_event(f"{lane.name} gap {gap:.0f}px")
+            gap_pixels = display_distance_to_pixels(gap, self.unit_system)
+            if lane.following_gap != gap_pixels:
+                lane.following_gap = gap_pixels
+                self.simulation.record_event(f"{lane.name} gap {gap:.0f} {unit}")
             self.select_lane(lane)
 
     def add_speedlimit(self, x: float, y: float, lane: Lane) -> None:
         """Post and draw a speed-limit sign at the selected lane location."""
-        speed = simpledialog.askfloat("Speed", f"Speed limit for sign",
-            parent=self.root, initialvalue=55.0, minvalue=15.0, maxvalue=70.0)
+        minimum, maximum = speed_limit_bounds(self.unit_system)
+        unit = speed_unit(self.unit_system)
+        speed = simpledialog.askfloat(
+            "Speed", f"Speed limit for sign ({unit})",
+            parent=self.root, initialvalue=mph_to_display(DEFAULT_SPEED_LIMIT_MPH, self.unit_system),
+            minvalue=minimum, maxvalue=maximum,
+        )
         if speed is None:
             return
-        self.simulation.add_speed_limit(speed, lane, x, y)
+        self.simulation.add_speed_limit(display_to_mph(speed, self.unit_system), lane, x, y)
         self.draw_speed_limits()
 
     def change_speed_limit(self, speed_limit: SpeedLimit) -> None:
+        """Prompt for and apply a sign speed in the selected display unit."""
+        minimum, maximum = speed_limit_bounds(self.unit_system)
+        unit = speed_unit(self.unit_system)
         speed = simpledialog.askfloat(
-            "Speed limit", "Speed limit (MPH):", parent=self.root,
-            initialvalue=speed_limit.speed, minvalue=15.0, maxvalue=70.0,
+            "Speed limit", f"Speed limit ({unit}):", parent=self.root,
+            initialvalue=mph_to_display(speed_limit.speed, self.unit_system), minvalue=minimum, maxvalue=maximum,
         )
         if speed is not None:
-            speed_limit.speed = speed
+            speed_limit.speed = display_to_mph(speed, self.unit_system)
             self.simulation.record_event(
-                f"{speed_limit.lane.name} limit changed to {speed:.0f} mph"
+                f"{speed_limit.lane.name} limit changed to {speed:.0f} {unit}"
             )
             self.draw_speed_limits()
 
     def delete_speed_limit(self, speed_limit: SpeedLimit) -> None:
+        """Remove one sign through the simulation and rebuild its visual layer."""
         self.simulation.remove_speed_limit(speed_limit)
         self.draw_speed_limits()
 
     def draw_speed_limits(self) -> None:
-        """Redraw all signs after a sign is added, changed, or deleted."""
+        """Redraw all signs after a sign is added, changed, or deleted.
+
+        All sign components share a tag so the layer can be recreated and
+        raised above moving cars as one unit.
+        """
         self.canvas.delete("speed_limit")
         for speed_limit in self.simulation.speed_limits:
-            x, y = speed_limit.x, speed_limit.y
-            self.canvas.create_rectangle(x - 25, y - 32, x + 25, y + 42,
+            x, y = self.world_to_screen((speed_limit.x, speed_limit.y))
+            scale = self.camera_zoom
+            self.canvas.create_rectangle(x - 25 * scale, y - 32 * scale, x + 25 * scale, y + 42 * scale,
                                          fill="#f8f8f8", outline="#20252a", width=2,
                                          tags="speed_limit")
-            self.canvas.create_text(x, y - 12, text="SPEED", fill="#20252a",
-                                    font=("Arial", 8, "bold"), tags="speed_limit")
-            self.canvas.create_text(x, y + 6, text="LIMIT", fill="#20252a",
-                                    font=("Arial", 8, "bold"), tags="speed_limit")
-            self.canvas.create_text(x, y + 24, text=f"{speed_limit.speed:.0f}",
-                                    fill="#20252a", font=("Arial", 12, "bold"),
+            self.canvas.create_text(x, y - 12 * scale, text="SPEED", fill="#20252a",
+                                    font=("Arial", max(6, int(8 * scale)), "bold"), tags="speed_limit")
+            self.canvas.create_text(x, y + 6 * scale, text="LIMIT", fill="#20252a",
+                                    font=("Arial", max(6, int(8 * scale)), "bold"), tags="speed_limit")
+            self.canvas.create_text(x, y + 24 * scale,
+                                    text=f"{mph_to_display(speed_limit.speed, self.unit_system):.0f}",
+                                    fill="#20252a", font=("Arial", max(8, int(12 * scale)), "bold"),
                                     tags="speed_limit")
 
     def show_analytics(self) -> None:
@@ -361,7 +611,11 @@ class FreewaySimulator:
         self.draw_analytics()
 
     def draw_analytics(self) -> None:
-        """Redraw the live analytics graph without creating another window."""
+        """Redraw the live analytics graph without creating another window.
+
+        The blue line is average speed in the selected unit; orange is flow.
+        series are independently scaled to fit the same plot area.
+        """
         if (
             self.analytics_window is None
             or not self.analytics_window.winfo_exists()
@@ -380,23 +634,25 @@ class FreewaySimulator:
         start = history[0][0]
         end = max(history[-1][0], start + 1)
         project_x = lambda t: 55 + (t - start) / (end - start) * 720
+        # The event markers make recent configuration changes visible in time.
         for timestamp, description in self.simulation.events[-12:]:
             if start <= timestamp <= end:
                 x = project_x(timestamp)
                 canvas.create_line(x, 28, x, 58, fill="#777")
                 canvas.create_text(x, 25, text=description[:18], anchor="s", angle=45, font=("Arial", 7))
         canvas.create_rectangle(55, 70, 775, 340, outline="#888")
-        max_speed = max(70.0, *(row[1] for row in history))
+        display_speeds = [mph_to_display(row[1], self.unit_system) for row in history]
+        max_speed = max(mph_to_display(DEFAULT_SPEED_LIMIT_MPH, self.unit_system), *display_speeds)
         max_flow = max(5.0, *(row[2] for row in history))
         speed_points, flow_points = [], []
-        for timestamp, speed, flow in history:
+        for (timestamp, _speed, flow), speed in zip(history, display_speeds):
             x = project_x(timestamp)
             speed_points.extend((x, 340 - speed / max_speed * 250))
             flow_points.extend((x, 340 - flow / max_flow * 250))
         if len(speed_points) >= 4:
             canvas.create_line(*speed_points, fill="#1976d2", width=2)
             canvas.create_line(*flow_points, fill="#e65100", width=2)
-        canvas.create_text(60, 355, anchor="w", text="Blue: average MPH    Orange: exits/min")
+        canvas.create_text(60, 355, anchor="w", text=f"Blue: average {speed_unit(self.unit_system)}    Orange: exits/min")
 
     def create_recent_changes_window(self) -> None:
         """Show a compact live timeline of events from the last 10 simulated minutes."""
@@ -413,6 +669,7 @@ class FreewaySimulator:
         self.draw_recent_changes()
 
     def draw_recent_changes(self) -> None:
+        """Render the ten newest events within the last 600 simulated seconds."""
         if self.recent_canvas is None or not self.recent_canvas.winfo_exists():
             return
         canvas = self.recent_canvas
@@ -435,15 +692,20 @@ class FreewaySimulator:
         print(formatted)
 
     def export_csv(self) -> None:
+        """Write sampled time, average speed, and flow metrics to a CSV file."""
         path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV", "*.csv")])
         if not path:
             return
         with open(path, "w", newline="", encoding="utf-8") as output:
             writer = csv.writer(output)
-            writer.writerow(("simulation_seconds", "average_mph", "exits_per_minute"))
-            writer.writerows(self.simulation.history)
+            writer.writerow(("simulation_seconds", f"average_{speed_unit(self.unit_system)}", "exits_per_minute"))
+            writer.writerows(
+                (timestamp, mph_to_display(speed, self.unit_system), flow)
+                for timestamp, speed, flow in self.simulation.history
+            )
 
     def export_svg(self) -> None:
+        """Write the average-speed history as a compact standalone SVG plot."""
         path = filedialog.asksaveasfilename(defaultextension=".svg", filetypes=[("SVG", "*.svg")])
         if not path:
             return
@@ -451,20 +713,22 @@ class FreewaySimulator:
         if not history:
             return
         start, end = history[0][0], max(history[-1][0], history[0][0] + 1)
-        max_speed = max(70.0, *(row[1] for row in history))
+        display_speeds = [mph_to_display(row[1], self.unit_system) for row in history]
+        max_speed = max(mph_to_display(DEFAULT_SPEED_LIMIT_MPH, self.unit_system), *display_speeds)
         points = " ".join(
             f"{55 + (timestamp - start) / (end - start) * 720:.1f},{340 - speed / max_speed * 250:.1f}"
-            for timestamp, speed, _ in history
+            for (timestamp, _speed, _flow), speed in zip(history, display_speeds)
         )
         with open(path, "w", encoding="utf-8") as output:
             output.write(
                 '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="380">'
                 '<rect x="55" y="70" width="720" height="270" fill="white" stroke="#888"/>'
                 f'<polyline points="{points}" fill="none" stroke="#1976d2" stroke-width="2"/>'
-                '<text x="60" y="355">Average MPH</text></svg>'
+                f'<text x="60" y="355">Average {speed_unit(self.unit_system)}</text></svg>'
             )
 
     def save_state(self) -> None:
+        """Serialize the merge-demo model state; Tkinter canvas IDs are omitted."""
         path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")])
         if not path:
             return
@@ -474,16 +738,40 @@ class FreewaySimulator:
         with open(path, "w", encoding="utf-8") as output:
             json.dump(state, output)
 
+    def new_world(self) -> None:
+        """Replace the current scenario with a fresh blank city-builder world."""
+        if not messagebox.askyesno(
+            "New world", "Create a new blank world? Unsaved changes will be lost."
+        ):
+            return
+        # Replacing both models clears merge-specific lanes, traffic, signs,
+        # metrics, and events before returning to the city-builder view.
+        self.clear_cars()
+        self.simulation = TrafficSimulation()
+        self.city_map = CityMap()
+        self.blank_map = True
+        self.select_lane(self.simulation.lanes[0])
+        for tool in self.tools:
+            if isinstance(tool, CanvasTool):
+                tool.reset()
+        self.reset_camera()
+
     def load_state(self) -> None:
+        """Load a merge-demo JSON save and recreate its dynamic canvas items."""
         path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
         if not path:
             return
         with open(path, encoding="utf-8") as source:
             state = json.load(source)
+        # Other scenario schemas are intentionally ignored by this UI.
         if state.get("scenario", "merge_demo") != "merge_demo":
             return
+        for tool in self.tools:
+            if isinstance(tool, CanvasTool):
+                tool.reset()
         self.clear_cars()
         self.blank_map = False
+        self.reset_camera()
         lanes = {lane.name: lane for lane in self.simulation.lanes}
         for name, gap in state["lanes"].items(): lanes[name].following_gap = gap
         self.simulation.speed_limits.clear()
@@ -496,10 +784,12 @@ class FreewaySimulator:
         self.draw_speed_limits()
 
     def exit_app(self) -> None:
+        """Close the Tk application after a confirmation dialog."""
         if messagebox.askyesno("Exit simulator", "Exit the freeway simulator?"):
             self.root.destroy()
 
     def draw_merge_debug(self) -> None:
+        """Refresh merge diagnostics and the latest captured callback error."""
         if self.debug_canvas is None or not self.debug_canvas.winfo_exists():
             return
         self.debug_canvas.delete("all")
@@ -524,10 +814,13 @@ class FreewaySimulator:
         self.draw_merge_debug()
 
     def tick(self) -> None:
+        """Advance traffic, refresh UI state, and schedule the next ~60 Hz frame."""
         now = time.perf_counter()
+        # Avoid a large simulation jump when the window/event loop stalls.
         dt = min(now - self.last_time, 0.1)
         self.last_time = now
         if self.running and not self.blank_map:
+            # update() returns cars that left the world so their visuals can go.
             for car in self.simulation.update(dt * self.simulation_speed):
                 self.canvas.delete(car.item)
                 for item in car.detail_items:
@@ -536,11 +829,12 @@ class FreewaySimulator:
                 if car.item is None:
                     car.item = self.create_car_details(car)
                 self.draw_car(car)
+                # Signs are the top dynamic layer and remain legible over cars.
                 self.canvas.tag_raise("speed_limit")
-        self.speed_label.config(text=f"{self.simulation_speed:.2g}x")
-        self.exit_label.config(text=f"Cars exited/min: {self.simulation.exits_per_minute():.0f}")
-        self.average_speed_label.config(text=f"Average speed: {self.simulation.average_speed_mph():.0f} mph")
+        if self.active_tool is not None:
+            self.active_tool.refresh()
         self.draw_merge_debug()
+        # Graph/event windows need not redraw at the animation frame rate.
         if now - self.last_dashboard_refresh >= 1.0:
             self.draw_analytics()
             self.draw_recent_changes()

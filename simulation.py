@@ -5,15 +5,26 @@ from __future__ import annotations
 import random
 from math import dist
 
-from config import LANE_HEIGHT, MERGE_END, MERGE_START, PIXELS_PER_MILE, POST_MERGE_END, ROAD_TOP
+from config import (
+    DEFAULT_SPEED_LIMIT_MPH,
+    LANE_HEIGHT,
+    MERGE_END,
+    MERGE_START,
+    MIN_SPEED_LIMIT_MPH,
+    MIN_SPEED_PREFERENCE_MPH,
+    MAX_SPEED_PREFERENCE_MPH,
+    POST_MERGE_END,
+    ROAD_TOP,
+)
 from models import Car, FollowingTarget, Lane, SpeedLimit, cubic_bezier_points
+from units import mph_to_pixels_per_second, pixels_per_second_to_mph
 
 
 class TrafficSimulation:
     """Own the road network and advance all cars without UI dependencies."""
 
     colors = ("#e74c3c", "#3498db", "#f1c40f", "#2ecc71", "#9b59b6", "#ecf0f1")
-    default_speed_limit_mph = 55.0
+    default_speed_limit_mph = DEFAULT_SPEED_LIMIT_MPH
 
     def __init__(self) -> None:
         self.max_cars = 12
@@ -43,7 +54,7 @@ class TrafficSimulation:
 
     def add_car(self, start_random: bool = False) -> Car:
         lane = random.choice(self.entry_lanes)
-        preference = random.uniform(-5.0, 10.0)
+        preference = random.uniform(MIN_SPEED_PREFERENCE_MPH, MAX_SPEED_PREFERENCE_MPH)
         speed = self.mph_to_pixels_per_second(self.default_speed_limit_mph + preference)
         car = Car(
             lane, *lane.points[0], speed, speed, random.choice(self.colors),
@@ -56,7 +67,8 @@ class TrafficSimulation:
 
     @staticmethod
     def mph_to_pixels_per_second(speed_mph: float) -> float:
-        return speed_mph * PIXELS_PER_MILE / 3600
+        """Convert the model's canonical MPH limit into world pixels/second."""
+        return mph_to_pixels_per_second(speed_mph)
 
     def add_speed_limit(self, speed: float, lane: Lane, x: float, y: float) -> SpeedLimit:
         """Post a limit that applies to cars after they pass this point."""
@@ -85,7 +97,7 @@ class TrafficSimulation:
     def desired_speed_for(self, car: Car) -> float:
         """Apply an individual preference around the current posted limit."""
         return self.mph_to_pixels_per_second(
-            max(15.0, self.speed_limit_for(car) + car.speed_preference_mph)
+            max(MIN_SPEED_LIMIT_MPH, self.speed_limit_for(car) + car.speed_preference_mph)
         )
 
     def advance_car(self, car: Car, distance: float) -> bool:
@@ -198,7 +210,7 @@ class TrafficSimulation:
     def average_speed_mph(self) -> float:
         if not self.cars:
             return 0.0
-        return sum(car.speed for car in self.cars) / len(self.cars) * 3600 / PIXELS_PER_MILE
+        return pixels_per_second_to_mph(sum(car.speed for car in self.cars) / len(self.cars))
 
     def merge_debug_lines(self) -> list[str]:
         lines = [f"MERGE DEBUG   span: {MERGE_START}–{MERGE_END}"]

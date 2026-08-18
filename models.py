@@ -65,8 +65,8 @@ class Car:
     color: str
     acceleration: float = 0.0
     next_point: int = 1
-    length: int = 54
-    width: int = 25
+    length: int = 14
+    width: int = 6
     item: int | None = None
     detail_items: list[int] = field(default_factory=list)
     merge_realness: float = 0.0
