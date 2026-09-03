@@ -20,6 +20,7 @@ class SimulationTool(DropdownTool):
             ToolAction("Clear traffic", self.host.clear_cars),
             ToolAction.separator(),
             ToolAction("Analytics graph", self.host.show_analytics),
+            ToolAction("Performance graph", self.host.show_performance_graph),
             ToolAction("Recent changes", self.host.create_recent_changes_window),
             ToolAction.separator(),
             ToolAction("Imperial (mph, feet)", lambda: self.host.set_unit_system("imperial")),

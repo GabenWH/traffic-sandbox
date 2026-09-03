@@ -1,0 +1,1595 @@
+{
+  "format": "lanesimulator.world",
+  "version": 4,
+  "world": {
+    "width": 5000,
+    "height": 3500,
+    "terrain": {
+      "grass_color": "#78b85a",
+      "trees": [
+        [
+          3201,
+          1440
+        ],
+        [
+          1970,
+          760
+        ],
+        [
+          3239,
+          2447
+        ],
+        [
+          2402,
+          2345
+        ],
+        [
+          2347,
+          1650
+        ],
+        [
+          4802,
+          118
+        ],
+        [
+          2120,
+          2789
+        ],
+        [
+          230,
+          1879
+        ],
+        [
+          1350,
+          693
+        ],
+        [
+          2692,
+          766
+        ],
+        [
+          2189,
+          2761
+        ],
+        [
+          4862,
+          323
+        ],
+        [
+          1061,
+          3292
+        ],
+        [
+          4894,
+          215
+        ],
+        [
+          3623,
+          1234
+        ],
+        [
+          1848,
+          377
+        ],
+        [
+          3030,
+          3079
+        ],
+        [
+          3972,
+          592
+        ],
+        [
+          4628,
+          2824
+        ],
+        [
+          231,
+          586
+        ],
+        [
+          888,
+          668
+        ],
+        [
+          1536,
+          299
+        ],
+        [
+          2263,
+          1381
+        ],
+        [
+          1925,
+          2619
+        ],
+        [
+          293,
+          2571
+        ],
+        [
+          4813,
+          825
+        ],
+        [
+          3642,
+          3342
+        ],
+        [
+          550,
+          1314
+        ],
+        [
+          3352,
+          677
+        ],
+        [
+          954,
+          2814
+        ],
+        [
+          846,
+          1747
+        ],
+        [
+          256,
+          2797
+        ],
+        [
+          4120,
+          1697
+        ],
+        [
+          1967,
+          168
+        ],
+        [
+          783,
+          632
+        ],
+        [
+          717,
+          1957
+        ],
+        [
+          3371,
+          1823
+        ],
+        [
+          4440,
+          3129
+        ],
+        [
+          2371,
+          2290
+        ],
+        [
+          310,
+          138
+        ],
+        [
+          3879,
+          1398
+        ],
+        [
+          1524,
+          648
+        ],
+        [
+          618,
+          3013
+        ],
+        [
+          404,
+          3030
+        ],
+        [
+          975,
+          2785
+        ],
+        [
+          1125,
+          1772
+        ],
+        [
+          778,
+          2574
+        ],
+        [
+          4413,
+          1793
+        ],
+        [
+          894,
+          1070
+        ],
+        [
+          1887,
+          1871
+        ],
+        [
+          3055,
+          3084
+        ],
+        [
+          3845,
+          2865
+        ],
+        [
+          3443,
+          3311
+        ],
+        [
+          3766,
+          419
+        ],
+        [
+          2340,
+          2300
+        ],
+        [
+          1812,
+          2890
+        ],
+        [
+          2118,
+          1214
+        ],
+        [
+          3170,
+          2963
+        ],
+        [
+          2748,
+          3389
+        ],
+        [
+          3191,
+          3306
+        ],
+        [
+          2494,
+          3156
+        ],
+        [
+          3693,
+          3078
+        ],
+        [
+          740,
+          957
+        ],
+        [
+          4603,
+          752
+        ],
+        [
+          1831,
+          207
+        ],
+        [
+          1927,
+          819
+        ],
+        [
+          3920,
+          2810
+        ],
+        [
+          2052,
+          343
+        ],
+        [
+          2023,
+          2323
+        ],
+        [
+          4725,
+          2630
+        ],
+        [
+          1350,
+          2098
+        ],
+        [
+          2775,
+          579
+        ],
+        [
+          1950,
+          1653
+        ],
+        [
+          1050,
+          1911
+        ],
+        [
+          1661,
+          2343
+        ],
+        [
+          4158,
+          1688
+        ],
+        [
+          3001,
+          1189
+        ],
+        [
+          2978,
+          202
+        ],
+        [
+          1542,
+          2494
+        ],
+        [
+          1343,
+          2694
+        ],
+        [
+          1333,
+          2181
+        ],
+        [
+          4325,
+          2741
+        ],
+        [
+          1530,
+          1764
+        ],
+        [
+          667,
+          251
+        ],
+        [
+          4256,
+          2809
+        ],
+        [
+          2963,
+          957
+        ],
+        [
+          3351,
+          1340
+        ],
+        [
+          2406,
+          701
+        ],
+        [
+          2201,
+          1635
+        ],
+        [
+          1969,
+          583
+        ],
+        [
+          2369,
+          2626
+        ],
+        [
+          4891,
+          1786
+        ],
+        [
+          2564,
+          1731
+        ],
+        [
+          4106,
+          2912
+        ],
+        [
+          2038,
+          479
+        ],
+        [
+          4177,
+          2004
+        ],
+        [
+          3694,
+          1034
+        ],
+        [
+          4043,
+          827
+        ],
+        [
+          3964,
+          1273
+        ],
+        [
+          670,
+          1091
+        ],
+        [
+          4136,
+          2011
+        ],
+        [
+          4743,
+          1616
+        ],
+        [
+          524,
+          2580
+        ],
+        [
+          4463,
+          189
+        ],
+        [
+          1680,
+          1769
+        ],
+        [
+          4164,
+          1400
+        ],
+        [
+          3083,
+          2454
+        ],
+        [
+          1491,
+          1831
+        ],
+        [
+          213,
+          988
+        ],
+        [
+          1437,
+          2601
+        ],
+        [
+          4289,
+          1720
+        ],
+        [
+          1296,
+          188
+        ],
+        [
+          4914,
+          2254
+        ],
+        [
+          3152,
+          190
+        ],
+        [
+          1992,
+          1189
+        ],
+        [
+          275,
+          2361
+        ],
+        [
+          4385,
+          3058
+        ],
+        [
+          2097,
+          1660
+        ],
+        [
+          1605,
+          261
+        ],
+        [
+          4396,
+          1420
+        ],
+        [
+          4884,
+          2170
+        ],
+        [
+          1589,
+          2085
+        ],
+        [
+          602,
+          2405
+        ],
+        [
+          4486,
+          3032
+        ],
+        [
+          408,
+          856
+        ],
+        [
+          3106,
+          819
+        ],
+        [
+          2345,
+          2064
+        ],
+        [
+          795,
+          3168
+        ],
+        [
+          3675,
+          148
+        ],
+        [
+          2622,
+          514
+        ],
+        [
+          2574,
+          1672
+        ],
+        [
+          627,
+          2310
+        ],
+        [
+          2691,
+          2822
+        ],
+        [
+          3673,
+          3162
+        ],
+        [
+          3129,
+          2177
+        ],
+        [
+          1547,
+          428
+        ],
+        [
+          668,
+          1598
+        ],
+        [
+          3267,
+          1516
+        ],
+        [
+          1393,
+          1952
+        ],
+        [
+          1497,
+          1162
+        ],
+        [
+          1383,
+          446
+        ],
+        [
+          614,
+          139
+        ],
+        [
+          2663,
+          1342
+        ],
+        [
+          2644,
+          1404
+        ],
+        [
+          208,
+          878
+        ],
+        [
+          510,
+          1815
+        ],
+        [
+          1049,
+          144
+        ],
+        [
+          1302,
+          3029
+        ],
+        [
+          2336,
+          2235
+        ],
+        [
+          2322,
+          1496
+        ],
+        [
+          1457,
+          3163
+        ],
+        [
+          3949,
+          3239
+        ],
+        [
+          4422,
+          3242
+        ],
+        [
+          3390,
+          2061
+        ],
+        [
+          2148,
+          2821
+        ],
+        [
+          4440,
+          2953
+        ],
+        [
+          2311,
+          2425
+        ],
+        [
+          1401,
+          1087
+        ],
+        [
+          288,
+          3167
+        ],
+        [
+          2339,
+          2220
+        ],
+        [
+          514,
+          871
+        ],
+        [
+          2713,
+          1232
+        ],
+        [
+          2403,
+          1107
+        ],
+        [
+          2474,
+          1188
+        ],
+        [
+          2422,
+          458
+        ],
+        [
+          631,
+          1162
+        ],
+        [
+          4771,
+          1330
+        ],
+        [
+          1358,
+          1738
+        ],
+        [
+          4540,
+          2321
+        ],
+        [
+          180,
+          1610
+        ],
+        [
+          1994,
+          1610
+        ],
+        [
+          3476,
+          2537
+        ],
+        [
+          3767,
+          1799
+        ],
+        [
+          1891,
+          235
+        ],
+        [
+          1740,
+          331
+        ],
+        [
+          2506,
+          2582
+        ],
+        [
+          3105,
+          166
+        ],
+        [
+          1497,
+          2107
+        ],
+        [
+          3529,
+          2906
+        ],
+        [
+          801,
+          2168
+        ]
+      ]
+    },
+    "roads": [
+      {
+        "id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+        "name": "Two-lane street 1",
+        "centerline": [
+          [
+            2629.0,
+            1610.0
+          ],
+          [
+            2853.4401885680613,
+            1689.0029463759577
+          ]
+        ],
+        "lane_width": 12.0,
+        "forward_lane_count": 1,
+        "reverse_lane_count": 1,
+        "buildable_id": "two_lane_street",
+        "buildable_state": {
+          "phase": "planning",
+          "condition": 1.0,
+          "inventory": {},
+          "active_work": null
+        },
+        "lanes": [
+          {
+            "name": "Two-lane street 1 forward 1",
+            "direction": "forward",
+            "index": 0,
+            "following_gap": 85.0
+          },
+          {
+            "name": "Two-lane street 1 reverse 1",
+            "direction": "reverse",
+            "index": 0,
+            "following_gap": 85.0
+          }
+        ]
+      },
+      {
+        "id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+        "name": "Two-lane street 1",
+        "centerline": [
+          [
+            2853.4401885680613,
+            1689.0029463759577
+          ],
+          [
+            3129.0,
+            1786.0
+          ],
+          [
+            2852.0,
+            2007.0
+          ],
+          [
+            2723.4330282861897,
+            1779.0079034941764
+          ]
+        ],
+        "lane_width": 12.0,
+        "forward_lane_count": 1,
+        "reverse_lane_count": 1,
+        "buildable_id": "two_lane_street",
+        "buildable_state": {
+          "phase": "planning",
+          "condition": 1.0,
+          "inventory": {},
+          "active_work": null
+        },
+        "lanes": [
+          {
+            "name": "Two-lane street 1 forward 1",
+            "direction": "forward",
+            "index": 0,
+            "following_gap": 85.0
+          },
+          {
+            "name": "Two-lane street 1 reverse 1",
+            "direction": "reverse",
+            "index": 0,
+            "following_gap": 85.0
+          }
+        ]
+      },
+      {
+        "id": "133f5d7e-5e65-40aa-be78-075179538e83",
+        "name": "Two-lane street 1",
+        "centerline": [
+          [
+            2723.4330282861897,
+            1779.0079034941764
+          ],
+          [
+            2627.0,
+            1608.0
+          ]
+        ],
+        "lane_width": 12.0,
+        "forward_lane_count": 1,
+        "reverse_lane_count": 1,
+        "buildable_id": "two_lane_street",
+        "buildable_state": {
+          "phase": "planning",
+          "condition": 1.0,
+          "inventory": {},
+          "active_work": null
+        },
+        "lanes": [
+          {
+            "name": "Two-lane street 1 forward 1",
+            "direction": "forward",
+            "index": 0,
+            "following_gap": 85.0
+          },
+          {
+            "name": "Two-lane street 1 reverse 1",
+            "direction": "reverse",
+            "index": 0,
+            "following_gap": 85.0
+          }
+        ]
+      },
+      {
+        "id": "ffcac5ad-71b3-450b-880f-26d3bcfab286",
+        "name": "Two-lane street 2",
+        "centerline": [
+          [
+            2982.0,
+            1600.0
+          ],
+          [
+            2853.4401885680613,
+            1689.0029463759577
+          ]
+        ],
+        "lane_width": 12.0,
+        "forward_lane_count": 1,
+        "reverse_lane_count": 1,
+        "buildable_id": "two_lane_street",
+        "buildable_state": {
+          "phase": "planning",
+          "condition": 1.0,
+          "inventory": {},
+          "active_work": null
+        },
+        "lanes": [
+          {
+            "name": "Two-lane street 2 forward 1",
+            "direction": "forward",
+            "index": 0,
+            "following_gap": 85.0
+          },
+          {
+            "name": "Two-lane street 2 reverse 1",
+            "direction": "reverse",
+            "index": 0,
+            "following_gap": 85.0
+          }
+        ]
+      },
+      {
+        "id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+        "name": "Two-lane street 2",
+        "centerline": [
+          [
+            2853.4401885680613,
+            1689.0029463759577
+          ],
+          [
+            2723.4330282861897,
+            1779.0079034941764
+          ]
+        ],
+        "lane_width": 12.0,
+        "forward_lane_count": 1,
+        "reverse_lane_count": 1,
+        "buildable_id": "two_lane_street",
+        "buildable_state": {
+          "phase": "planning",
+          "condition": 1.0,
+          "inventory": {},
+          "active_work": null
+        },
+        "lanes": [
+          {
+            "name": "Two-lane street 2 forward 1",
+            "direction": "forward",
+            "index": 0,
+            "following_gap": 85.0
+          },
+          {
+            "name": "Two-lane street 2 reverse 1",
+            "direction": "reverse",
+            "index": 0,
+            "following_gap": 85.0
+          }
+        ]
+      },
+      {
+        "id": "ad0a345f-0fe4-4313-a2b0-689faed04e78",
+        "name": "Two-lane street 2",
+        "centerline": [
+          [
+            2723.4330282861897,
+            1779.0079034941764
+          ],
+          [
+            2475.0,
+            1951.0
+          ]
+        ],
+        "lane_width": 12.0,
+        "forward_lane_count": 1,
+        "reverse_lane_count": 1,
+        "buildable_id": "two_lane_street",
+        "buildable_state": {
+          "phase": "planning",
+          "condition": 1.0,
+          "inventory": {},
+          "active_work": null
+        },
+        "lanes": [
+          {
+            "name": "Two-lane street 2 forward 1",
+            "direction": "forward",
+            "index": 0,
+            "following_gap": 85.0
+          },
+          {
+            "name": "Two-lane street 2 reverse 1",
+            "direction": "reverse",
+            "index": 0,
+            "following_gap": 85.0
+          }
+        ]
+      }
+    ],
+    "intersections": [
+      {
+        "id": "be06a408-db75-43f7-bff2-d129c319d036",
+        "kind": "standard",
+        "position": [
+          2853.4401885680613,
+          1689.0029463759577
+        ],
+        "road_ids": [
+          "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+          "b4830da7-8c2c-4128-9815-ae8182566c2d",
+          "ffcac5ad-71b3-450b-880f-26d3bcfab286",
+          "67fbd087-7aa9-4794-ab4e-48a917421a93"
+        ],
+        "lane_connections": [
+          {
+            "source_output": {
+              "road_id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "through",
+              "angle": -0.010778257946785576
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "ffcac5ad-71b3-450b-880f-26d3bcfab286",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -0.944000107890426
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 2.1975925456993703
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "through",
+              "angle": -0.010397846312897864
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "ffcac5ad-71b3-450b-880f-26d3bcfab286",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 2.1871946993864695
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -0.954397954203321
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "ffcac5ad-71b3-450b-880f-26d3bcfab286",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 0.944000107890426
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "ffcac5ad-71b3-450b-880f-26d3bcfab286",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -2.2083708036461527
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "ffcac5ad-71b3-450b-880f-26d3bcfab286",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "through",
+              "angle": 2.9976021664879227e-15
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -2.1975925456993703
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 0.9332218499436375
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "ffcac5ad-71b3-450b-880f-26d3bcfab286",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "through",
+              "angle": -2.9976021664879227e-15
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "e328f818-fbc5-4b12-b702-32cf03a4d425",
+        "kind": "standard",
+        "position": [
+          2723.4330282861897,
+          1779.0079034941764
+        ],
+        "road_ids": [
+          "b4830da7-8c2c-4128-9815-ae8182566c2d",
+          "133f5d7e-5e65-40aa-be78-075179538e83",
+          "67fbd087-7aa9-4794-ab4e-48a917421a93",
+          "ad0a345f-0fe4-4313-a2b0-689faed04e78"
+        ],
+        "lane_connections": [
+          {
+            "source_output": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "133f5d7e-5e65-40aa-be78-075179538e83",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "through",
+              "angle": -0.008203869011951609
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 1.470507535920927
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "ad0a345f-0fe4-4313-a2b0-689faed04e78",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -1.6710851176688677
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "133f5d7e-5e65-40aa-be78-075179538e83",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "through",
+              "angle": -0.007922439521427656
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "133f5d7e-5e65-40aa-be78-075179538e83",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -1.6628812486569144
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "133f5d7e-5e65-40aa-be78-075179538e83",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "ad0a345f-0fe4-4313-a2b0-689faed04e78",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 1.4787114049328773
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -1.4866338444543064
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "133f5d7e-5e65-40aa-be78-075179538e83",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 1.6628812486569144
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "ad0a345f-0fe4-4313-a2b0-689faed04e78",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "through",
+              "angle": -1.4432899320127035e-15
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "ad0a345f-0fe4-4313-a2b0-689faed04e78",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "b4830da7-8c2c-4128-9815-ae8182566c2d",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 1.6549588091354883
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "ad0a345f-0fe4-4313-a2b0-689faed04e78",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "133f5d7e-5e65-40aa-be78-075179538e83",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -1.4787114049328773
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "ad0a345f-0fe4-4313-a2b0-689faed04e78",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "67fbd087-7aa9-4794-ab4e-48a917421a93",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "through",
+              "angle": 1.4432899320127035e-15
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "cul_de_sac:f7d3774a-ff4b-4679-9a67-9e6206b02c82:start",
+        "kind": "cul_de_sac",
+        "position": [
+          2629.0,
+          1610.0
+        ],
+        "road_ids": [
+          "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+          "133f5d7e-5e65-40aa-be78-075179538e83"
+        ],
+        "lane_connections": [
+          {
+            "source_output": {
+              "road_id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "u_turn",
+              "angle": 3.141592653589793
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "133f5d7e-5e65-40aa-be78-075179538e83",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -2.4227115128233017
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "133f5d7e-5e65-40aa-be78-075179538e83",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "f7d3774a-ff4b-4679-9a67-9e6206b02c82",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 2.4227115128233017
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "133f5d7e-5e65-40aa-be78-075179538e83",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "133f5d7e-5e65-40aa-be78-075179538e83",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "u_turn",
+              "angle": 3.141592653589793
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "cul_de_sac:ffcac5ad-71b3-450b-880f-26d3bcfab286:start",
+        "kind": "cul_de_sac",
+        "position": [
+          2982.0,
+          1600.0
+        ],
+        "road_ids": [
+          "ffcac5ad-71b3-450b-880f-26d3bcfab286"
+        ],
+        "lane_connections": [
+          {
+            "source_output": {
+              "road_id": "ffcac5ad-71b3-450b-880f-26d3bcfab286",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "ffcac5ad-71b3-450b-880f-26d3bcfab286",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "u_turn",
+              "angle": 3.141592653589793
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "cul_de_sac:ad0a345f-0fe4-4313-a2b0-689faed04e78:end",
+        "kind": "cul_de_sac",
+        "position": [
+          2475.0,
+          1951.0
+        ],
+        "road_ids": [
+          "ad0a345f-0fe4-4313-a2b0-689faed04e78"
+        ],
+        "lane_connections": [
+          {
+            "source_output": {
+              "road_id": "ad0a345f-0fe4-4313-a2b0-689faed04e78",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "ad0a345f-0fe4-4313-a2b0-689faed04e78",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "u_turn",
+              "angle": 3.141592653589793
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          }
+        ]
+      }
+    ],
+    "parcels": [],
+    "buildings": []
+  },
+  "view": {
+    "unit_system": "imperial",
+    "camera": {
+      "x": 2000.0,
+      "y": 1430.0,
+      "zoom": 1.0
+    }
+  }
+}

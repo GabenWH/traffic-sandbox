@@ -19,6 +19,10 @@ class ToolbarTool:
         """Create and return this tool's toolbar widget."""
         raise NotImplementedError
 
+    def iter_canvas_tools(self) -> tuple[CanvasTool, ...]:
+        """Return canvas modes owned by this toolbar item."""
+        return ()
+
 
 class CommandTool(ToolbarTool):
     """A one-click toolbar command, such as Reset view."""
@@ -42,6 +46,28 @@ class CanvasTool(ToolbarTool):
     the activate/click/refresh/deactivate pattern reusable.
     """
 
+    cursor = ""
+
+    def iter_canvas_tools(self) -> tuple[CanvasTool, ...]:
+        return (self,)
+
+    @property
+    def inspector(self) -> Any:
+        """Return the application's shared Inspector tool, when available."""
+        return getattr(self.host, "inspector_tool", None)
+
+    def show_inspector(self) -> None:
+        """Open the shared Inspector without replacing this active mode."""
+        inspector = self.inspector
+        if inspector is not None:
+            inspector.show_panel()
+
+    def inspect_object(self, selected: object) -> None:
+        """Hand an object to the shared Inspector without changing modes."""
+        inspector = self.inspector
+        if inspector is not None:
+            inspector.show_object(selected)
+
     def build(self, toolbar: tk.Misc) -> tk.Button:
         """Create a toggle button that selects this canvas interaction mode."""
         button = tk.Button(
@@ -64,6 +90,9 @@ class CanvasTool(ToolbarTool):
 
     def on_canvas_click(self, event: Any) -> None:
         """Handle a left click delegated by the main world canvas."""
+
+    def on_canvas_motion(self, event: Any) -> None:
+        """Handle pointer movement delegated by the main world canvas."""
 
     def refresh(self) -> None:
         """Update live information while the tool is active."""

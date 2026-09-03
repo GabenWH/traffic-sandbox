@@ -1,7 +1,34 @@
 [
-  {"id": "file", "enabled": true},
-  {"id": "simulation", "enabled": true},
-  {"id": "units", "enabled": true},
-  {"id": "inspect", "enabled": true},
-  {"id": "reset_view", "enabled": true}
+  {
+    "id": "file",
+    "enabled": true
+  },
+  {
+    "id": "simulation",
+    "enabled": true
+  },
+  {
+    "id": "units",
+    "enabled": true
+  },
+  {
+    "id": "inspect",
+    "enabled": true
+  },
+  {
+    "id": "reset_view",
+    "enabled": true
+  },
+  {
+    "id": "road",
+    "enabled": true
+  },
+  {
+    "id": "route_test",
+    "enabled": true
+  },
+  {
+    "id": "test_traffic",
+    "enabled": true
+  }
 ]

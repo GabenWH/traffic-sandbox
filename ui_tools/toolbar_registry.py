@@ -120,7 +120,18 @@ def configured_tool_ids(
 
 
 def load_toolbar_tools(host: Any) -> list[ToolbarTool]:
-    """Instantiate the enabled tools, in the order written in toolbar.json."""
+    """Synchronize then instantiate enabled tools in manifest order.
+
+    A local import avoids the module cycle created because the synchronizer
+    relies on this module's discovery helpers.
+    """
+    from .sync_toolbar import sync_manifest
+
+    try:
+        sync_manifest()
+    except ValueError as error:
+        # Preserve the existing fallback for an unreadable or invalid manifest.
+        print(f"Toolbar: {error}")
     definitions = discover_tool_definitions()
     manifest = read_manifest()
     tools: list[ToolbarTool] = []

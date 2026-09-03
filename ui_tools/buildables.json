@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "buildables": [
+    {
+      "id": "two_lane_street",
+      "kind": "road",
+      "name": "Two-lane street",
+      "description": "A general-purpose street with one lane in each direction.",
+      "specs": {
+        "lane_width": 12,
+        "forward_lane_count": 1,
+        "reverse_lane_count": 1
+      }
+    },
+    {
+      "id": "one_way_street",
+      "kind": "road",
+      "name": "One-way street",
+      "description": "A narrow one-way street for compact circulation.",
+      "specs": {
+        "lane_width": 11,
+        "forward_lane_count": 1,
+        "reverse_lane_count": 0
+      }
+    },
+    {
+      "id": "four_lane_avenue",
+      "kind": "road",
+      "name": "Four-lane avenue",
+      "description": "A higher-capacity avenue with two lanes in each direction.",
+      "specs": {
+        "lane_width": 12,
+        "forward_lane_count": 2,
+        "reverse_lane_count": 2
+      }
+    },
+    {
+      "id": "small_house",
+      "kind": "building",
+      "name": "Small house",
+      "description": "A detached residential home for a small household.",
+      "specs": {
+        "width": 40,
+        "height": 30,
+        "zone": "residential",
+        "residents": 4,
+        "jobs": 0,
+        "color": "#d9b38c"
+      }
+    },
+    {
+      "id": "apartment_building",
+      "kind": "building",
+      "name": "Apartment building",
+      "description": "A medium-density residential building.",
+      "specs": {
+        "width": 72,
+        "height": 52,
+        "zone": "residential",
+        "residents": 24,
+        "jobs": 2,
+        "color": "#c9936f"
+      }
+    },
+    {
+      "id": "corner_shop",
+      "kind": "building",
+      "name": "Corner shop",
+      "description": "A small commercial building serving nearby residents.",
+      "specs": {
+        "width": 54,
+        "height": 42,
+        "zone": "commercial",
+        "residents": 0,
+        "jobs": 8,
+        "color": "#70a8c9"
+      }
+    },
+    {
+      "id": "office_building",
+      "kind": "building",
+      "name": "Office building",
+      "description": "A larger workplace for a commercial district.",
+      "specs": {
+        "width": 90,
+        "height": 70,
+        "zone": "commercial",
+        "residents": 0,
+        "jobs": 60,
+        "color": "#658aa8"
+      }
+    },
+    {
+      "id": "factory",
+      "kind": "building",
+      "name": "Factory",
+      "description": "An industrial workplace with a broad footprint.",
+      "specs": {
+        "width": 110,
+        "height": 80,
+        "zone": "industrial",
+        "residents": 0,
+        "jobs": 45,
+        "color": "#8b8580"
+      }
+    }
+  ]
+}
