@@ -35,6 +35,8 @@ class CarObservation:
     speed: float
     distance_to_stop: float | None = None
     must_stop: bool = False
+    must_yield: bool = False
+    priority_reason: str = "waiting for conflicting traffic"
     has_priority: bool = False
     lead_car_distance: float | None = None
     following_gap: float = 24.0
@@ -73,6 +75,18 @@ class CarBrain:
         if observation.inside_intersection:
             state = BehaviorState.CLEARING_INTERSECTION
             self.stopped_elapsed = 0.0
+        elif observation.must_yield and observation.distance_to_stop is not None:
+            self.stopped_elapsed = 0.0
+            if observation.has_priority:
+                state = BehaviorState.ENTERING_INTERSECTION
+                request_claim = True
+            else:
+                # A yield is permission to keep rolling when there is a gap.
+                # Only brake toward the line when someone else has priority.
+                desired = min(desired, sqrt(2.0 * COMFORTABLE_BRAKING
+                                             * max(0.0, observation.distance_to_stop)))
+                state = BehaviorState.WAITING_FOR_PRIORITY
+                reason = observation.priority_reason
         elif observation.must_stop and observation.distance_to_stop is not None:
             distance = max(0.0, observation.distance_to_stop)
             if distance > 0.05:

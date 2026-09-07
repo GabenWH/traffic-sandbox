@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from itertools import count
-from math import dist, isfinite
+from math import dist, isfinite, sqrt
 import random
 
 from city import CityMap
 from car_brain import CarBrain, CarObservation
 from intersection_controls import AllWayStopCoordinator
+from merge_behavior import merge_has_gap
 from mobility import (
     LaneTraversal,
     MobilityLink,
@@ -19,7 +20,7 @@ from mobility import (
     vehicle_link_points,
     vehicle_route_points,
 )
-from models import ControlType, Intersection, Lane, LaneConnection, Point, polyline_length
+from models import ManeuverType, ControlType, Intersection, Lane, LaneConnection, Point, polyline_length
 from pathfinding import Path
 from traffic_occupancy import TrafficOccupancyIndex
 from units import mph_to_pixels_per_second
@@ -80,6 +81,9 @@ class RoutedTestCar:
         if not isfinite(elapsed_seconds) or elapsed_seconds < 0:
             raise ValueError("Elapsed time must be finite and nonnegative")
         self.distance = min(self.total_length, self.distance + self.speed * elapsed_seconds)
+        # Substeps can accumulate a few trillionths of a foot of rounding error.
+        if self.total_length - self.distance < 1e-8:
+            self.distance = self.total_length
         self.position, self.heading = _position_and_heading(self.points, self.distance)
         return self.distance < self.total_length
 
@@ -175,6 +179,17 @@ class TestTrafficSimulation:
         """Spawn and advance test cars, returning cars that reached a sink."""
         if not isfinite(elapsed_seconds) or elapsed_seconds < 0:
             raise ValueError("Elapsed time must be finite and nonnegative")
+        # Keep observations frequent even when the UI fast-forwards or a test
+        # advances several seconds at once. Otherwise a car can skip a whole
+        # entrance between two decisions.
+        if elapsed_seconds > 0.05 + 1e-9:
+            completed = []
+            remaining = elapsed_seconds
+            while remaining > 1e-9:
+                step = min(0.05, remaining)
+                completed.extend(self.update(city_map, step))
+                remaining -= step
+            return completed
         self.elapsed_time += elapsed_seconds
         current_ids = {junction.id for junction in city_map.intersections}
         self.active_junction_ids = [
@@ -199,6 +214,19 @@ class TestTrafficSimulation:
                         break
 
         self.occupancy.rebuild(self.cars)
+        # Observe EVERY approach before granting ANY entry. The order of cars
+        # in the Python list must not decide who gets right of way.
+        for car in self.cars:
+            movement = _next_controlled_movement(car)
+            if movement is None or self.stop_coordinator.has_claim(car.id, movement[2]):
+                continue
+            distance = max(0.0, movement[0] - car.length / 2 - car.distance)
+            if movement[2].control.kind is ControlType.STOP:
+                if distance <= 0.05 and car.speed <= 0.1:
+                    self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
+            elif distance <= TEST_CAR_LOOKAHEAD:
+                self.stop_coordinator.observe_approach(
+                    car.id, movement[2], self.elapsed_time + distance / max(car.speed, 1.0))
         completed: list[RoutedTestCar] = []
         for car in list(self.cars):
             route_movement = _next_route_movement(car)
@@ -217,27 +245,37 @@ class TestTrafficSimulation:
                 if movement is not None and not has_claim
                 else None
             )
-            if movement is not None and distance_to_stop is not None and distance_to_stop <= 0.05 and car.speed <= 0.1:
+            if movement is not None and movement[2].control.kind is ControlType.STOP and distance_to_stop is not None and distance_to_stop <= 0.05 and car.speed <= 0.1:
                 self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
             priority = (
                 movement is not None
                 and self.stop_coordinator.can_claim(car.id, movement[2])
             )
+            priority_reason = "waiting for intersection priority"
+            if movement is not None and not has_claim:
+                # Reserve enough space for our whole car beyond the movement.
+                # Stopping across the exit would block everyone else's path.
+                exit_gap = self.occupancy.gap_from(car, movement[1], TEST_CAR_LOOKAHEAD)
+                if exit_gap is not None and exit_gap < TEST_CAR_FOLLOWING_GAP + car.length / 2:
+                    priority = False
+                    priority_reason = "waiting for room beyond the junction"
+                if not merge_has_gap(car, movement, self.cars):
+                    priority = False
+                    priority_reason = "yielding to traffic on the joining lane"
             lead_distance = self.occupancy.lead_gap(car, TEST_CAR_LOOKAHEAD)
             decision = car.brain.decide(
                 CarObservation(
-                    cruise_speed=mph_to_pixels_per_second(self.speed_mph),
+                    cruise_speed=_route_cruise_speed(car, self.speed_mph),
                     speed=car.speed,
                     distance_to_stop=distance_to_stop,
-                    must_stop=movement is not None and not has_claim,
+                    must_stop=movement is not None and not has_claim and movement[2].control.kind is ControlType.STOP,
+                    must_yield=movement is not None and not has_claim and movement[2].control.kind is not ControlType.STOP,
+                    priority_reason=priority_reason,
                     has_priority=priority,
                     lead_car_distance=lead_distance,
                     following_gap=TEST_CAR_FOLLOWING_GAP,
                     inside_intersection=inside,
-                    next_maneuver=(
-                        route_movement[2].maneuver.kind
-                        if route_movement is not None else None
-                    ),
+                    next_maneuver=_signaled_maneuver(car, route_movement),
                     distance_to_maneuver=(
                         max(0.0, route_movement[0] - car.distance)
                         if route_movement is not None else None
@@ -251,7 +289,10 @@ class TestTrafficSimulation:
             )
             if decision.register_stop and movement is not None:
                 self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
-            if decision.request_claim and movement is not None:
+            if (decision.request_claim and movement is not None
+                    and (distance_to_stop or 0) <= max(10.0, car.speed * 0.6)):
+                # Claim only near entry; a car far up the road should not reserve
+                # an empty junction for several seconds while it approaches.
                 has_claim = self.stop_coordinator.claim(car.id, movement[2])
                 if has_claim:
                     car._claimed_movement = movement[2]
@@ -273,9 +314,13 @@ class TestTrafficSimulation:
                 if travel == 0.0:
                     car.speed = 0.0
             alive = car.advance(travel / car.speed if car.speed > 0 else 0.0)
-            if movement is not None and has_claim and car.distance >= movement[1]:
+            if movement is not None and has_claim and car.distance - car.length / 2 >= movement[1]:
                 self.stop_coordinator.release(car.id)
                 car._claimed_movement = None
+            # Refresh occupancy so a later car in this same tick sees the
+            # space just taken by a merge. At this prototype's 60-car limit a
+            # simple rebuild is clearer than maintaining incremental bins.
+            self.occupancy.rebuild(self.cars)
             if not alive:
                 completed.append(car)
                 self.stop_coordinator.forget_car(car.id)
@@ -369,8 +414,9 @@ def _next_controlled_movement(
     return next(
         (
             movement for movement in car.controlled_movements
-            if car.distance < movement[1]
-            and movement[2].control.kind is ControlType.STOP
+            if car.distance - car.length / 2 < movement[1]
+            and movement[2].roundabout_role != "exit"
+            and movement[2].maneuver.kind is not ManeuverType.U_TURN
         ),
         None,
     )
@@ -383,3 +429,31 @@ def _next_route_movement(
         (movement for movement in car.controlled_movements if car.distance < movement[1]),
         None,
     )
+
+
+def _route_cruise_speed(car, speed_mph):
+    """Brake before the tight circle, and keep a modest speed until the exit."""
+    cruise = mph_to_pixels_per_second(speed_mph)
+    curve_speed = mph_to_pixels_per_second(min(speed_mph, 12.0))
+    for start, end, movement in car.controlled_movements:
+        if movement.roundabout_role and car.distance - car.length/2 < end:
+            distance = max(0.0, start - car.distance - car.length/2)
+            # Once on the ring, the next movement is its exit. Stay slow across
+            # the intervening shared arcs rather than accelerating toward it.
+            if movement.roundabout_role == "exit":
+                distance = 0.0
+            return min(cruise, sqrt(curve_speed**2 + 2*TEST_CAR_BRAKING*distance))
+    return cruise
+
+
+def _signaled_maneuver(car, movement):
+    """Wait until the final ring section before signaling the chosen exit."""
+    if movement is None:
+        return None
+    start, end, connection = movement
+    if connection.roundabout_role == "exit":
+        previous = [segment for segment in car.route_segments
+                    if segment[1] <= start + 1e-8 and segment[2][0] == "lane"]
+        if previous and car.distance < previous[-1][0]:
+            return None
+    return connection.maneuver.kind

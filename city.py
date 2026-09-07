@@ -145,7 +145,7 @@ class CityMap:
     def standard_intersections(self) -> list[Intersection]:
         return [
             intersection for intersection in self.intersections
-            if intersection.kind is IntersectionKind.STANDARD
+            if intersection.kind is not IntersectionKind.CUL_DE_SAC
         ]
 
     def add_road(
@@ -288,7 +288,7 @@ class CityMap:
         }
         standard_intersections = [
             intersection for intersection in self.intersections
-            if intersection.kind is IntersectionKind.STANDARD
+            if intersection.kind is not IntersectionKind.CUL_DE_SAC
         ]
         cul_de_sacs = [
             intersection for intersection in self.intersections
@@ -303,7 +303,7 @@ class CityMap:
                 )
             ]
             intersection.radius = max(
-                MINIMUM_INTERSECTION_RADIUS,
+                60.0 if intersection.kind is IntersectionKind.ROUNDABOUT else MINIMUM_INTERSECTION_RADIUS,
                 *(
                     road.width / 2
                     + INTERSECTION_CLEARANCE

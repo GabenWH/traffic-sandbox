@@ -248,6 +248,23 @@ class RendererMixin:
                 x + surface_radius, y + surface_radius,
                 fill="#4d535a", outline="", tags=STATIC_TAG,
             )
+            if intersection.kind is IntersectionKind.ROUNDABOUT:
+                from roundabouts import ring_radius
+                # Leave twelve feet of circulating roadway around the island.
+                island = max(1, (ring_radius(intersection) - 7) * self.camera_zoom)
+                self.canvas.create_oval(
+                    x-island, y-island, x+island, y+island,
+                    fill="#67884b", outline="#e6dfbe",
+                    width=max(1, 2*self.camera_zoom), tags=STATIC_TAG)
+                for port in intersection.incoming_ports():
+                    side = (-port.heading[1], port.heading[0])
+                    a = (port.position[0]-side[0]*port.width/2,
+                         port.position[1]-side[1]*port.width/2)
+                    b = (port.position[0]+side[0]*port.width/2,
+                         port.position[1]+side[1]*port.width/2)
+                    self.canvas.create_line(*self.world_points(a, b),
+                        fill="#f7f7f2", dash=(3, 3),
+                        width=max(2, 2*self.camera_zoom), tags=STATIC_TAG)
             controlled_ports = {
                 connection.source_output
                 for connection in intersection.lane_connections

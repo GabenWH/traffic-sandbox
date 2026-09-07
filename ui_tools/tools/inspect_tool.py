@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from city import Building
 from config import MAX_SPEED_PREFERENCE_MPH, MIN_SPEED_PREFERENCE_MPH
-from models import Car, CityObject, Intersection, Lane, Road, SpeedLimit
+from models import Car, CityObject, Intersection, IntersectionKind, Lane, Road, SpeedLimit
 from traffic_testbed import RoutedTestCar
 from units import (
     acceleration_unit,
@@ -112,6 +112,33 @@ def set_intersection_all_way_stop(
         draw_scene()
 
 
+def set_intersection_kind(host, intersection, value):
+    """Convert a junction and discard temporary cars holding old route shapes."""
+    value = value.strip().lower()
+    if value not in {"standard", "roundabout"}:
+        raise ValueError("Enter standard or roundabout.")
+    kind = IntersectionKind(value)
+    if intersection.kind is kind:
+        return
+    traffic = getattr(host, "test_traffic", None)
+    if traffic is not None:
+        for car in traffic.clear_cars():
+            canvas = getattr(host, "canvas", None)
+            if canvas is not None:
+                for item in [car.item, *car.signal_items]:
+                    if item is not None:
+                        canvas.delete(item)
+    intersection.kind = kind
+    # Stop signs from the former layout do not carry over to roundabout entries.
+    from models import ControlDefinition
+    for connection in intersection.lane_connections:
+        connection.control = ControlDefinition()
+    host.city_map.rebuild_mobility_network()
+    redraw = getattr(host, "redraw_world", None)
+    if callable(redraw):
+        redraw()
+
+
 def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[InspectionRow]]:
     """Return a title and field descriptions for one selected model object.
 
@@ -150,6 +177,9 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
                     f"{distance_unit(unit_system)}"
                 )
             rows.append(InspectionRow(item.label, str(value), target=item.target))
+        if selected.kind is not IntersectionKind.CUL_DE_SAC:
+            rows.insert(2, InspectionRow("Junction type", selected.kind.value, "text",
+                lambda value: set_intersection_kind(host, selected, value)))
         if selected.kind.value == "standard":
             rows.insert(
                 2,
@@ -438,11 +468,13 @@ class InspectTool(CanvasTool):
             self.host.select_lane(self.selected)
         self.refresh()
 
-    def _selection_key(self) -> tuple[int | None, int | None]:
+    def _selection_key(self) -> tuple[object, ...]:
         """Identify the layout; global fields also depend on selected lane."""
         return (
             id(self.selected) if self.selected is not None else None,
             id(self.host.selected_lane) if self.selected is None else None,
+            # Changing kind adds/removes the all-way-stop editor.
+            self.selected.kind if isinstance(self.selected, Intersection) else None,
         )
 
     def _build_fields(self, rows: list[InspectionRow]) -> None:

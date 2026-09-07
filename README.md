@@ -56,10 +56,18 @@ Select a standard intersection with **Inspect** and set **All-way stop** to
 request entry after a complete stop, while a runtime coordinator records
 arrival order and prevents conflicting claims. Equal arrivals use deterministic
 clockwise approach order. Select a routed car to inspect its brain state and
-wait reason. Traffic lights, roundabouts, and the legacy freeway-car migration remain
-future work. Routed cars automatically use perfectly compliant turn signals:
+wait reason. Traffic lights and the legacy freeway-car migration remain future work. Routed cars automatically use perfectly compliant turn signals:
 left/right indicators activate 100 feet before a turn, U-turns signal left,
 and the signal remains active until the car clears the movement.
+
+**Roundabouts and uncontrolled intersections:** use the intersection Inspector's
+**Junction type** field (`standard` or `roundabout`). Uncontrolled intersections
+now yield to conflicting traffic and check for space beyond the junction.
+Single-lane roundabouts use shared circular lane sections, yield-controlled
+entrances, a 12 mph circulating speed and exit signals. Changing type clears
+temporary cars so their routes can be regenerated. See
+[`docs/JUNCTIONS.md`](docs/JUNCTIONS.md) for testing instructions and a plain-English
+walkthrough of the reusable merge logic.
 
 Roads and buildings also share persistent lifecycle, local inventory,
 condition, and active-work state as groundwork for worker-and-resource-driven

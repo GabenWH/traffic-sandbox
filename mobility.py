@@ -8,6 +8,7 @@ from math import dist, isfinite
 
 from models import (
     Intersection,
+    IntersectionKind,
     Lane,
     LaneConnection,
     Point,
@@ -201,6 +202,10 @@ def build_vehicle_layer(
                 )
 
     for junction in intersections:
+        if junction.kind is IntersectionKind.ROUNDABOUT:
+            from roundabouts import add_roundabout_to_layer
+            add_roundabout_to_layer(layer, junction)
+            continue
         for connection in junction.lane_connections:
             layer.graph.add_edge(
                 road_output_node(connection.source_output),

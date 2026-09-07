@@ -227,6 +227,7 @@ class IntersectionKind(StrEnum):
     """Geometry and movement policy used by a generic road junction."""
 
     STANDARD = "standard"
+    ROUNDABOUT = "roundabout"
     CUL_DE_SAC = "cul_de_sac"
 
 
@@ -704,6 +705,10 @@ class LaneConnection(CityObject):
     path: list[Point]
     maneuver: ManeuverDefinition
     control: ControlDefinition = field(default_factory=ControlDefinition)
+    # Generated entrance/exit connectors use ordinary movement data, with an
+    # extra role for signals and a shared target lane for generic merge checks.
+    roundabout_role: str = ""
+    merge_target: tuple[str, str] | None = None
     inspection_title = "Lane connection"
 
     @property
@@ -711,6 +716,7 @@ class LaneConnection(CityObject):
         return (
             f"{self.intersection_id}:"
             f"{self.source_output.id}->{self.destination_input.id}"
+            f"{':' + self.roundabout_role if self.roundabout_role else ''}"
         )
 
     @property
@@ -745,6 +751,8 @@ class Intersection(CityObject):
 
     @property
     def inspection_title(self) -> str:
+        if self.kind is IntersectionKind.ROUNDABOUT:
+            return "Roundabout"
         return "Cul-de-sac" if self.kind is IntersectionKind.CUL_DE_SAC else "Intersection"
 
     def incoming_ports(self) -> list[RoadPort]:
