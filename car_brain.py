@@ -103,7 +103,9 @@ class CarBrain:
             self.phantom_target = merge_choice.phantom_target
             reason = merge_choice.reason
 
-        if observation.inside_intersection:
+        # Our rear may still occupy one junction while our nose must obey the
+        # next signal. Clearing the old junction does not cancel that signal.
+        if observation.inside_intersection and not (observation.must_stop or observation.must_yield):
             state = BehaviorState.CLEARING_INTERSECTION
             self.stopped_elapsed = 0.0
         elif observation.must_yield and observation.distance_to_stop is not None:

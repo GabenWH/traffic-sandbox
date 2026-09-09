@@ -89,3 +89,32 @@ that it adjusts speed, enters without stopping, and does not overlap the leader.
 The cautious and rolling brains are separately given identical observations to
 verify that their choices differ. Standstill queues block both strategies, and a
 reservation cannot survive a delay before the car enters the connector.
+
+## Closely spaced junctions
+
+A car has two different jobs: its nose obeys the next entrance, while its rear
+keeps the previous junction occupied. A seven-foot link cannot hold a fourteen-
+foot car. Waiting for the rear to clear before looking at the next yield caused
+an actual overlap on `tests/fixtures/slip_lanes.json` at 15.05 seconds.
+
+Claims are now stored per car AND movement, so one car can occupy two junctions.
+Each claim is released independently when the rear clears. Once the nose enters
+with permission, the brain can consider the next stop or yield. It still matches
+circulating traffic's speed while completing a merge; looking ahead must not
+cancel phantom following midway through entry.
+
+Before an ordinary intersection, the simulator also looks through short links
+for a downstream merge. If the predicted gap is blocked, it waits upstream
+instead of treating that short link as storage. This prediction does not reserve
+the circle: the actual yield is checked again on approach. Conditions can change,
+so a car that must wait after entry still retains its upstream occupancy claim.
+A later stop sign still requires its own stop; occupancy does not waive it.
+
+Run the uploaded-map regression with:
+
+```sh
+python3 -m unittest discover -s tests -p test_chained_junctions.py -v
+```
+
+The regression checks oriented vehicle rectangles every 0.05 seconds and also
+requires completed trips, so making every car stand still cannot pass it.

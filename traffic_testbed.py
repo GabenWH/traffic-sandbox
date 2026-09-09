@@ -10,7 +10,7 @@ import random
 from city import CityMap
 from car_brain import CarBrain, CarObservation
 from intersection_controls import AllWayStopCoordinator
-from merge_behavior import observe_merge
+from merge_behavior import observe_merge, MERGE_STRATEGIES
 from mobility import (
     LaneTraversal,
     MobilityLink,
@@ -222,13 +222,13 @@ class TestTrafficSimulation:
         # Observe EVERY approach before granting ANY entry. The order of cars
         # in the Python list must not decide who gets right of way.
         for car in self.cars:
-            movement = _next_controlled_movement(car)
+            movement = _next_controlled_movement(car, self.stop_coordinator)
             if (movement is not None and movement[2].merge_target is not None
                     and car.distance + car.length/2 < movement[0]
                     and self.stop_coordinator.has_claim(car.id, movement[2])):
                 # A reservation made while approaching is not a permanent
                 # ticket. Recheck the gap if we have not physically entered yet.
-                self.stop_coordinator.release(car.id)
+                self.stop_coordinator.release(car.id, movement[2])
                 car._claimed_movement = None
             if movement is None or self.stop_coordinator.has_claim(car.id, movement[2]):
                 continue
@@ -242,16 +242,16 @@ class TestTrafficSimulation:
         completed: list[RoutedTestCar] = []
         for car in list(self.cars):
             route_movement = _next_route_movement(car)
-            movement = _next_controlled_movement(car)
+            movement = _next_controlled_movement(car, self.stop_coordinator)
             has_claim = (
                 movement is not None
                 and self.stop_coordinator.has_claim(car.id, movement[2])
             )
-            inside = (
-                movement is not None
-                and has_claim
-                and movement[0] <= car.distance < movement[1]
-            )
+            inside = any(
+                self.stop_coordinator.has_claim(car.id, connection)
+                and start <= car.distance + car.length/2
+                and car.distance - car.length/2 < end
+                for start, end, connection in car.controlled_movements)
             distance_to_stop = (
                 max(0.0, movement[0] - car.length / 2 - car.distance)
                 if movement is not None and not has_claim
@@ -272,10 +272,43 @@ class TestTrafficSimulation:
                 if exit_gap is not None and exit_gap < TEST_CAR_FOLLOWING_GAP + car.length / 2:
                     priority = False
                     priority_reason = "waiting for room beyond the junction"
+                # A short link is not a waiting area: our rear would still
+                # block this junction if we had to stop at the next yield.
+                # Look through consecutive short links before entering. This
+                # is a prediction, not a permanent reservation of the circle;
+                # the real yield is checked again as the nose approaches it.
+                chain_end = movement[1]
+                for following in car.controlled_movements:
+                    if following[0] < movement[1]:
+                        continue
+                    if following[0] - chain_end >= car.length + 4.0:
+                        break
+                    if following[2].merge_target is not None:
+                        opening = MERGE_STRATEGIES[car.brain.merge_style].decide(
+                            observe_merge(car, following, self.cars), car.speed,
+                            _route_cruise_speed(car, self.speed_mph))
+                        if (not opening.can_enter or not self.stop_coordinator.can_enter_merge(
+                                car.id, following[2])):
+                            priority = False
+                            priority_reason = "waiting before short link for the next yield"
+                            break
+                    chain_end = following[1]
             lead_distance = self.occupancy.lead_gap(car, TEST_CAR_LOOKAHEAD)
+            cruise_speed = _route_cruise_speed(car, self.speed_mph)
+            # Looking at the next signal must not stop phantom following in
+            # the merge we are still completing. Permission and speed matching
+            # are separate: keep matching traffic until our rear has joined.
+            for active in car.controlled_movements:
+                if (active[2].merge_target is not None
+                        and self.stop_coordinator.has_claim(car.id, active[2])
+                        and car.distance + car.length/2 >= active[0]
+                        and car.distance - car.length/2 < active[1]):
+                    choice = MERGE_STRATEGIES[car.brain.merge_style].decide(
+                        observe_merge(car, active, self.cars), car.speed, cruise_speed)
+                    cruise_speed = min(cruise_speed, choice.desired_speed)
             decision = car.brain.decide(
                 CarObservation(
-                    cruise_speed=_route_cruise_speed(car, self.speed_mph),
+                    cruise_speed=cruise_speed,
                     speed=car.speed,
                     distance_to_stop=distance_to_stop,
                     must_stop=movement is not None and not has_claim and movement[2].control.kind is ControlType.STOP,
@@ -328,9 +361,14 @@ class TestTrafficSimulation:
                 if travel == 0.0:
                     car.speed = 0.0
             alive = car.advance(travel / car.speed if car.speed > 0 else 0.0)
-            if movement is not None and has_claim and car.distance - car.length / 2 >= movement[1]:
-                self.stop_coordinator.release(car.id)
-                car._claimed_movement = None
+            # Keep every junction occupied until our REAR clears it, even
+            # while our FRONT is already obeying the next yield or stop.
+            for _, end, connection in car.controlled_movements:
+                if car.distance - car.length / 2 >= end:
+                    self.stop_coordinator.release(car.id, connection)
+            remaining_claims = [connection for _, _, connection in car.controlled_movements
+                                if self.stop_coordinator.has_claim(car.id, connection)]
+            car._claimed_movement = remaining_claims[-1] if remaining_claims else None
             # Refresh occupancy so a later car in this same tick sees the
             # space just taken by a merge. At this prototype's 60-car limit a
             # simple rebuild is clearer than maintaining incremental bins.
@@ -423,12 +461,19 @@ def _route_occupancy_segments(
 
 
 def _next_controlled_movement(
-    car: RoutedTestCar,
+    car: RoutedTestCar, coordinator: AllWayStopCoordinator,
 ) -> tuple[float, float, LaneConnection] | None:
+    """Find the next entrance to obey, separately from junction occupancy.
+
+    Once the nose enters with permission, look ahead to the next stop/yield.
+    The previous claim stays alive until the rear clears that junction.
+    """
     return next(
         (
             movement for movement in car.controlled_movements
             if car.distance - car.length / 2 < movement[1]
+            and not (coordinator.has_claim(car.id, movement[2])
+                     and car.distance + car.length / 2 >= movement[0])
             and movement[2].roundabout_role != "exit"
             and movement[2].maneuver.kind is not ManeuverType.U_TURN
         ),

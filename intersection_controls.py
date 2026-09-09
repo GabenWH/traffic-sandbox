@@ -21,7 +21,7 @@ class AllWayStopCoordinator:
     """Arbitrate claims while leaving movement decisions to individual cars."""
 
     arrivals: dict[str, StopArrival] = field(default_factory=dict)
-    claims: dict[str, LaneConnection] = field(default_factory=dict)
+    claims: dict[tuple[str, str], LaneConnection] = field(default_factory=dict)
 
     def observe_stop(
         self, car_id: str, connection: LaneConnection, stopped_at: float,
@@ -42,7 +42,7 @@ class AllWayStopCoordinator:
             and (connection.control.kind is ControlType.STOP
                  or claimed.control.kind is ControlType.STOP
                  or movements_conflict(connection, claimed))
-            for owner, claimed in self.claims.items()
+            for (owner, _), claimed in self.claims.items()
         )
 
     def can_claim(self, car_id: str, connection: LaneConnection) -> bool:
@@ -89,26 +89,30 @@ class AllWayStopCoordinator:
     def claim_merge(self, car_id, connection):
         if not self.can_enter_merge(car_id, connection):
             return False
-        self.claims[car_id] = connection
+        self.claims[(car_id, connection.id)] = connection
         self.arrivals.pop(car_id, None)
         return True
 
     def claim(self, car_id: str, connection: LaneConnection) -> bool:
         if not self.can_claim(car_id, connection):
             return False
-        self.claims[car_id] = connection
+        self.claims[(car_id, connection.id)] = connection
         self.arrivals.pop(car_id, None)
         return True
 
-    def release(self, car_id: str) -> None:
-        self.claims.pop(car_id, None)
+    def release(self, car_id: str, connection: LaneConnection | None = None) -> None:
+        # A car can occupy two close junctions at once. Clearing the first
+        # must not erase its permission for the second.
+        for key in list(self.claims):
+            if key[0] == car_id and (connection is None or self.claims[key] is connection):
+                del self.claims[key]
 
     def forget_car(self, car_id: str) -> None:
         self.arrivals.pop(car_id, None)
-        self.claims.pop(car_id, None)
+        self.release(car_id)
 
     def has_claim(self, car_id: str, connection: LaneConnection) -> bool:
-        return self.claims.get(car_id) is connection
+        return self.claims.get((car_id, connection.id)) is connection
 
     @staticmethod
     def _priority_key(arrival: StopArrival) -> tuple[float, float, str]:
