@@ -7,6 +7,7 @@ from enum import StrEnum
 from math import sqrt
 
 from models import ManeuverType
+from merge_behavior import MergeObservation, MERGE_STRATEGIES
 
 
 STOP_DWELL_SECONDS = 0.5
@@ -36,6 +37,7 @@ class CarObservation:
     distance_to_stop: float | None = None
     must_stop: bool = False
     must_yield: bool = False
+    merge: MergeObservation | None = None
     priority_reason: str = "waiting for conflicting traffic"
     has_priority: bool = False
     lead_car_distance: float | None = None
@@ -64,6 +66,16 @@ class CarBrain:
     desired_speed: float = 0.0
     stopped_elapsed: float = 0.0
     signal_intent: SignalIntent = SignalIntent.NONE
+    merge_style: str = "rolling"
+    phantom_target: str = ""
+
+    def __post_init__(self):
+        if self.merge_style not in MERGE_STRATEGIES:
+            raise ValueError("Merge style must be rolling or cautious.")
+
+    def following_distance(self, speed):
+        """Driver preference, not a universal hardcoded gap for every car."""
+        return (6.0 + 0.8*speed) if self.merge_style == "rolling" else (12.0 + 1.2*speed)
 
     def decide(self, observation: CarObservation, elapsed_seconds: float) -> CarDecision:
         desired = observation.cruise_speed
@@ -71,13 +83,32 @@ class CarBrain:
         reason = ""
         register_stop = False
         request_claim = False
+        self.phantom_target = ""
+        # The predicted joining time must use the speed we will actually ask
+        # for. A queued car cannot reserve a gap as if it could cruise through.
+        following_reason = ""
+        if observation.lead_car_distance is not None:
+            available = observation.lead_car_distance - observation.following_gap
+            if available <= 0:
+                desired = 0.0
+                following_reason = "following queued car"
+            else:
+                desired = min(desired, sqrt(2.0 * COMFORTABLE_BRAKING * available))
+
+        merge_choice = None
+        if observation.merge is not None:
+            merge_choice = MERGE_STRATEGIES[self.merge_style].decide(
+                observation.merge, observation.speed, desired)
+            desired = min(desired, merge_choice.desired_speed)
+            self.phantom_target = merge_choice.phantom_target
+            reason = merge_choice.reason
 
         if observation.inside_intersection:
             state = BehaviorState.CLEARING_INTERSECTION
             self.stopped_elapsed = 0.0
         elif observation.must_yield and observation.distance_to_stop is not None:
             self.stopped_elapsed = 0.0
-            if observation.has_priority:
+            if observation.has_priority and (merge_choice is None or merge_choice.can_enter):
                 state = BehaviorState.ENTERING_INTERSECTION
                 request_claim = True
             else:
@@ -86,7 +117,8 @@ class CarBrain:
                 desired = min(desired, sqrt(2.0 * COMFORTABLE_BRAKING
                                              * max(0.0, observation.distance_to_stop)))
                 state = BehaviorState.WAITING_FOR_PRIORITY
-                reason = observation.priority_reason
+                reason = (merge_choice.reason if merge_choice is not None and not merge_choice.can_enter
+                          else observation.priority_reason)
         elif observation.must_stop and observation.distance_to_stop is not None:
             distance = max(0.0, observation.distance_to_stop)
             if distance > 0.05:
@@ -113,13 +145,8 @@ class CarBrain:
         else:
             self.stopped_elapsed = 0.0
 
-        if observation.lead_car_distance is not None:
-            available = observation.lead_car_distance - observation.following_gap
-            if available <= 0:
-                desired = 0.0
-                reason = "following queued car"
-            else:
-                desired = min(desired, sqrt(2.0 * COMFORTABLE_BRAKING * available))
+        if following_reason:
+            reason = following_reason
 
         decision = CarDecision(max(0.0, desired), state, reason, register_stop, request_claim)
         self.state = decision.state

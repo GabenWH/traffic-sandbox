@@ -10,7 +10,7 @@ import random
 from city import CityMap
 from car_brain import CarBrain, CarObservation
 from intersection_controls import AllWayStopCoordinator
-from merge_behavior import merge_has_gap
+from merge_behavior import observe_merge
 from mobility import (
     LaneTraversal,
     MobilityLink,
@@ -114,6 +114,7 @@ class TestTrafficSimulation:
         default_factory=AllWayStopCoordinator, repr=False,
     )
     elapsed_time: float = 0.0
+    _spawned_count: int = field(default=0, init=False, repr=False)
     occupancy: TrafficOccupancyIndex = field(
         default_factory=TrafficOccupancyIndex, repr=False,
     )
@@ -172,6 +173,10 @@ class TestTrafficSimulation:
         spawn_gap = self.occupancy.lead_gap(car, TEST_CAR_FOLLOWING_GAP + car.length)
         if spawn_gap is not None and spawn_gap < TEST_CAR_FOLLOWING_GAP:
             return None
+        # Mix driver decisions on the same road. No global road mode decides
+        # that every driver must use the same merging behavior.
+        self._spawned_count += 1
+        car.brain.merge_style = "cautious" if self._spawned_count % 5 == 0 else "rolling"
         self.cars.append(car)
         return car
 
@@ -218,13 +223,20 @@ class TestTrafficSimulation:
         # in the Python list must not decide who gets right of way.
         for car in self.cars:
             movement = _next_controlled_movement(car)
+            if (movement is not None and movement[2].merge_target is not None
+                    and car.distance + car.length/2 < movement[0]
+                    and self.stop_coordinator.has_claim(car.id, movement[2])):
+                # A reservation made while approaching is not a permanent
+                # ticket. Recheck the gap if we have not physically entered yet.
+                self.stop_coordinator.release(car.id)
+                car._claimed_movement = None
             if movement is None or self.stop_coordinator.has_claim(car.id, movement[2]):
                 continue
             distance = max(0.0, movement[0] - car.length / 2 - car.distance)
             if movement[2].control.kind is ControlType.STOP:
                 if distance <= 0.05 and car.speed <= 0.1:
                     self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
-            elif distance <= TEST_CAR_LOOKAHEAD:
+            elif movement[2].merge_target is None and distance <= TEST_CAR_LOOKAHEAD:
                 self.stop_coordinator.observe_approach(
                     car.id, movement[2], self.elapsed_time + distance / max(car.speed, 1.0))
         completed: list[RoutedTestCar] = []
@@ -247,21 +259,19 @@ class TestTrafficSimulation:
             )
             if movement is not None and movement[2].control.kind is ControlType.STOP and distance_to_stop is not None and distance_to_stop <= 0.05 and car.speed <= 0.1:
                 self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
-            priority = (
-                movement is not None
-                and self.stop_coordinator.can_claim(car.id, movement[2])
-            )
+            is_merge = movement is not None and movement[2].merge_target is not None
+            merge_observation = observe_merge(car, movement, self.cars) if is_merge else None
+            priority = movement is not None and (
+                self.stop_coordinator.can_enter_merge(car.id, movement[2]) if is_merge
+                else self.stop_coordinator.can_claim(car.id, movement[2]))
             priority_reason = "waiting for intersection priority"
-            if movement is not None and not has_claim:
+            if movement is not None and not has_claim and not is_merge:
                 # Reserve enough space for our whole car beyond the movement.
                 # Stopping across the exit would block everyone else's path.
                 exit_gap = self.occupancy.gap_from(car, movement[1], TEST_CAR_LOOKAHEAD)
                 if exit_gap is not None and exit_gap < TEST_CAR_FOLLOWING_GAP + car.length / 2:
                     priority = False
                     priority_reason = "waiting for room beyond the junction"
-                if not merge_has_gap(car, movement, self.cars):
-                    priority = False
-                    priority_reason = "yielding to traffic on the joining lane"
             lead_distance = self.occupancy.lead_gap(car, TEST_CAR_LOOKAHEAD)
             decision = car.brain.decide(
                 CarObservation(
@@ -271,9 +281,10 @@ class TestTrafficSimulation:
                     must_stop=movement is not None and not has_claim and movement[2].control.kind is ControlType.STOP,
                     must_yield=movement is not None and not has_claim and movement[2].control.kind is not ControlType.STOP,
                     priority_reason=priority_reason,
+                    merge=merge_observation,
                     has_priority=priority,
                     lead_car_distance=lead_distance,
-                    following_gap=TEST_CAR_FOLLOWING_GAP,
+                    following_gap=car.brain.following_distance(car.speed),
                     inside_intersection=inside,
                     next_maneuver=_signaled_maneuver(car, route_movement),
                     distance_to_maneuver=(
@@ -293,7 +304,8 @@ class TestTrafficSimulation:
                     and (distance_to_stop or 0) <= max(10.0, car.speed * 0.6)):
                 # Claim only near entry; a car far up the road should not reserve
                 # an empty junction for several seconds while it approaches.
-                has_claim = self.stop_coordinator.claim(car.id, movement[2])
+                has_claim = (self.stop_coordinator.claim_merge(car.id, movement[2]) if is_merge
+                             else self.stop_coordinator.claim(car.id, movement[2]))
                 if has_claim:
                     car._claimed_movement = movement[2]
 
@@ -304,7 +316,9 @@ class TestTrafficSimulation:
             if lead_distance is not None:
                 travel = min(
                     travel,
-                    max(0.0, lead_distance - TEST_CAR_FOLLOWING_GAP),
+                    # Physical overlap guard. Comfortable following distance is
+                    # chosen by CarBrain and should not become another stop wall.
+                    max(0.0, lead_distance - 4.0),
                 )
                 if travel == 0.0:
                     car.speed = 0.0

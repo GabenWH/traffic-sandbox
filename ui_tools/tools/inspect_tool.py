@@ -139,6 +139,16 @@ def set_intersection_kind(host, intersection, value):
         redraw()
 
 
+def set_merge_style(car, value):
+    """Change just this driver's behavior, leaving the road rules alone."""
+    from merge_behavior import MERGE_STRATEGIES
+    value = value.strip().lower()
+    if value not in MERGE_STRATEGIES:
+        raise ValueError("Enter rolling or cautious.")
+    car.brain.merge_style = value
+    car.brain.phantom_target = ""
+
+
 def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[InspectionRow]]:
     """Return a title and field descriptions for one selected model object.
 
@@ -153,6 +163,9 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
         return "Routed test car", [
             InspectionRow("ID", selected.id),
             InspectionRow("Brain state", selected.brain.state.value),
+            InspectionRow("Merge style", selected.brain.merge_style, "text",
+                          lambda value: set_merge_style(selected, value)),
+            InspectionRow("Phantom target", selected.brain.phantom_target or "—"),
             InspectionRow("Turn signal", selected.brain.signal_intent.value),
             InspectionRow("Wait reason", selected.brain.wait_reason or "—"),
             InspectionRow(

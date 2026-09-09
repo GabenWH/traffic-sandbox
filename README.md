@@ -64,7 +64,10 @@ and the signal remains active until the car clears the movement.
 **Junction type** field (`standard` or `roundabout`). Uncontrolled intersections
 now yield to conflicting traffic and check for space beyond the junction.
 Single-lane roundabouts use shared circular lane sections, yield-controlled
-entrances, a 12 mph circulating speed and exit signals. Changing type clears
+entrances, a 12 mph circulating speed and exit signals. Each car's Inspector has
+an editable **Merge style** (`rolling` or `cautious`) and shows its **Phantom target**.
+Rolling drivers adjust speed into gaps; cautious drivers wait for larger openings.
+Changing type clears
 temporary cars so their routes can be regenerated. See
 [`docs/JUNCTIONS.md`](docs/JUNCTIONS.md) for testing instructions and a plain-English
 walkthrough of the reusable merge logic.

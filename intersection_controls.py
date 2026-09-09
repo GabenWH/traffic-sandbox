@@ -77,6 +77,22 @@ class AllWayStopCoordinator:
             return min(waiting, key=self._priority_key).car_id == car_id
         return False
 
+    def can_enter_merge(self, car_id, connection):
+        """Only protect against another car physically using this entrance.
+
+        A yield merge has no first-arrival queue across the entire junction.
+        The driver's brain assesses through traffic. Unrelated entrances can
+        operate together, and circulating cars do not wait for entering cars.
+        """
+        return not self._blocked_by_claim(car_id, connection)
+
+    def claim_merge(self, car_id, connection):
+        if not self.can_enter_merge(car_id, connection):
+            return False
+        self.claims[car_id] = connection
+        self.arrivals.pop(car_id, None)
+        return True
+
     def claim(self, car_id: str, connection: LaneConnection) -> bool:
         if not self.can_claim(car_id, connection):
             return False

@@ -10,6 +10,9 @@ to `no` uses the new uncontrolled-intersection rules.
 Choose **Test traffic**, then click at least two outer cul-de-sacs or junctions
 as sources/sinks. Select all four outer ends to exercise competing arrivals.
 Use **Inspect** on a car to see its state, desired speed, signal and wait reason.
+The **Merge style** field accepts `rolling` or `cautious` for that individual car.
+New traffic uses four rolling drivers followed by one cautious driver. The
+**Phantom target** field shows which circulating car a rolling driver is following.
 Save and load to check the junction type is retained.
 
 Converting a junction clears temporary cars (their routes describe the old
@@ -27,21 +30,32 @@ this version. The older fixed-freeway simulation is not migrated here.
    distance ruler. The lookup translates positions onto the driver's route ruler,
    continuing across section boundaries. A short clearance shadow keeps a car
    visible just after a split, while the branches are still close together.
-3. **`merge_behavior.py` decides whether the joining lane has a gap.** It examines
-   approaching cars' planned routes to the named target lane. This includes cars
-   on previous connected sections. It is a finite, distance-limited search, so a
-   circle does not need special wraparound arithmetic. A freeway entrance can use
-   the same function by supplying its target lane in `LaneConnection.merge_target`.
+3. **`merge_behavior.py` reports traffic and provides two strategies.** The
+   observer puts cars on one distance ruler: zero at the joining point, negative
+   upstream and positive downstream. It searches connected sections with a speed-
+   scaled look distance. `RollingMerge` adapts the original freeway demo's phantom
+   spacing and relative-speed response, and adjusts approach speed to arrive
+   behind the chosen leader. `CautiousMerge` waits for a larger gap. Both predict
+   clearance throughout the joining interval, including possible acceleration by
+   traffic behind. The old `merge_has_gap` function remains only for compatibility;
+   the routed simulation does not use it as a universal permission check.
 4. **`intersection_controls.py` shares right-of-way information.** Active claims
    block conflicting movements. Compatible uncontrolled movements may run together.
    Estimated arrival order handles separated arrivals; arrivals within 0.75 seconds
    yield to the right, and left turns yield to opposing non-left turns. If everyone
    is waiting for someone else, one stable winner breaks the cycle. Existing
-   all-way stops retain their conservative one-car-at-a-time policy.
-5. **`car_brain.py` makes the individual decision.** A yield permits rolling entry
-   when priority and space are available. A stop still requires the full stop dwell.
+   all-way stops retain their conservative one-car-at-a-time policy. Merge entries
+   do not join that arrival queue: claims only stop two cars occupying a conflicting
+   entrance together. Each driver's brain decides whether through traffic leaves
+   enough space. Circulating cars retain priority.
+5. **`car_brain.py` makes the individual decision.** It first applies its driver's
+   following preference, then asks the selected merge strategy using that speed.
+   This prevents reserving a gap at cruise speed while actually queued. A yield
+   allows rolling entry; a stop still requires the full stop dwell.
 6. **`traffic_testbed.py` applies motion.** It checks exit space, grants claims close
-   to entry, and releases them only after the rear clears. Roundabouts slow cars to
+   to entry, rechecks merge reservations until the nose enters, and releases them
+   after the rear clears. A four-foot physical following guard is separate from
+   the driver's comfortable following distance. Roundabouts slow cars to
    12 mph, and cars signal right on the final ring section before their exit.
 
 The observation and merge code is generic; the geometry builder knows that the
@@ -61,3 +75,17 @@ movements, simultaneous-arrival deadlock, blocked exits, upstream merge gaps,
 shared roundabout routes, signals, speed, conversion and persistence. A sustained
 four-source test checks oriented car rectangles for overlap and verifies that
 cars keep reaching their destinations. No extra packages are required.
+
+## September 9 behavior comparison
+
+In the same four-arm scenario, with seed 42, all four sources spawning every
+2.5 seconds over 80 simulated seconds, the first version completed 22 trips and
+accumulated 187.05 vehicle-seconds stopped near entrances. The revised mixed-driver
+version completed 31 trips and accumulated 99.9 stopped vehicle-seconds. This is
+one reproducible prototype comparison, not calibration against real traffic.
+
+Tests also place a rolling entrant behind an actual circulating leader and check
+that it adjusts speed, enters without stopping, and does not overlap the leader.
+The cautious and rolling brains are separately given identical observations to
+verify that their choices differ. Standstill queues block both strategies, and a
+reservation cannot survive a delay before the car enters the connector.
