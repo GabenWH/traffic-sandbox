@@ -1,0 +1,621 @@
+{
+  "tested_commit": "e8c8c0c",
+  "published_equivalent": "37b99db879ea74fec2d1f616f4b0b471fd822aeb",
+  "runs": [
+    {
+      "experiment": "baseline",
+      "seed": 42,
+      "dt": 0.05,
+      "seconds": 80.0,
+      "completed": 36,
+      "remaining": 17,
+      "overlap_pair_ticks": 50,
+      "first_collision": {
+        "time": 15.5,
+        "cars": [
+          "test-car-1",
+          "test-car-8"
+        ],
+        "positions": [
+          [
+            2722.0464389923955,
+            1741.6745782072817
+          ],
+          [
+            2723.67815858168,
+            1751.4465805750708
+          ]
+        ],
+        "speeds": [
+          17.6,
+          11.337163520637711
+        ],
+        "links": [
+          [
+            [
+              "lane",
+              "roundabout:e73b6a22-97a5-498a-a2cc-643373741f86:forward:4"
+            ],
+            21.595342198448748
+          ],
+          [
+            [
+              "lane_connection",
+              "e73b6a22-97a5-498a-a2cc-643373741f86:e7ec64e9-8e21-4580-939d-ea292b766f71:start:output->e7ec64e9-8e21-4580-939d-ea292b766f71:start:input:entry"
+            ],
+            16.968751815389055
+          ]
+        ]
+      },
+      "longest_stop_without_indexed_leader": {
+        "car": "test-car-176",
+        "time": 69.85,
+        "duration": 18.3,
+        "nose_before_line": 166.126,
+        "center_before_join": 203.575,
+        "reason": "yielding until the merge gap opens"
+      },
+      "false_veto_example": {
+        "time": 76.7,
+        "car": "test-car-204",
+        "removed": [
+          "test-car-85",
+          "test-car-176",
+          "test-car-484",
+          "test-car-504",
+          "test-car-510"
+        ]
+      }
+    },
+    {
+      "experiment": "baseline",
+      "seed": 42,
+      "dt": 0.025,
+      "seconds": 20.0,
+      "completed": 3,
+      "remaining": 29,
+      "overlap_pair_ticks": 50,
+      "first_collision": {
+        "time": 15.525,
+        "cars": [
+          "test-car-1",
+          "test-car-8"
+        ],
+        "positions": [
+          [
+            2721.614049083251,
+            1741.1311495933087
+          ],
+          [
+            2723.0542029678236,
+            1751.5316272351097
+          ]
+        ],
+        "speeds": [
+          17.6,
+          11.05701926056552
+        ],
+        "links": [
+          [
+            [
+              "lane",
+              "roundabout:e73b6a22-97a5-498a-a2cc-643373741f86:forward:4"
+            ],
+            20.900881478166497
+          ],
+          [
+            [
+              "lane_connection",
+              "e73b6a22-97a5-498a-a2cc-643373741f86:e7ec64e9-8e21-4580-939d-ea292b766f71:start:output->e7ec64e9-8e21-4580-939d-ea292b766f71:start:input:entry"
+            ],
+            16.339026841732647
+          ]
+        ]
+      },
+      "longest_stop_without_indexed_leader": {
+        "car": "test-car-1",
+        "time": 8.125,
+        "duration": 1.6,
+        "nose_before_line": 0.0,
+        "center_before_join": 37.45,
+        "reason": "yielding until the merge gap opens"
+      },
+      "false_veto_example": null
+    },
+    {
+      "experiment": "reverse_order",
+      "seed": 42,
+      "dt": 0.05,
+      "seconds": 20.0,
+      "completed": 2,
+      "remaining": 29,
+      "overlap_pair_ticks": 0,
+      "first_collision": null,
+      "longest_stop_without_indexed_leader": {
+        "car": "test-car-4",
+        "time": 9.15,
+        "duration": 1.5,
+        "nose_before_line": 0.0,
+        "center_before_join": 37.45,
+        "reason": "yielding until the merge gap opens"
+      },
+      "false_veto_example": {
+        "time": 5.15,
+        "car": "test-car-3",
+        "removed": [
+          "test-car-10",
+          "test-car-2"
+        ]
+      }
+    },
+    {
+      "experiment": "free_acceleration",
+      "seed": 42,
+      "dt": 0.05,
+      "seconds": 80.0,
+      "completed": 40,
+      "remaining": 32,
+      "overlap_pair_ticks": 30,
+      "first_collision": {
+        "time": 15.5,
+        "cars": [
+          "test-car-1",
+          "test-car-8"
+        ],
+        "positions": [
+          [
+            2722.0464389923955,
+            1741.6745782072817
+          ],
+          [
+            2723.67815858168,
+            1751.4465805750708
+          ]
+        ],
+        "speeds": [
+          17.6,
+          11.337163520637711
+        ],
+        "links": [
+          [
+            [
+              "lane",
+              "roundabout:e73b6a22-97a5-498a-a2cc-643373741f86:forward:4"
+            ],
+            21.595342198448748
+          ],
+          [
+            [
+              "lane_connection",
+              "e73b6a22-97a5-498a-a2cc-643373741f86:e7ec64e9-8e21-4580-939d-ea292b766f71:start:output->e7ec64e9-8e21-4580-939d-ea292b766f71:start:input:entry"
+            ],
+            16.968751815389055
+          ]
+        ]
+      },
+      "longest_stop_without_indexed_leader": {
+        "car": "test-car-24",
+        "time": 54.95,
+        "duration": 7.2,
+        "nose_before_line": 0.0,
+        "center_before_join": 37.45,
+        "reason": "waiting for a generous merge gap"
+      },
+      "false_veto_example": null
+    },
+    {
+      "experiment": "exclude_waiting",
+      "seed": 42,
+      "dt": 0.05,
+      "seconds": 20.0,
+      "completed": 2,
+      "remaining": 30,
+      "overlap_pair_ticks": 12,
+      "first_collision": {
+        "time": 13.05,
+        "cars": [
+          "test-car-3",
+          "test-car-4"
+        ],
+        "positions": [
+          [
+            2721.8134705716698,
+            1741.381782970166
+          ],
+          [
+            2727.3687142822682,
+            1751.2161435896858
+          ]
+        ],
+        "speeds": [
+          17.6,
+          14.313194168360642
+        ],
+        "links": [
+          [
+            [
+              "lane",
+              "roundabout:e73b6a22-97a5-498a-a2cc-643373741f86:forward:4"
+            ],
+            21.221172001969705
+          ],
+          [
+            [
+              "lane_connection",
+              "e73b6a22-97a5-498a-a2cc-643373741f86:e7ec64e9-8e21-4580-939d-ea292b766f71:start:output->e7ec64e9-8e21-4580-939d-ea292b766f71:start:input:entry"
+            ],
+            20.670812508768762
+          ]
+        ]
+      },
+      "longest_stop_without_indexed_leader": {
+        "car": "test-car-5",
+        "time": 16.35,
+        "duration": 1.55,
+        "nose_before_line": 0.0,
+        "center_before_join": 37.45,
+        "reason": "waiting for a generous merge gap"
+      },
+      "false_veto_example": null
+    }
+  ],
+  "approval": {
+    "t": 11.7,
+    "distance": 193.2256158075109,
+    "speed": 0.0,
+    "obs": {
+      "cruise_speed": 17.6,
+      "speed": 0.0,
+      "distance_to_stop": 0.0,
+      "must_stop": false,
+      "must_yield": true,
+      "merge": {
+        "distance_to_join": 37.44957066230697,
+        "length": 14.0,
+        "vehicles": [
+          {
+            "id": "test-car-1",
+            "position": -79.44898034399563,
+            "speed": 8.29631078753284,
+            "length": 14.0
+          },
+          {
+            "id": "test-car-3",
+            "position": -43.102552441294705,
+            "speed": 17.6,
+            "length": 14.0
+          },
+          {
+            "id": "test-car-6",
+            "position": 77.03809102998741,
+            "speed": 17.6,
+            "length": 14.0
+          },
+          {
+            "id": "test-car-7",
+            "position": -143.29515815015966,
+            "speed": 8.330319321905078,
+            "length": 14.0
+          },
+          {
+            "id": "test-car-9",
+            "position": -143.7910270612005,
+            "speed": 8.441888332361433,
+            "length": 14.0
+          }
+        ]
+      },
+      "priority_reason": "waiting for intersection priority",
+      "has_priority": true,
+      "lead_car_distance": 70.49145982399216,
+      "following_gap": 6.0,
+      "inside_intersection": false,
+      "next_maneuver": "merge",
+      "distance_to_maneuver": 7.0,
+      "inside_maneuver": false
+    },
+    "decision": {
+      "desired_speed": 0.4740809559937714,
+      "state": "entering_intersection",
+      "wait_reason": "matching speed behind phantom car",
+      "register_stop": false,
+      "request_claim": true
+    },
+    "style": "rolling",
+    "choice": {
+      "desired_speed": 0.4740809559937714,
+      "can_enter": true,
+      "reason": "matching speed behind phantom car",
+      "phantom_target": "test-car-3"
+    },
+    "claimed": false,
+    "active": {
+      "obs": {
+        "distance_to_join": 37.44957066230697,
+        "length": 14.0,
+        "vehicles": [
+          {
+            "id": "test-car-1",
+            "position": -79.44898034399563,
+            "speed": 8.29631078753284,
+            "length": 14.0
+          },
+          {
+            "id": "test-car-3",
+            "position": -43.102552441294705,
+            "speed": 17.6,
+            "length": 14.0
+          },
+          {
+            "id": "test-car-6",
+            "position": 77.03809102998741,
+            "speed": 17.6,
+            "length": 14.0
+          },
+          {
+            "id": "test-car-7",
+            "position": -143.29515815015966,
+            "speed": 8.330319321905078,
+            "length": 14.0
+          },
+          {
+            "id": "test-car-9",
+            "position": -143.7910270612005,
+            "speed": 8.441888332361433,
+            "length": 14.0
+          }
+        ]
+      },
+      "choice": {
+        "desired_speed": 0.4740809559937714,
+        "can_enter": true,
+        "reason": "matching speed behind phantom car",
+        "phantom_target": "test-car-3"
+      }
+    }
+  },
+  "subsequent_samples": [
+    {
+      "t": 12.0,
+      "distance": 193.62974728681615,
+      "speed": 2.217418505074773,
+      "obs": {
+        "cruise_speed": 2.5508536831979436,
+        "speed": 2.217418505074773,
+        "distance_to_stop": null,
+        "must_stop": false,
+        "must_yield": false,
+        "merge": null,
+        "priority_reason": "waiting for intersection priority",
+        "has_priority": false,
+        "lead_car_distance": 105.36353021298908,
+        "following_gap": 7.773934804059818,
+        "inside_intersection": true,
+        "next_maneuver": "merge",
+        "distance_to_maneuver": 6.595868520694751,
+        "inside_maneuver": false
+      },
+      "decision": {
+        "desired_speed": 2.5508536831979436,
+        "state": "clearing_intersection",
+        "wait_reason": "",
+        "register_stop": false,
+        "request_claim": false
+      },
+      "style": "rolling",
+      "choice": null,
+      "claimed": true,
+      "active": {
+        "obs": {
+          "distance_to_join": 37.04543918300172,
+          "length": 14.0,
+          "vehicles": [
+            {
+              "id": "test-car-1",
+              "position": -76.93256459207143,
+              "speed": 8.822567467359875,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-3",
+              "position": -37.82255244129473,
+              "speed": 17.6,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-6",
+              "position": 82.31809102998741,
+              "speed": 17.6,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-7",
+              "position": -140.79569270250929,
+              "speed": 8.33144787845239,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-9",
+              "position": -141.49846056149207,
+              "speed": 8.041888332361435,
+              "length": 14.0
+            }
+          ]
+        },
+        "choice": {
+          "desired_speed": 2.5508536831979436,
+          "can_enter": false,
+          "reason": "yielding until the merge gap opens",
+          "phantom_target": "test-car-3"
+        }
+      }
+    },
+    {
+      "t": 13.0,
+      "distance": 198.85942530447673,
+      "speed": 7.137574411013029,
+      "obs": {
+        "cruise_speed": 7.137235471530131,
+        "speed": 7.137574411013029,
+        "distance_to_stop": null,
+        "must_stop": false,
+        "must_yield": false,
+        "merge": null,
+        "priority_reason": "waiting for intersection priority",
+        "has_priority": false,
+        "lead_car_distance": 117.73385219532841,
+        "following_gap": 11.710059528810422,
+        "inside_intersection": true,
+        "next_maneuver": "merge",
+        "distance_to_maneuver": 1.3661905030341757,
+        "inside_maneuver": false
+      },
+      "decision": {
+        "desired_speed": 7.137235471530131,
+        "state": "clearing_intersection",
+        "wait_reason": "",
+        "register_stop": false,
+        "request_claim": false
+      },
+      "style": "rolling",
+      "choice": null,
+      "claimed": true,
+      "active": {
+        "obs": {
+          "distance_to_join": 31.815761165341144,
+          "length": 14.0,
+          "vehicles": [
+            {
+              "id": "test-car-1",
+              "position": -62.96838224481553,
+              "speed": 17.6,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-3",
+              "position": -20.222552441294795,
+              "speed": 17.6,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-6",
+              "position": 99.91809102998732,
+              "speed": 17.6,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-7",
+              "position": -129.0859112204074,
+              "speed": 15.89775254331884,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-9",
+              "position": -135.94092700084548,
+              "speed": 3.9877587462372825,
+              "length": 14.0
+            }
+          ]
+        },
+        "choice": {
+          "desired_speed": 7.137235471530131,
+          "can_enter": false,
+          "reason": "yielding until the merge gap opens",
+          "phantom_target": "test-car-3"
+        }
+      }
+    },
+    {
+      "t": 15.5,
+      "distance": 216.6275094468681,
+      "speed": 10.837163520637711,
+      "obs": {
+        "cruise_speed": 17.6,
+        "speed": 10.837163520637711,
+        "distance_to_stop": null,
+        "must_stop": false,
+        "must_yield": false,
+        "merge": null,
+        "priority_reason": "waiting for intersection priority",
+        "has_priority": false,
+        "lead_car_distance": 23.825124581654762,
+        "following_gap": 14.66973081651017,
+        "inside_intersection": true,
+        "next_maneuver": "merge",
+        "distance_to_maneuver": 0.0,
+        "inside_maneuver": true
+      },
+      "decision": {
+        "desired_speed": 17.6,
+        "state": "clearing_intersection",
+        "wait_reason": "",
+        "register_stop": false,
+        "request_claim": false
+      },
+      "style": "rolling",
+      "choice": null,
+      "claimed": true,
+      "active": {
+        "obs": {
+          "distance_to_join": 14.047677022949784,
+          "length": 14.0,
+          "vehicles": [
+            {
+              "id": "test-car-1",
+              "position": -18.968382244815757,
+              "speed": 17.6,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-6",
+              "position": 153.36809102998717,
+              "speed": 31.1,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-7",
+              "position": -86.24112096233543,
+              "speed": 17.6,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-9",
+              "position": -124.69155126608202,
+              "speed": 0.5,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-10",
+              "position": 75.11790312013392,
+              "speed": 17.6,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-53",
+              "position": -211.83675582217674,
+              "speed": 11.868313134089835,
+              "length": 14.0
+            },
+            {
+              "id": "test-car-57",
+              "position": -252.8026181806544,
+              "speed": 8.422612017636324,
+              "length": 14.0
+            }
+          ]
+        },
+        "choice": {
+          "desired_speed": 17.6,
+          "can_enter": false,
+          "reason": "yielding until the merge gap opens",
+          "phantom_target": "test-car-10"
+        }
+      }
+    }
+  ],
+  "notes": [
+    "overlap_pair_ticks counts repeated overlapping pairs, not distinct crashes",
+    "Different dt runs must not compare raw overlap pair-tick counts",
+    "Experiments alter only one dependency within the analysis process; they are not production fixes"
+  ]
+}
