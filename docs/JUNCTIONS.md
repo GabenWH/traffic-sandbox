@@ -118,3 +118,33 @@ python3 -m unittest discover -s tests -p test_chained_junctions.py -v
 
 The regression checks oriented vehicle rectangles every 0.05 seconds and also
 requires completed trips, so making every car stand still cannot pass it.
+
+## September 11 merge safety corrections
+
+The cause-isolation audit found that entry permission was based on a speed plan
+which the driver did not keep. Entry now carries an explicit speed plan, used
+from the approval update until the rear has joined. Phantom following chooses
+approach speed; it no longer freely changes the approved plan halfway through
+entry. Normal following can still brake for a real vehicle ahead. Near-zero
+queue speeds do not qualify as a committed joining plan: the minimum is six
+feet per second, or the road's lower cruise speed.
+
+Waiting drivers at other entrances no longer count as circulating traffic.
+However, a driver already completing a merge creates a downstream reservation:
+a later entrant cannot race around the circle into that joining point before
+it clears. The check allows for acceleration after the later car finishes its
+own merge. Predictions also allow circulating cars to accelerate from a queue
+back to road speed, rather than assuming their current low speed persists.
+
+Zero phantom influence now allows free acceleration. This fixes the isolated
+restart failure that could strand a car over 160 feet before its yield line.
+The painted yield line and control target now share a position farther into the
+entrance curve. On the uploaded plain roundabout it is about ten feet closer
+to the circle. A radial buffer and a test of stopped-car clearance against
+circulating vehicle rectangles protect the reference 14-by-6-foot test cars.
+
+`tests/test_merge_safety.py` includes the audit's failed approval observation,
+restart and classification regressions, downstream-reservation checks, yield
+clearance, and the uploaded roundabout's 80-second collision/progress test.
+The earlier slip-lane map regression remains enabled. These are tested scenarios,
+not proof that arbitrary layouts and traffic conditions can never collide.

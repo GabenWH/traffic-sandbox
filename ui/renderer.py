@@ -256,12 +256,20 @@ class RendererMixin:
                     x-island, y-island, x+island, y+island,
                     fill="#67884b", outline="#e6dfbe",
                     width=max(1, 2*self.camera_zoom), tags=STATIC_TAG)
+                from mobility import VEHICLE_LAYER, road_output_node
+                from roundabouts import yield_mark
+                graph = self.city_map.mobility.layers[VEHICLE_LAYER].graph
                 for port in intersection.incoming_ports():
-                    side = (-port.heading[1], port.heading[0])
-                    a = (port.position[0]-side[0]*port.width/2,
-                         port.position[1]-side[1]*port.width/2)
-                    b = (port.position[0]+side[0]*port.width/2,
-                         port.position[1]+side[1]*port.width/2)
+                    entry = next((t.edge.value for t in graph.transitions_from(road_output_node(port))
+                                  if getattr(t.edge.value, "roundabout_role", "") == "entry"), None)
+                    if entry is None:
+                        continue
+                    position, heading = yield_mark(entry)
+                    side = (-heading[1], heading[0])
+                    a = (position[0]-side[0]*port.width/2,
+                         position[1]-side[1]*port.width/2)
+                    b = (position[0]+side[0]*port.width/2,
+                         position[1]+side[1]*port.width/2)
                     self.canvas.create_line(*self.world_points(a, b),
                         fill="#f7f7f2", dash=(3, 3),
                         width=max(2, 2*self.camera_zoom), tags=STATIC_TAG)

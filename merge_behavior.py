@@ -6,6 +6,7 @@ looks through preceding connected sections without getting stuck in a loop:
 we inspect only the finite, planned route and only a short distance ahead.
 """
 
+MIN_JOINING_SPEED = 6.0  # ft/s: do not commit to a near-stationary entry plan.
 MERGE_HEADWAY_SECONDS = 2.0
 MERGE_LOOKBACK = 180.0  # Model distances are feet, like the rest of the simulator.
 
@@ -63,6 +64,15 @@ class MergeVehicle:
     position: float
     speed: float
     length: float
+    cruise_speed: float = 0.0
+
+
+@dataclass(frozen=True)
+class MergeReservation:
+    # Distance along our future lane to another committed joining point, and
+    # seconds until that car's rear clears it under its approved speed plan.
+    distance: float
+    clear_time: float
 
 
 @dataclass(frozen=True)
@@ -70,6 +80,8 @@ class MergeObservation:
     distance_to_join: float
     length: float
     vehicles: tuple[MergeVehicle, ...]
+    reservations: tuple[MergeReservation, ...] = ()
+    cruise_speed: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -78,6 +90,7 @@ class MergeChoice:
     can_enter: bool
     reason: str = ""
     phantom_target: str = ""
+    entry_speed: float | None = None
 
 
 def observe_merge(car, movement, cars):
@@ -92,6 +105,7 @@ def observe_merge(car, movement, cars):
     if target is None:
         return None
     vehicles = []
+    reservations = []
     # A fixed 180-foot window is adequate at roundabout speeds but too short
     # for a fast freeway. Scale the same observation query with traffic speed.
     look_distance = max(MERGE_LOOKBACK, 8.0*max([car.speed, *(other.speed for other in cars)]))
@@ -100,9 +114,27 @@ def observe_merge(car, movement, cars):
     for other in cars:
         if other is car:
             continue
+        # An upstream entrant must respect a downstream merge already in
+        # progress. Otherwise it can join freely, accelerate around the ring,
+        # and invalidate the slower downstream driver's approved gap.
+        plan = getattr(other, "_merge_entry_speed", None)
+        if plan is not None:
+            for other_start, other_end, committed in other.controlled_movements:
+                if (committed.merge_target is None
+                        or other.distance + other.length/2 < other_start
+                        or other.distance - other.length/2 >= other_end):
+                    continue
+                for start, _, key, _ in downstream:
+                    if key == committed.merge_target:
+                        clearing = _arrival_time(other_end + other.length/2 - other.distance,
+                                                 other.speed, plan)
+                        reservations.append(MergeReservation(start-end, clearing))
+                        break
         # Waiting entrants must yield to through traffic, not to each other's
         # imagined future positions. Actual entry claims prevent double entry.
-        if any(m[2].merge_target == target and other.distance < m[0]
+        if any(m[2].intersection_id == connection.intersection_id
+               and m[2].merge_target is not None
+               and other.distance + other.length/2 < m[0]
                for m in other.controlled_movements):
             continue
         position = None
@@ -118,8 +150,10 @@ def observe_merge(car, movement, cars):
                         position = a - end + occupancy[1] - offset
                         break
         if position is not None and abs(position) <= look_distance:
-            vehicles.append(MergeVehicle(other.id, position, other.speed, other.length))
-    return MergeObservation(max(0.0, end-car.distance), car.length, tuple(vehicles))
+            vehicles.append(MergeVehicle(other.id, position, other.speed, other.length,
+                                         getattr(other, "cruise_speed_bound", other.speed)))
+    return MergeObservation(max(0.0, end-car.distance), car.length, tuple(vehicles), tuple(reservations),
+                            getattr(car, "cruise_speed_bound", car.speed))
 
 
 def _arrival_time(distance, speed, desired):
@@ -153,6 +187,15 @@ def _gap_at_arrival(observation, speed, desired, headway):
     finish = _arrival_time(observation.distance_to_join+observation.length/2, speed, desired)
     if finish == float('inf'):
         return False
+    for reservation in observation.reservations:
+        # Our entry cap ends when our rear joins. Beyond that we can accelerate
+        # to road speed, so use the earliest arrival at this later conflict,
+        # not a fiction that our slow entry pace continues around the ring.
+        arrival = _arrival_time(max(0.0, observation.distance_to_join
+            + reservation.distance - observation.length), speed,
+            max(desired, observation.cruise_speed))
+        if arrival < reservation.clear_time + headway:
+            return False
     for other in observation.vehicles:
         allowance = (observation.length+other.length)/2 + 4.0
         if other.position + other.speed*begin >= allowance + headway*desired:
@@ -160,7 +203,7 @@ def _gap_at_arrival(observation, speed, desired, headway):
         # A circulating car may accelerate out of a queue while we are joining.
         # Check that possibility, rather than assuming its current low speed
         # stays constant and accepting a gap that immediately disappears.
-        cap = max(other.speed, speed, desired)
+        cap = max(other.speed, other.cruise_speed, speed, desired)
         accelerating = min(finish, (cap-other.speed)/10.0)
         travel = (other.speed*accelerating + 5*accelerating**2
                   + cap*(finish-accelerating))
@@ -173,7 +216,7 @@ class CautiousMerge:
     """Keep the old wait-for-a-generous-opening behavior as a driver choice."""
     def decide(self, observation, speed, cruise):
         clear = _gap_at_arrival(observation, speed, cruise, 2.0)
-        return MergeChoice(cruise, clear, "" if clear else "waiting for a generous merge gap")
+        return MergeChoice(cruise, clear, "" if clear else "waiting for a generous merge gap", entry_speed=cruise)
 
 
 class RollingMerge:
@@ -201,7 +244,9 @@ class RollingMerge:
             gap = leader.position + distance - (observation.length+leader.length)/2
             wanted = 6.0 + 0.8*speed
             response = 0.8*(gap-wanted) + 1.2*(leader.speed-speed)
-            desired = min(cruise, max(0.0, speed+response*strength))
+            # Zero influence means free acceleration, not holding current speed.
+            matching_speed = max(0.0, speed + response)
+            desired = min(cruise, cruise*(1-strength) + matching_speed*strength)
             if leader.speed > 0.1:
                 # Aim to reach the shared pavement after the leader, rather
                 # than repeatedly braking at the yield line awaiting permission.
@@ -209,11 +254,17 @@ class RollingMerge:
                 if opening_time > 0:
                     pace = max(0.0, distance-observation.length)/opening_time
                     desired = min(desired, pace)
-        clear = _gap_at_arrival(observation, speed, desired, 0.8)
+        # Approval must use the speed plan we actually execute after entry.
+        # Approaching slowly must not buy permission for an imaginary 90-second
+        # crawl followed by an unplanned acceleration into circulating traffic.
+        # Do not reserve a gap on a near-zero speed plan that takes a minute
+        # to finish. Six ft/s is a slow joining pace; below that, wait for room.
+        entry_speed = max(desired, min(cruise, MIN_JOINING_SPEED))
+        clear = _gap_at_arrival(observation, speed, entry_speed, 0.8)
         reason = "matching speed behind phantom car" if target and desired < cruise else ""
         if not clear:
             reason = "yielding until the merge gap opens"
-        return MergeChoice(desired, clear, reason, target)
+        return MergeChoice(desired, clear, reason, target, entry_speed=entry_speed)
 
 
 MERGE_STRATEGIES = {'rolling': RollingMerge(), 'cautious': CautiousMerge()}

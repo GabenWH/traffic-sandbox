@@ -709,6 +709,7 @@ class LaneConnection(CityObject):
     # extra role for signals and a shared target lane for generic merge checks.
     roundabout_role: str = ""
     merge_target: tuple[str, str] | None = None
+    control_offset: float = 0.0  # Distance into the connector to its yield line.
     inspection_title = "Lane connection"
 
     @property

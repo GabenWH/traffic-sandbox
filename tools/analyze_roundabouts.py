@@ -112,7 +112,8 @@ def run(args):
                         obs = original_observe(car, m, sim.cars)
                         waiting = {o.id for o in sim.cars if waiting_elsewhere(o, m)}
                         filtered = merges.MergeObservation(obs.distance_to_join, obs.length,
-                            tuple(v for v in obs.vehicles if v.id not in waiting))
+                            tuple(v for v in obs.vehicles if v.id not in waiting),
+                            obs.reservations, obs.cruise_speed)
                         strategy = merges.MERGE_STRATEGIES[car.brain.merge_style]
                         cruise = traffic._route_cruise_speed(car, sim.speed_mph)
                         if (not strategy.decide(obs, car.speed, cruise).can_enter

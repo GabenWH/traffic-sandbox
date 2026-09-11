@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import count
 from math import dist, isfinite, sqrt
 import random
@@ -64,6 +64,8 @@ class RoutedTestCar:
         init=False, repr=False,
     )
     _claimed_movement: LaneConnection | None = field(default=None, init=False, repr=False)
+    cruise_speed_bound: float = field(default=TEST_CAR_SPEED_MPH*22/15, init=False)
+    _merge_entry_speed: float | None = field(default=None, init=False, repr=False)
     signal_items: list[int] = field(default_factory=list, repr=False)
 
     def __post_init__(self) -> None:
@@ -222,6 +224,10 @@ class TestTrafficSimulation:
         # Observe EVERY approach before granting ANY entry. The order of cars
         # in the Python list must not decide who gets right of way.
         for car in self.cars:
+            # A queued circulating car may accelerate back to its road speed.
+            # Its current speed alone is not a safe prediction of future travel.
+            car.cruise_speed_bound = _route_cruise_speed(car, self.speed_mph)
+        for car in self.cars:
             movement = _next_controlled_movement(car, self.stop_coordinator)
             if (movement is not None and movement[2].merge_target is not None
                     and car.distance + car.length/2 < movement[0]
@@ -295,17 +301,18 @@ class TestTrafficSimulation:
                     chain_end = following[1]
             lead_distance = self.occupancy.lead_gap(car, TEST_CAR_LOOKAHEAD)
             cruise_speed = _route_cruise_speed(car, self.speed_mph)
-            # Looking at the next signal must not stop phantom following in
-            # the merge we are still completing. Permission and speed matching
-            # are separate: keep matching traffic until our rear has joined.
+            # While approaching, phantom following chooses a pace. Once we
+            # enter, keep the speed plan that was checked when granting entry.
+            # Ordinary following can still brake for a real vehicle ahead.
             for active in car.controlled_movements:
                 if (active[2].merge_target is not None
                         and self.stop_coordinator.has_claim(car.id, active[2])
                         and car.distance + car.length/2 >= active[0]
                         and car.distance - car.length/2 < active[1]):
-                    choice = MERGE_STRATEGIES[car.brain.merge_style].decide(
-                        observe_merge(car, active, self.cars), car.speed, cruise_speed)
-                    cruise_speed = min(cruise_speed, choice.desired_speed)
+                    # Execute the plan checked at approval. Changing phantom
+                    # targets mid-entry must not accelerate beyond that plan.
+                    if car._merge_entry_speed is not None:
+                        cruise_speed = min(cruise_speed, car._merge_entry_speed)
             decision = car.brain.decide(
                 CarObservation(
                     cruise_speed=cruise_speed,
@@ -341,6 +348,11 @@ class TestTrafficSimulation:
                              else self.stop_coordinator.claim(car.id, movement[2]))
                 if has_claim:
                     car._claimed_movement = movement[2]
+                    if is_merge:
+                        car._merge_entry_speed = decision.merge_entry_speed
+                        # Begin the checked plan in this same update; do not
+                        # spend one tick executing the old approach target.
+                        decision = replace(decision, desired_speed=decision.merge_entry_speed)
 
             speed_delta = decision.desired_speed - car.speed
             limit = (TEST_CAR_ACCELERATION if speed_delta > 0 else TEST_CAR_BRAKING) * elapsed_seconds
@@ -426,7 +438,7 @@ def _controlled_movement_ranges(
         points = vehicle_link_points(link)
         length = polyline_length(list(points)) if len(points) >= 2 else 0.0
         if link.kind == "lane_connection" and isinstance(link.value, LaneConnection):
-            result.append((distance_along, distance_along + length, link.value))
+            result.append((distance_along + link.value.control_offset, distance_along + length, link.value))
         distance_along += length
     return tuple(result)
 

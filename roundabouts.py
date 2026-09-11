@@ -94,4 +94,26 @@ def add_roundabout_to_layer(layer, junction):
         # needs this target, not any knowledge that the lane belongs to a circle.
         if role == "entry":
             connection.merge_target = ("lane", lanes[i].id)
+            # The outer edge of the junction is not the conflict boundary.
+            # Move the nose's yield line inward while keeping a ten-foot radial
+            # buffer from the ring centerline. This covers the six-foot-wide,
+            # fourteen-foot-long test cars' swept bodies plus clearance.
+            offset = 0.0
+            for a, b in zip(path, path[1:]):
+                if dist(b, junction.position) < radius + 10.0:
+                    break
+                offset += dist(a, b)
+            connection.control_offset = offset
         layer.graph.add_edge(start, end, connection.length, MobilityLink("lane_connection", connection))
+
+
+def yield_mark(connection):
+    """Use the same position for the painted line and the driver's stop target."""
+    remaining = connection.control_offset
+    for a, b in zip(connection.path, connection.path[1:]):
+        length = dist(a, b)
+        if length > 0 and remaining <= length + 1e-9:
+            heading = ((b[0]-a[0])/length, (b[1]-a[1])/length)
+            return (a[0]+heading[0]*remaining, a[1]+heading[1]*remaining), heading
+        remaining -= length
+    return connection.path[-1], connection.source_output.heading

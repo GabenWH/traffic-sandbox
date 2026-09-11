@@ -7,7 +7,7 @@ from enum import StrEnum
 from math import sqrt
 
 from models import ManeuverType
-from merge_behavior import MergeObservation, MERGE_STRATEGIES
+from merge_behavior import MergeObservation, MERGE_STRATEGIES, MIN_JOINING_SPEED
 
 
 STOP_DWELL_SECONDS = 0.5
@@ -55,6 +55,7 @@ class CarDecision:
     wait_reason: str = ""
     register_stop: bool = False
     request_claim: bool = False
+    merge_entry_speed: float | None = None
 
 
 @dataclass
@@ -110,7 +111,13 @@ class CarBrain:
             self.stopped_elapsed = 0.0
         elif observation.must_yield and observation.distance_to_stop is not None:
             self.stopped_elapsed = 0.0
-            if observation.has_priority and (merge_choice is None or merge_choice.can_enter):
+            # A queue-limited crawl is not a useful committed joining plan.
+            # Approach gently until there is room for at least the slow joining
+            # pace (or the road's lower cruise speed).
+            merge_ready = merge_choice is None or (
+                merge_choice.can_enter and merge_choice.entry_speed is not None
+                and merge_choice.entry_speed >= min(MIN_JOINING_SPEED, observation.cruise_speed))
+            if observation.has_priority and merge_ready:
                 state = BehaviorState.ENTERING_INTERSECTION
                 request_claim = True
             else:
@@ -150,7 +157,8 @@ class CarBrain:
         if following_reason:
             reason = following_reason
 
-        decision = CarDecision(max(0.0, desired), state, reason, register_stop, request_claim)
+        decision = CarDecision(max(0.0, desired), state, reason, register_stop, request_claim,
+                               merge_choice.entry_speed if merge_choice else None)
         self.state = decision.state
         self.wait_reason = decision.wait_reason
         self.desired_speed = decision.desired_speed
