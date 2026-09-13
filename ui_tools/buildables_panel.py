@@ -160,6 +160,9 @@ class BuildablesPanel:
                 font=("Courier", 10),
             ).pack(side="left", fill="x", expand=True)
 
+        from .menu_theme import style_panel
+        style_panel(self.panel)
+
     def close(self) -> None:
         if getattr(self.host, "active_tool", None) is self.owner:
             self.host.deactivate_tool(self.owner)

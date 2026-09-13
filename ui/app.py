@@ -107,6 +107,8 @@ class FreewaySimulator(
             toolbar, text="Pan: middle-drag · Zoom: wheel", bg="#e8edf2",
         )
         self.camera_label.pack(side="left", padx=(12, 0))
+        from ui_tools.menu_theme import style_panel
+        style_panel(toolbar)
 
     def _bind_canvas_events(self) -> None:
         self.canvas.bind("<Button-1>", self.handle_tool_click)

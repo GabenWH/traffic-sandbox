@@ -548,6 +548,9 @@ class InspectTool(CanvasTool):
                 value_label.pack(side="left", fill="x", expand=True)
                 self._row_widgets.append(("label", value_label))
 
+        from ..menu_theme import style_panel
+        style_panel(self.panel)
+
     def _apply_slider(self, field: InspectionRow, value: str) -> None:
         """Apply a slider change unless it came from live-value synchronization."""
         if self._syncing or field.apply is None:

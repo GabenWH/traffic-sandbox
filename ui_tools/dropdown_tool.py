@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -9,8 +10,48 @@ from dataclasses import dataclass
 from .base import CanvasTool, ToolbarTool
 
 
-ACTIVE_MENU_COLOR = "#1976d2"
-ACTIVE_MENU_TEXT_COLOR = "#ffffff"
+MENU_BACKGROUND = "#000000"
+MENU_FOREGROUND = "#39ff14"
+MENU_ACTIVE_BACKGROUND = MENU_FOREGROUND
+MENU_ACTIVE_FOREGROUND = MENU_BACKGROUND
+MENU_DISABLED_FOREGROUND = "#76a66d"
+DEFAULT_MENU_BACKGROUND = "#e8edf2"
+DEFAULT_ACTIVE_MENU_COLOR = "#1976d2"
+DEFAULT_ACTIVE_MENU_TEXT_COLOR = "#ffffff"
+
+
+def _menu_button_colors() -> dict[str, str]:
+    if sys.platform != "darwin":
+        return {"bg": DEFAULT_MENU_BACKGROUND}
+    return {
+        "bg": MENU_BACKGROUND,
+        "fg": MENU_FOREGROUND,
+        "activebackground": MENU_ACTIVE_BACKGROUND,
+        "activeforeground": MENU_ACTIVE_FOREGROUND,
+        "disabledforeground": MENU_DISABLED_FOREGROUND,
+    }
+
+
+def _active_menu_colors() -> tuple[str, str]:
+    if sys.platform == "darwin":
+        return MENU_ACTIVE_BACKGROUND, MENU_ACTIVE_FOREGROUND
+    return DEFAULT_ACTIVE_MENU_COLOR, DEFAULT_ACTIVE_MENU_TEXT_COLOR
+
+
+def _new_menu(parent: tk.Misc) -> tk.Menu:
+    """Return the shared high-contrast black-and-green popup menu."""
+    if sys.platform != "darwin":
+        return tk.Menu(parent, tearoff=False)
+    return tk.Menu(
+        parent,
+        tearoff=False,
+        background=MENU_BACKGROUND,
+        foreground=MENU_FOREGROUND,
+        activebackground=MENU_ACTIVE_BACKGROUND,
+        activeforeground=MENU_ACTIVE_FOREGROUND,
+        disabledforeground=MENU_DISABLED_FOREGROUND,
+        selectcolor=MENU_FOREGROUND,
+    )
 
 
 @dataclass(frozen=True)
@@ -34,14 +75,19 @@ class DropdownTool(ToolbarTool):
         return []
 
     def build(self, toolbar: tk.Misc) -> tk.Menubutton:
-        button = tk.Menubutton(toolbar, text=self.name, relief="raised", bg="#e8edf2")
+        button = tk.Menubutton(
+            toolbar,
+            text=self.name,
+            relief="raised",
+            **_menu_button_colors(),
+        )
         menu = self._build_menu(button)
         button.config(menu=menu)
         self.button = button
         return button
 
     def _build_menu(self, parent: tk.Misc) -> tk.Menu:
-        menu = tk.Menu(parent, tearoff=False)
+        menu = _new_menu(parent)
         for action in self.actions():
             if action.label is None:
                 menu.add_separator()
@@ -89,7 +135,7 @@ class CanvasToolDropdown(DropdownTool):
         """Build a menu whose canvas entries visibly retain selection."""
         if self._selected_tool is None:
             self._selected_tool = tk.StringVar(master=parent, value="")
-        menu = tk.Menu(parent, tearoff=False)
+        menu = _new_menu(parent)
         for tool in self.owned_canvas_tools:
             menu.add_radiobutton(
                 label=tool.name,
@@ -121,12 +167,13 @@ class CanvasToolDropdown(DropdownTool):
             assert self.button is not None
             self.button.grid_remove()
             active_area = self.host.active_menu_area
-            active_area.config(bg=ACTIVE_MENU_COLOR)
+            active_color, active_text_color = _active_menu_colors()
+            active_area.config(bg=active_color)
             self.active_button = tk.Menubutton(
                 active_area, text=self.name, relief="sunken",
-                bg=ACTIVE_MENU_COLOR, fg=ACTIVE_MENU_TEXT_COLOR,
-                activebackground=ACTIVE_MENU_COLOR,
-                activeforeground=ACTIVE_MENU_TEXT_COLOR,
+                bg=active_color, fg=active_text_color,
+                activebackground=active_color,
+                activeforeground=active_text_color,
             )
             self.active_menu = self._build_menu(self.active_button)
             self.active_button.config(menu=self.active_menu)
@@ -170,4 +217,4 @@ class CanvasToolDropdown(DropdownTool):
             self.button.grid()
         active_area = getattr(self.host, "active_menu_area", None)
         if active_area is not None:
-            active_area.config(bg="#e8edf2")
+            active_area.config(bg=DEFAULT_MENU_BACKGROUND)

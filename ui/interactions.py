@@ -141,7 +141,8 @@ class InteractionMixin:
         if lane is None:
             return
         self.select_lane(lane)
-        menu = tk.Menu(self.root, tearoff=False)
+        from ui_tools.dropdown_tool import _new_menu
+        menu = _new_menu(self.root)
         menu.add_command(
             label=f"Set {lane.name} lane gap…",
             command=lambda: self.prompt_for_gap(lane),
@@ -164,7 +165,8 @@ class InteractionMixin:
     def show_speedlimit_menu(
         self, event: tk.Event[tk.Misc], speed_limit: SpeedLimit,
     ) -> None:
-        menu = tk.Menu(self.root, tearoff=False)
+        from ui_tools.dropdown_tool import _new_menu
+        menu = _new_menu(self.root)
         menu.add_command(
             label=(
                 f"Change {mph_to_display(speed_limit.speed, self.unit_system):.0f} "
