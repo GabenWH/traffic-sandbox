@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, replace
 from itertools import count
 from math import dist, isfinite, sqrt
 import random
+from time import perf_counter
 
 from city import CityMap
 from car_brain import CarBrain, CarObservation
@@ -23,6 +24,7 @@ from mobility import (
 from models import ManeuverType, ControlType, Intersection, Lane, LaneConnection, Point, polyline_length
 from pathfinding import Path
 from traffic_occupancy import TrafficOccupancyIndex
+from traffic_debugger import TrafficDebugger
 from units import mph_to_pixels_per_second
 
 
@@ -120,6 +122,9 @@ class TestTrafficSimulation:
     occupancy: TrafficOccupancyIndex = field(
         default_factory=TrafficOccupancyIndex, repr=False,
     )
+    # Optional recorder.  It observes completed decisions; it never feeds a
+    # decision back into the traffic model.
+    debugger: TrafficDebugger | None = field(default=None, repr=False)
 
     colors = ("#ff5b72", "#37e6ff", "#f7d154", "#7fea8c", "#c98cff")
 
@@ -197,6 +202,9 @@ class TestTrafficSimulation:
                 completed.extend(self.update(city_map, step))
                 remaining -= step
             return completed
+        frame_started = perf_counter() if self.debugger is not None else 0.0
+        if self.debugger is not None:
+            self.debugger.begin_frame()
         self.elapsed_time += elapsed_seconds
         current_ids = {junction.id for junction in city_map.intersections}
         self.active_junction_ids = [
@@ -219,6 +227,7 @@ class TestTrafficSimulation:
                 for destination in destinations:
                     if self.spawn_car(city_map, source, destination) is not None:
                         break
+        spawned_at = perf_counter() if self.debugger is not None else 0.0
 
         self.occupancy.rebuild(self.cars)
         # Observe EVERY approach before granting ANY entry. The order of cars
@@ -245,8 +254,16 @@ class TestTrafficSimulation:
             elif movement[2].merge_target is None and distance <= TEST_CAR_LOOKAHEAD:
                 self.stop_coordinator.observe_approach(
                     car.id, movement[2], self.elapsed_time + distance / max(car.speed, 1.0))
+        observed_at = perf_counter() if self.debugger is not None else 0.0
+        # This is the number that was actually considered this frame.  A car
+        # finishing later in the frame is still present in its trace record.
+        frame_car_count = len(self.cars)
         completed: list[RoutedTestCar] = []
+        decision_seconds = 0.0
+        resolution_seconds = 0.0
         for car in list(self.cars):
+            distance_before = car.distance
+            speed_before = car.speed
             route_movement = _next_route_movement(car)
             movement = _next_controlled_movement(car, self.stop_coordinator)
             has_claim = (
@@ -313,6 +330,7 @@ class TestTrafficSimulation:
                     # targets mid-entry must not accelerate beyond that plan.
                     if car._merge_entry_speed is not None:
                         cruise_speed = min(cruise_speed, car._merge_entry_speed)
+            decision_started = perf_counter() if self.debugger is not None else 0.0
             decision = car.brain.decide(
                 CarObservation(
                     cruise_speed=cruise_speed,
@@ -338,6 +356,9 @@ class TestTrafficSimulation:
                 ),
                 elapsed_seconds,
             )
+            if self.debugger is not None:
+                decision_seconds += perf_counter() - decision_started
+            resolution_started = perf_counter() if self.debugger is not None else 0.0
             if decision.register_stop and movement is not None:
                 self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
             if (decision.request_claim and movement is not None
@@ -388,8 +409,41 @@ class TestTrafficSimulation:
             if not alive:
                 completed.append(car)
                 self.stop_coordinator.forget_car(car.id)
+            if self.debugger is not None:
+                self.debugger.record_car(
+                    car,
+                    distance_before=distance_before,
+                    speed_before=speed_before,
+                    decision=decision,
+                    movement=movement,
+                    has_priority=priority,
+                    # Report the resolved claim, rather than the fact that
+                    # existed before this car asked for one this frame.
+                    has_claim=(movement is not None and self.stop_coordinator.has_claim(
+                        car.id, movement[2])),
+                    merge_observation=merge_observation,
+                )
+                resolution_seconds += perf_counter() - resolution_started
         for car in completed:
             self.cars.remove(car)
+        if self.debugger is not None:
+            finished_at = perf_counter()
+            self.debugger.end_frame(
+                simulated_time=self.elapsed_time,
+                elapsed_seconds=elapsed_seconds,
+                car_count=frame_car_count,
+                completed_ids=[car.id for car in completed],
+                timings_ms={
+                    "spawn": (spawned_at - frame_started) * 1000,
+                    "observe": (observed_at - spawned_at) * 1000,
+                    # Intent is just CarBrain.  Resolution is the claim,
+                    # acceleration clamp, movement, and occupancy refresh that
+                    # converts that intent into this frame's final position.
+                    "decision": decision_seconds * 1000,
+                    "resolution": resolution_seconds * 1000,
+                    "total": (finished_at - frame_started) * 1000,
+                },
+            )
         return completed
 
     def clear_cars(self) -> list[RoutedTestCar]:

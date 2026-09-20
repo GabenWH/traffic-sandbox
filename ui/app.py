@@ -9,6 +9,7 @@ from city import CityMap
 from config import DEFAULT_UNIT_SYSTEM, HEIGHT, WIDTH
 from simulation import TrafficSimulation
 from traffic_testbed import TestTrafficSimulation
+from traffic_debugger import TrafficDebugger
 from ui_tools import CanvasTool, CanvasToolDropdown, ToolbarTool, load_toolbar_tools
 from units import validate_unit_system
 
@@ -47,7 +48,9 @@ class FreewaySimulator(
         self.unit_system = validate_unit_system(DEFAULT_UNIT_SYSTEM)
         self.simulation = TrafficSimulation()
         self.city_map = CityMap()
-        self.test_traffic = TestTrafficSimulation()
+        # Keep a short, bounded history so the debug window can explain what
+        # happened during a bad frame without retaining an entire long run.
+        self.test_traffic = TestTrafficSimulation(debugger=TrafficDebugger())
         self.blank_map = True
         self.viewport = Viewport(
             (self.city_map.width - WIDTH) / 2,

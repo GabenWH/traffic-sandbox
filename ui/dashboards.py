@@ -243,6 +243,9 @@ class DashboardMixin:
             0, 0, 500, 260, fill="#182028", outline="#54616e",
         )
         lines = self.simulation.merge_debug_lines()
+        trace_summary = self.test_traffic.debugger.latest_summary()
+        if trace_summary is not None:
+            lines.extend(("", trace_summary))
         routed_lines = routed_car_debug_lines(self.test_traffic.cars)
         if routed_lines:
             lines.extend(("", "ROUTED CAR BRAINS:", *routed_lines[:8]))
