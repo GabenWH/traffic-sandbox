@@ -100,6 +100,22 @@ class AllWayStopCoordinator:
         self.arrivals.pop(car_id, None)
         return True
 
+    def claim_temporary_winner(self, car_id: str, connection: LaneConnection) -> bool:
+        """Break waiting-order hesitation without overriding active traffic.
+
+        An existing claim means another vehicle is already committed, so it is
+        never displaced.  Only the queue/arrival ordering is bypassed.
+        """
+        if not self.can_claim_temporary_winner(car_id, connection):
+            return False
+        self.claims[(car_id, connection.id)] = connection
+        self.arrivals.pop(car_id, None)
+        return True
+
+    def can_claim_temporary_winner(self, car_id: str, connection: LaneConnection) -> bool:
+        """A soft-deadlock winner may not displace committed traffic."""
+        return not self._blocked_by_claim(car_id, connection)
+
     def release(self, car_id: str, connection: LaneConnection | None = None) -> None:
         # A car can occupy two close junctions at once. Clearing the first
         # must not erase its permission for the second.

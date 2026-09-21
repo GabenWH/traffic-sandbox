@@ -54,6 +54,12 @@ class ChainedJunctionTests(unittest.TestCase):
         circulating.distance, circulating.speed = target[0] - 65, 17.6
         joining.advance(0)
         circulating.advance(0)
+        traffic.occupancy.rebuild(traffic.cars)
+        from traffic_testbed import _temporary_winner_path_clear
+        self.assertFalse(_temporary_winner_path_clear(
+            joining, first, traffic.cars, traffic.occupancy,
+            traffic.stop_coordinator,
+        ), 'Deadlock negotiation must not bypass the next yield on a short link')
         traffic.update(city, 0)
         self.assertFalse(traffic.stop_coordinator.has_claim(joining.id, first[2]),
                          'Wait before the first junction when the next yield has no gap and no waiting space')

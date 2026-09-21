@@ -44,6 +44,9 @@ class FrameTrace:
     completed_ids: tuple[str, ...]
     timings_ms: dict[str, float]
     cars: tuple[CarFrame, ...]
+    deadlock_stall_seconds: float = 0.0
+    temporary_winner_id: str | None = None
+    hard_gridlock: bool = False
 
 
 class TrafficDebugger:
@@ -105,6 +108,9 @@ class TrafficDebugger:
         car_count: int,
         completed_ids: list[str],
         timings_ms: dict[str, float],
+        deadlock_stall_seconds: float = 0.0,
+        temporary_winner_id: str | None = None,
+        hard_gridlock: bool = False,
     ) -> None:
         self._index += 1
         self.frames.append(FrameTrace(
@@ -115,6 +121,9 @@ class TrafficDebugger:
             completed_ids=tuple(completed_ids),
             timings_ms={name: round(value, 4) for name, value in timings_ms.items()},
             cars=tuple(self._cars),
+            deadlock_stall_seconds=round(deadlock_stall_seconds, 3),
+            temporary_winner_id=temporary_winner_id,
+            hard_gridlock=hard_gridlock,
         ))
 
     def as_dict(self) -> dict[str, object]:
@@ -128,7 +137,15 @@ class TrafficDebugger:
             return None
         total = frame.timings_ms.get("total", 0.0)
         decision = frame.timings_ms.get("decision", 0.0)
+        deadlock = ""
+        if frame.temporary_winner_id is not None:
+            deadlock = f" deadlock-winner={frame.temporary_winner_id}"
+        elif frame.hard_gridlock:
+            deadlock = " hard-gridlock"
+        elif frame.deadlock_stall_seconds > 0:
+            deadlock = f" stalled={frame.deadlock_stall_seconds:.1f}s"
         return (
             f"TRACE frame={frame.index} sim={frame.simulated_time:.2f}s "
             f"cars={frame.car_count} total={total:.2f}ms decision={decision:.2f}ms"
+            f"{deadlock}"
         )

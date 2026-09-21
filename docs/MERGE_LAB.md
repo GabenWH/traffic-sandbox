@@ -36,6 +36,15 @@ four wall-clock timing buckets:
 is the collision alarm: it uses oriented car rectangles, so cars in adjacent
 lanes are not reported merely for being close together.
 
+The frame trace also reports `deadlock_stall_seconds`, `temporary_winner_id`,
+and `hard_gridlock`. When at least 80 percent of active cars remain stopped for
+five simulated seconds, the soft-deadlock resolver selects one physically
+unblocked lead car. That car receives a cautious three-foot-per-second
+"committed crawl" intent until its nose enters the conflict. Existing claims,
+real bumpers, occupied exits, and occupied merge points remain hard vetoes.
+When every candidate is physically blocked, `hard_gridlock` is reported and
+the simulator does not move a car by force.
+
 The app's **Simulator debug** window now shows the newest trace frame and its
 decision/total time. The lab keeps up to 10,000 frames for export; the app keeps
 the latest 600 frames so normal editing does not accumulate an unlimited log.

@@ -34,3 +34,18 @@ class MergeLabTests(unittest.TestCase):
     def test_unknown_scenario_has_an_actionable_error(self):
         with self.assertRaisesRegex(ValueError, "Available scenarios"):
             MergeLab().run("not-a-scenario", seconds=1.0)
+
+    def test_soft_deadlock_resolution_restores_slip_lane_throughput(self):
+        report = MergeLab(seed=7).run("slip-lane-short-link", seconds=90.0)
+        tail_completions = sum(
+            len(frame.completed_ids)
+            for frame in report.frames
+            if frame.simulated_time > 70.0
+        )
+
+        self.assertEqual(report.overlap_pair_ticks, 0, report.first_overlap)
+        self.assertGreater(report.completed, 13)
+        self.assertGreater(tail_completions, 0)
+        self.assertTrue(any(
+            frame.temporary_winner_id is not None for frame in report.frames
+        ))

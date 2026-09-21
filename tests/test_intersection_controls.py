@@ -43,7 +43,18 @@ class AllWayStopCoordinatorTests(unittest.TestCase):
         coordinator.release("first")
         self.assertTrue(coordinator.can_claim("second", self.connections[1]))
 
+    def test_temporary_winner_can_break_waiting_order_but_not_active_claim(self) -> None:
+        coordinator = AllWayStopCoordinator()
+        coordinator.observe_stop("older", self.connections[0], 1.0)
+        coordinator.observe_stop("winner", self.connections[1], 2.0)
+
+        self.assertTrue(coordinator.claim_temporary_winner(
+            "winner", self.connections[1]))
+
+        coordinator.observe_stop("next", self.connections[2], 3.0)
+        self.assertFalse(coordinator.claim_temporary_winner(
+            "next", self.connections[2]))
+
 
 if __name__ == "__main__":
     unittest.main()
-

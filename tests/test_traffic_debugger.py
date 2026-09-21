@@ -33,6 +33,9 @@ class TrafficDebuggerTests(unittest.TestCase):
         self.assertIn("decision", frame.timings_ms)
         self.assertGreaterEqual(frame.timings_ms["total"], 0)
         self.assertEqual(frame.cars[0].speed_after, car.speed)
+        self.assertEqual(frame.deadlock_stall_seconds, 0.0)
+        self.assertIsNone(frame.temporary_winner_id)
+        self.assertFalse(frame.hard_gridlock)
 
     def test_trace_is_bounded_and_serializable(self):
         debugger = TrafficDebugger(max_frames=2)

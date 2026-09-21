@@ -13,6 +13,7 @@ from merge_behavior import MergeObservation, MERGE_STRATEGIES, MIN_JOINING_SPEED
 STOP_DWELL_SECONDS = 0.5
 COMFORTABLE_BRAKING = 18.0
 TURN_SIGNAL_DISTANCE = 100.0
+DEADLOCK_CRAWL_SPEED = 3.0
 
 
 class SignalIntent(StrEnum):
@@ -46,6 +47,8 @@ class CarObservation:
     next_maneuver: ManeuverType | None = None
     distance_to_maneuver: float | None = None
     inside_maneuver: bool = False
+    temporary_winner: bool = False
+    temporary_winner_blocked: bool = False
 
 
 @dataclass(frozen=True)
@@ -96,6 +99,11 @@ class CarBrain:
             else:
                 desired = min(desired, sqrt(2.0 * COMFORTABLE_BRAKING * available))
 
+        # Keep a copy of the speed allowed by real same-route occupancy.  A
+        # temporary winner may ignore a circular right-of-way prediction, but
+        # it must never ignore the bumper of a vehicle physically ahead.
+        physically_allowed_speed = desired
+
         merge_choice = None
         if observation.merge is not None:
             merge_choice = MERGE_STRATEGIES[self.merge_style].decide(
@@ -117,7 +125,12 @@ class CarBrain:
             merge_ready = merge_choice is None or (
                 merge_choice.can_enter and merge_choice.entry_speed is not None
                 and merge_choice.entry_speed >= min(MIN_JOINING_SPEED, observation.cruise_speed))
-            if observation.has_priority and merge_ready:
+            if observation.temporary_winner:
+                desired = min(physically_allowed_speed, DEADLOCK_CRAWL_SPEED)
+                state = BehaviorState.ENTERING_INTERSECTION
+                request_claim = True
+                reason = "breaking soft deadlock"
+            elif observation.has_priority and merge_ready:
                 state = BehaviorState.ENTERING_INTERSECTION
                 request_claim = True
             else:
@@ -141,10 +154,14 @@ class CarBrain:
                 if self.stopped_elapsed < STOP_DWELL_SECONDS:
                     state = BehaviorState.STOPPED
                     reason = "completing stop dwell"
-                elif observation.has_priority:
+                elif observation.has_priority or observation.temporary_winner:
                     state = BehaviorState.ENTERING_INTERSECTION
-                    desired = observation.cruise_speed
+                    desired = min(observation.cruise_speed, DEADLOCK_CRAWL_SPEED)
+                    if not observation.temporary_winner:
+                        desired = observation.cruise_speed
                     request_claim = True
+                    if observation.temporary_winner:
+                        reason = "breaking soft deadlock"
                 else:
                     state = BehaviorState.WAITING_FOR_PRIORITY
                     reason = "waiting for all-way-stop priority"
@@ -157,8 +174,31 @@ class CarBrain:
         if following_reason:
             reason = following_reason
 
+        if observation.temporary_winner:
+            # Keep the committed crawl on later frames too.  Once the claim is
+            # owned, must_stop/must_yield are false, but the grant still ends
+            # only when the car's nose enters its bound movement.
+            desired = min(physically_allowed_speed, DEADLOCK_CRAWL_SPEED)
+            state = BehaviorState.ENTERING_INTERSECTION
+            reason = "breaking soft deadlock"
+
+        if observation.temporary_winner_blocked:
+            # The committed grant still belongs to this car, but a physical
+            # veto appeared after selection.  Keep the claim parked and stop;
+            # normal cruising must not leak through merely because we already
+            # own that claim.
+            desired = 0.0
+            state = BehaviorState.WAITING_FOR_PRIORITY
+            reason = "temporary winner path blocked"
+            request_claim = False
+
+        entry_speed = merge_choice.entry_speed if merge_choice else None
+        if observation.temporary_winner and request_claim:
+            entry_speed = desired
+        elif observation.temporary_winner_blocked:
+            entry_speed = None
         decision = CarDecision(max(0.0, desired), state, reason, register_stop, request_claim,
-                               merge_choice.entry_speed if merge_choice else None)
+                               entry_speed)
         self.state = decision.state
         self.wait_reason = decision.wait_reason
         self.desired_speed = decision.desired_speed

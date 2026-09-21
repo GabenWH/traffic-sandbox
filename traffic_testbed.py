@@ -12,6 +12,7 @@ from city import CityMap
 from car_brain import CarBrain, CarObservation
 from intersection_controls import AllWayStopCoordinator
 from merge_behavior import observe_merge, MERGE_STRATEGIES
+from soft_deadlock import DeadlockCandidate, SoftDeadlockResolver, merge_space_clear
 from mobility import (
     LaneTraversal,
     MobilityLink,
@@ -125,6 +126,9 @@ class TestTrafficSimulation:
     # Optional recorder.  It observes completed decisions; it never feeds a
     # decision back into the traffic model.
     debugger: TrafficDebugger | None = field(default=None, repr=False)
+    deadlock_resolver: SoftDeadlockResolver = field(
+        default_factory=SoftDeadlockResolver, repr=False,
+    )
 
     colors = ("#ff5b72", "#37e6ff", "#f7d154", "#7fea8c", "#c98cff")
 
@@ -236,6 +240,29 @@ class TestTrafficSimulation:
             # A queued circulating car may accelerate back to its road speed.
             # Its current speed alone is not a safe prediction of future travel.
             car.cruise_speed_bound = _route_cruise_speed(car, self.speed_mph)
+        deadlock_candidates = []
+        for car in self.cars:
+            is_waiting = (
+                car.speed <= 0.1
+                and car.brain.state.value
+                in ("waiting_for_priority", "entering_intersection")
+            )
+            if car.id != self.deadlock_resolver.winner_id and not is_waiting:
+                continue
+            movement = _next_controlled_movement(car, self.stop_coordinator)
+            if movement is None:
+                continue
+            deadlock_candidates.append(DeadlockCandidate(
+                car.id,
+                car.brain.wait_reason != "following queued car"
+                and _temporary_winner_path_clear(
+                    car, movement, self.cars, self.occupancy,
+                    self.stop_coordinator,
+                ),
+                movement_id=movement[2].id,
+            ))
+        deadlock_candidates = tuple(deadlock_candidates)
+        temporary_winner = self.deadlock_resolver.choose_winner(deadlock_candidates)
         for car in self.cars:
             movement = _next_controlled_movement(car, self.stop_coordinator)
             if (movement is not None and movement[2].merge_target is not None
@@ -259,6 +286,7 @@ class TestTrafficSimulation:
         # finishing later in the frame is still present in its trace record.
         frame_car_count = len(self.cars)
         completed: list[RoutedTestCar] = []
+        temporary_winner_entered = False
         decision_seconds = 0.0
         resolution_seconds = 0.0
         for car in list(self.cars):
@@ -353,6 +381,11 @@ class TestTrafficSimulation:
                         route_movement is not None
                         and route_movement[0] <= car.distance < route_movement[1]
                     ),
+                    temporary_winner=car.id == temporary_winner,
+                    temporary_winner_blocked=(
+                        car.id == self.deadlock_resolver.winner_id
+                        and temporary_winner is None
+                    ),
                 ),
                 elapsed_seconds,
             )
@@ -365,8 +398,12 @@ class TestTrafficSimulation:
                     and (distance_to_stop or 0) <= max(10.0, car.speed * 0.6)):
                 # Claim only near entry; a car far up the road should not reserve
                 # an empty junction for several seconds while it approaches.
-                has_claim = (self.stop_coordinator.claim_merge(car.id, movement[2]) if is_merge
-                             else self.stop_coordinator.claim(car.id, movement[2]))
+                if car.id == temporary_winner:
+                    has_claim = self.stop_coordinator.claim_temporary_winner(
+                        car.id, movement[2])
+                else:
+                    has_claim = (self.stop_coordinator.claim_merge(car.id, movement[2]) if is_merge
+                                 else self.stop_coordinator.claim(car.id, movement[2]))
                 if has_claim:
                     car._claimed_movement = movement[2]
                     if is_merge:
@@ -394,6 +431,9 @@ class TestTrafficSimulation:
                 if travel == 0.0:
                     car.speed = 0.0
             alive = car.advance(travel / car.speed if car.speed > 0 else 0.0)
+            if (car.id == temporary_winner and has_claim and movement is not None
+                    and car.distance + car.length/2 >= movement[0]):
+                temporary_winner_entered = True
             # Keep every junction occupied until our REAR clears it, even
             # while our FRONT is already obeying the next yield or stop.
             for _, end, connection in car.controlled_movements:
@@ -426,6 +466,21 @@ class TestTrafficSimulation:
                 resolution_seconds += perf_counter() - resolution_started
         for car in completed:
             self.cars.remove(car)
+        stopped_count = sum(car.speed <= 0.1 for car in self.cars)
+        traffic_is_flowing = bool(self.cars) and stopped_count < 0.8 * len(self.cars)
+        self.deadlock_resolver.observe_frame(
+            elapsed_seconds,
+            # A few cars creeping inches inside a forty-car standstill are not
+            # meaningful throughput. Keep the winner committed until its nose
+            # enters the conflict; otherwise its first cautious movement would
+            # cancel the very intent meant to break the hesitation cycle.
+            made_progress=traffic_is_flowing or bool(completed),
+            candidate_ids=tuple(candidate.car_id for candidate in deadlock_candidates),
+            winner_resolved=(
+                temporary_winner_entered
+                or any(car.id == self.deadlock_resolver.winner_id for car in completed)
+            ),
+        )
         if self.debugger is not None:
             finished_at = perf_counter()
             self.debugger.end_frame(
@@ -443,6 +498,11 @@ class TestTrafficSimulation:
                     "resolution": resolution_seconds * 1000,
                     "total": (finished_at - frame_started) * 1000,
                 },
+                deadlock_stall_seconds=self.deadlock_resolver.stall_seconds,
+                temporary_winner_id=(
+                    temporary_winner or self.deadlock_resolver.winner_id
+                ),
+                hard_gridlock=self.deadlock_resolver.hard_gridlock,
             )
         return completed
 
@@ -452,6 +512,7 @@ class TestTrafficSimulation:
             self.stop_coordinator.forget_car(car.id)
             car._claimed_movement = None
         self.cars.clear()
+        self.deadlock_resolver.reset()
         return removed
 
     def clear(self) -> list[RoutedTestCar]:
@@ -582,3 +643,48 @@ def _signaled_maneuver(car, movement):
         if previous and car.distance < previous[-1][0]:
             return None
     return connection.maneuver.kind
+
+
+def _temporary_winner_path_clear(car, movement, cars, occupancy, coordinator):
+    """Check physical space without re-applying conservative social gaps.
+
+    A temporary winner may break a right-of-way tie, but it may not drive into
+    a bumper, a committed movement, or an occupied merge point.  Four feet is
+    the same small physical margin used by the final same-route travel guard.
+    """
+    if movement is None or not coordinator.can_claim_temporary_winner(
+            car.id, movement[2]):
+        return False
+    lead_gap = occupancy.lead_gap(car, TEST_CAR_LOOKAHEAD)
+    if lead_gap is not None and lead_gap < 4.0:
+        return False
+    exit_gap = occupancy.gap_from(car, movement[1], TEST_CAR_LOOKAHEAD)
+    if exit_gap is not None and exit_gap < 4.0:
+        return False
+    if movement[2].merge_target is not None:
+        observation = observe_merge(car, movement, cars)
+        if observation is None or not merge_space_clear(
+                car.length, observation.vehicles, observation.reservations):
+            return False
+
+    # Preserve the existing chain-signal rule.  A clear first intersection is
+    # not a safe escape when the car cannot fit before the next yield.  Check
+    # each close following movement with physical (not comfort) clearances.
+    chain_end = movement[1]
+    for following in car.controlled_movements:
+        if following[0] < movement[1]:
+            continue
+        if following[0] - chain_end >= car.length + 4.0:
+            break
+        if not coordinator.can_claim_temporary_winner(car.id, following[2]):
+            return False
+        following_exit = occupancy.gap_from(car, following[1], TEST_CAR_LOOKAHEAD)
+        if following_exit is not None and following_exit < 4.0:
+            return False
+        if following[2].merge_target is not None:
+            observation = observe_merge(car, following, cars)
+            if observation is None or not merge_space_clear(
+                    car.length, observation.vehicles, observation.reservations):
+                return False
+        chain_end = following[1]
+    return True
