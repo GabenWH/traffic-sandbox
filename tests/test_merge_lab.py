@@ -1,11 +1,40 @@
 """The merge lab keeps difficult traffic states reproducible."""
 
+from math import sqrt
 import unittest
 
-from merge_lab import MergeLab, scenario_catalog
+from merge_lab import MergeLab, _overlapping_pairs, scenario_catalog
 
 
 class MergeLabTests(unittest.TestCase):
+    def test_overlap_audit_checks_nearby_buckets_without_missing_a_collision(self):
+        scenario = next(
+            item for item in scenario_catalog()
+            if item.name == "roundabout-simultaneous-entry"
+        )
+        _city, traffic = scenario.build(1)
+        first, second = traffic.cars
+        second.position = first.position
+
+        self.assertEqual(_overlapping_pairs(traffic.cars), [(first, second)])
+
+        second.position = (first.position[0] + 1000, first.position[1] + 1000)
+        self.assertEqual(_overlapping_pairs(traffic.cars), [])
+
+    def test_overlap_audit_handles_rotated_large_cars_across_cell_boundaries(self):
+        scenario = next(
+            item for item in scenario_catalog()
+            if item.name == "roundabout-simultaneous-entry"
+        )
+        _city, traffic = scenario.build(2)
+        first, second = traffic.cars
+        first.length = first.width = second.length = second.width = 32.0
+        first.heading = second.heading = (1 / sqrt(2), 1 / sqrt(2))
+        first.position = (31.9, 100.0)
+        second.position = (64.1, 100.0)
+
+        self.assertEqual(_overlapping_pairs(traffic.cars), [(first, second)])
+
     def test_catalog_covers_clear_competing_queued_and_short_link_cases(self):
         names = {scenario.name for scenario in scenario_catalog()}
         self.assertTrue({
@@ -15,7 +44,55 @@ class MergeLabTests(unittest.TestCase):
             "roundabout-queued-ring",
             "roundabout-continuous-pressure",
             "slip-lane-short-link",
+            "dense-network-gauntlet",
         }.issubset(names))
+
+    def test_dense_gauntlet_combines_varied_junctions_and_high_demand(self):
+        scenario = next(
+            item for item in scenario_catalog()
+            if item.name == "dense-network-gauntlet"
+        )
+
+        city, traffic = scenario.build(11)
+
+        self.assertGreaterEqual(len(city.standard_intersections), 12)
+        self.assertGreaterEqual(len(city.cul_de_sacs), 8)
+        self.assertGreaterEqual(
+            sum(junction.kind.value == "roundabout"
+                for junction in city.standard_intersections),
+            2,
+        )
+        self.assertTrue(any(road.reverse_lane_count == 0 for road in city.roads))
+        self.assertTrue(any(road.reverse_lane_count > 0 for road in city.roads))
+        self.assertEqual(
+            sum(junction.is_all_way_stop for junction in city.standard_intersections),
+            3,
+        )
+        self.assertGreaterEqual(sum(
+            road.reverse_lane_count == 0 and len(road.centerline) >= 3
+            for road in city.roads
+        ), 2)
+        self.assertGreaterEqual(traffic.max_cars, 200)
+        self.assertLessEqual(traffic.spawn_interval, 0.25)
+
+    def test_report_slices_long_runs_into_throughput_windows(self):
+        report = MergeLab(seed=3).run(
+            "roundabout-continuous-pressure",
+            seconds=1.0,
+            window_seconds=0.25,
+            trace=False,
+        )
+
+        self.assertEqual(len(report.windows), 4)
+        self.assertEqual(
+            [(window.started_at, window.ended_at) for window in report.windows],
+            [(0.0, 0.25), (0.25, 0.5), (0.5, 0.75), (0.75, 1.0)],
+        )
+        self.assertEqual(report.peak_active, max(
+            window.peak_active for window in report.windows
+        ))
+        self.assertTrue(all(window.p99_tick_ms >= 0 for window in report.windows))
+        self.assertEqual([window.tick_count for window in report.windows], [5, 5, 5, 5])
 
     def test_run_returns_frame_trace_and_safety_summary(self):
         report = MergeLab(seed=7).run("roundabout-simultaneous-entry", seconds=1.0)

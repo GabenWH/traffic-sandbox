@@ -22,6 +22,7 @@ def compare_traffic_engines(
     seconds: float = 120.0,
     repeats: int = 3,
     dt: float = 0.05,
+    window_seconds: float = 60.0,
 ) -> dict[str, object]:
     """Run both engines under identical seeds and summarize useful gates."""
     if not seeds:
@@ -30,21 +31,33 @@ def compare_traffic_engines(
         raise ValueError("Repeats must be positive")
 
     runs: dict[str, list[MergeLabReport]] = {"legacy": [], "data_first": []}
-    for seed in seeds:
-        for _ in range(repeats):
-            for engine in runs:
+    run_order = []
+    for seed_index, seed in enumerate(seeds):
+        for repeat_index in range(repeats):
+            engines = (
+                ("legacy", "data_first")
+                if (seed_index + repeat_index) % 2 == 0
+                else ("data_first", "legacy")
+            )
+            run_order.append({
+                "seed": seed,
+                "repeat": repeat_index + 1,
+                "engines": list(engines),
+            })
+            for engine in engines:
                 runs[engine].append(MergeLab(seed).run(
                     scenario,
                     seconds=seconds,
                     dt=dt,
                     engine=engine,
                     trace=False,
+                    window_seconds=window_seconds,
                 ))
 
     summaries: dict[str, dict[str, object]] = {}
     for engine, reports in runs.items():
         tick_times = [value for report in reports for value in report.tick_times_ms]
-        deterministic = all(
+        deterministic = None if repeats < 2 else all(
             len({report.state_digest for report in reports if report.seed == seed}) == 1
             for seed in seeds
         )
@@ -58,6 +71,8 @@ def compare_traffic_engines(
             ),
             "median_tick_ms": round(median(tick_times), 4),
             "p95_tick_ms": round(_percentile(tick_times, 0.95), 4),
+            "p99_tick_ms": round(_percentile(tick_times, 0.99), 4),
+            "peak_active": max(report.peak_active for report in reports),
             "deterministic": deterministic,
             "state_digests": {
                 str(seed): next(
@@ -65,6 +80,43 @@ def compare_traffic_engines(
                 )
                 for seed in seeds
             },
+            "windows": [
+                {
+                    "started_at": reference.started_at,
+                    "ended_at": reference.ended_at,
+                    "mean_tick_count": round(sum(
+                        report.windows[index].tick_count for report in reports
+                    ) / len(reports), 3),
+                    "mean_completed": round(sum(
+                        report.windows[index].completed for report in reports
+                    ) / len(reports), 3),
+                    "mean_active": round(sum(
+                        report.windows[index].mean_active for report in reports
+                    ) / len(reports), 3),
+                    "max_peak_active": max(
+                        report.windows[index].peak_active for report in reports
+                    ),
+                    "mean_overlap_pair_ticks": round(sum(
+                        report.windows[index].overlap_pair_ticks for report in reports
+                    ) / len(reports), 3),
+                    "mean_hard_gridlock_seconds": round(sum(
+                        report.windows[index].hard_gridlock_seconds for report in reports
+                    ) / len(reports), 3),
+                    "mean_temporary_winner_ticks": round(sum(
+                        report.windows[index].temporary_winner_ticks for report in reports
+                    ) / len(reports), 3),
+                    "mean_median_tick_ms": round(sum(
+                        report.windows[index].median_tick_ms for report in reports
+                    ) / len(reports), 4),
+                    "mean_p95_tick_ms": round(sum(
+                        report.windows[index].p95_tick_ms for report in reports
+                    ) / len(reports), 4),
+                    "mean_p99_tick_ms": round(sum(
+                        report.windows[index].p99_tick_ms for report in reports
+                    ) / len(reports), 4),
+                }
+                for index, reference in enumerate(reports[0].windows)
+            ],
         }
 
     legacy = summaries["legacy"]
@@ -79,12 +131,16 @@ def compare_traffic_engines(
         1.0 - float(data_first["median_tick_ms"]) / legacy_median
         if legacy_median else 0.0
     )
+    performance_counterbalanced = repeats >= 2
     return {
         "scenario": scenario,
         "seeds": list(seeds),
         "seconds": seconds,
         "repeats": repeats,
         "dt": dt,
+        "window_seconds": window_seconds,
+        "run_order": run_order,
+        "performance_counterbalanced": performance_counterbalanced,
         "engines": summaries,
         "comparison": {
             "throughput_ratio": round(throughput_ratio, 4),
@@ -94,6 +150,8 @@ def compare_traffic_engines(
             "zero_overlaps": data_first["overlap_pair_ticks"] == 0,
             "deterministic": data_first["deterministic"],
             "throughput_within_10_percent": throughput_ratio >= 0.9,
-            "median_tick_at_least_25_percent_faster": speedup >= 0.25,
+            "median_tick_at_least_25_percent_faster": (
+                speedup >= 0.25 if performance_counterbalanced else None
+            ),
         },
     }

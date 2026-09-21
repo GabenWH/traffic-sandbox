@@ -8,11 +8,14 @@ priority facts, and resulting motion—not a screenshot of a particular object.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 import hashlib
 import json
+from math import ceil, hypot
 from pathlib import Path
 import random
+from statistics import mean, median
 from time import perf_counter
 from typing import Callable
 
@@ -50,7 +53,27 @@ class MergeLabReport:
     tick_times_ms: tuple[float, ...]
     hard_gridlock_seconds: float
     state_digest: str
+    peak_active: int
+    windows: tuple["TrafficWindow", ...]
     frames: tuple[FrameTrace, ...]
+
+
+@dataclass(frozen=True)
+class TrafficWindow:
+    """One fixed slice of a sustained run for spotting flow degradation."""
+
+    started_at: float
+    ended_at: float
+    tick_count: int
+    completed: int
+    mean_active: float
+    peak_active: int
+    overlap_pair_ticks: int
+    hard_gridlock_seconds: float
+    temporary_winner_ticks: int
+    median_tick_ms: float
+    p95_tick_ms: float
+    p99_tick_ms: float
 
 
 def _roundabout_city() -> CityMap:
@@ -66,9 +89,15 @@ def _endpoints(city: CityMap) -> dict[tuple[float, float], object]:
     return {junction.position: junction for junction in city.cul_de_sacs}
 
 
-def _traffic(seed: int, *, interval: float = 1000.0) -> TestTrafficSimulation:
+def _traffic(
+    seed: int,
+    *,
+    interval: float = 1000.0,
+    max_cars: int = 60,
+) -> TestTrafficSimulation:
     return TestTrafficSimulation(
         spawn_interval=interval,
+        max_cars=max_cars,
         rng=random.Random(seed),
         # A lab run keeps its full trace; the interactive UI intentionally
         # keeps only a short rolling history.
@@ -152,6 +181,63 @@ def _slip_lane_short_link(seed: int) -> tuple[CityMap, TestTrafficSimulation]:
     return city, traffic
 
 
+def _dense_network_gauntlet(seed: int) -> tuple[CityMap, TestTrafficSimulation]:
+    """Large mixed network with ordinary, stopped, one-way, and merge traffic."""
+    city = CityMap(width=2200, height=1700, terrain=Terrain(trees=[]))
+    for y in (200, 600, 1000, 1400):
+        city.add_road([(100, y), (1900, y)], name=f"Avenue {y}")
+    for x in (300, 700, 1100, 1500):
+        city.add_road([(x, 50), (x, 1550)], name=f"Street {x}")
+
+    # A one-way cross-town route creates asymmetric demand. The two curved
+    # bypasses join close to larger junctions, producing the short-link and
+    # merge interactions that are most likely to propagate queues upstream.
+    city.add_road(
+        [(100, 800), (1900, 800)],
+        name="One-way cross-town",
+        forward_lane_count=1,
+        reverse_lane_count=0,
+    )
+    city.add_road(
+        [(540, 600), (600, 540), (700, 460)],
+        name="Northbound slip",
+        forward_lane_count=1,
+        reverse_lane_count=0,
+    )
+    city.add_road(
+        [(1500, 1140), (1560, 1080), (1660, 1000)],
+        name="Eastbound slip",
+        forward_lane_count=1,
+        reverse_lane_count=0,
+    )
+
+    def nearest(position):
+        return min(
+            city.standard_intersections,
+            key=lambda junction: (
+                (junction.position[0] - position[0]) ** 2
+                + (junction.position[1] - position[1]) ** 2
+            ),
+        )
+
+    for position in ((700, 600), (1500, 1000), (1100, 800)):
+        nearest(position).kind = IntersectionKind.ROUNDABOUT
+    city.rebuild_mobility_network()
+    for position in ((300, 200), (1100, 1400), (1500, 600)):
+        nearest(position).set_all_way_stop(True)
+
+    traffic = _traffic(seed, interval=0.12, max_cars=240)
+    for junction in city.cul_de_sacs:
+        traffic.toggle_junction(junction)
+    # Avoid an artificial once-per-interval spike where all sixteen boundary
+    # sources run pathfinding and spawn checks on the exact same frame.
+    for index, junction in enumerate(city.cul_de_sacs):
+        traffic._spawn_elapsed[junction.id] = (
+            index * traffic.spawn_interval / len(city.cul_de_sacs)
+        )
+    return city, traffic
+
+
 def scenario_catalog() -> tuple[MergeLabScenario, ...]:
     """Return the current stress matrix. Add cases here before changing AI."""
     return (
@@ -167,6 +253,13 @@ def scenario_catalog() -> tuple[MergeLabScenario, ...]:
                          ("roundabout", "mixed-brains", "sustained-load"), _continuous_pressure),
         MergeLabScenario("slip-lane-short-link", "A close junction followed by a roundabout yield.",
                          ("short-link", "chain-signals", "sustained-load"), _slip_lane_short_link),
+        MergeLabScenario(
+            "dense-network-gauntlet",
+            "A large mixed grid driven to saturation through stops, circles, and slip lanes.",
+            ("large-network", "roundabout", "all-way-stop", "one-way",
+             "short-link", "sustained-load"),
+            _dense_network_gauntlet,
+        ),
     )
 
 
@@ -184,11 +277,14 @@ class MergeLab:
         dt: float = 0.05,
         engine: str = "legacy",
         trace: bool = True,
+        window_seconds: float = 60.0,
     ) -> MergeLabReport:
         if seconds <= 0 or not 0 < dt <= 0.05:
             raise ValueError("Use positive seconds and 0 < dt <= 0.05")
         if engine not in ("legacy", "data_first"):
             raise ValueError("Traffic engine must be legacy or data_first")
+        if window_seconds <= 0:
+            raise ValueError("Traffic window duration must be positive")
         scenarios = {scenario.name: scenario for scenario in scenario_catalog()}
         if scenario_name not in scenarios:
             raise ValueError("Unknown scenario. Available scenarios: " + ", ".join(scenarios))
@@ -200,6 +296,15 @@ class MergeLab:
         hard_gridlock_seconds = 0.0
         first_overlap: dict[str, object] | None = None
         tick_times_ms: list[float] = []
+        window_count = ceil(seconds / window_seconds)
+        window_samples = [{
+            "completed": 0,
+            "active": [],
+            "overlaps": 0,
+            "hard_gridlock_seconds": 0.0,
+            "temporary_winner_ticks": 0,
+            "tick_times_ms": [],
+        } for _ in range(window_count)]
         digest = hashlib.sha256()
         ordinals: dict[str, int] = {}
         next_ordinal = 1
@@ -211,23 +316,35 @@ class MergeLab:
             started = perf_counter()
             finished = traffic.update(city, dt)
             tick_times_ms.append((perf_counter() - started) * 1000)
+            window_index = min(
+                int((tick * dt) / window_seconds),
+                window_count - 1,
+            )
+            window = window_samples[window_index]
+            window["tick_times_ms"].append(tick_times_ms[-1])
             for car in (*traffic.cars, *finished):
                 if car.id not in ordinals:
                     ordinals[car.id] = next_ordinal
                     next_ordinal += 1
             completed += len(finished)
+            window["completed"] += len(finished)
+            window["active"].append(len(traffic.cars))
             if traffic.deadlock_resolver.hard_gridlock:
                 hard_gridlock_seconds += dt
-            for index, car in enumerate(traffic.cars):
-                for other in traffic.cars[index + 1:]:
-                    if _cars_overlap(car, other):
-                        overlaps += 1
-                        if first_overlap is None:
-                            first_overlap = {
-                                "time": round(traffic.elapsed_time, 3),
-                                "cars": (car.id, other.id),
-                                "positions": (car.position, other.position),
-                            }
+                window["hard_gridlock_seconds"] += dt
+            if traffic.deadlock_resolver.winner_id is not None:
+                window["temporary_winner_ticks"] += 1
+            tick_overlaps = 0
+            for car, other in _overlapping_pairs(traffic.cars):
+                overlaps += 1
+                tick_overlaps += 1
+                if first_overlap is None:
+                    first_overlap = {
+                        "time": round(traffic.elapsed_time, 3),
+                        "cars": (car.id, other.id),
+                        "positions": (car.position, other.position),
+                    }
+            window["overlaps"] += tick_overlaps
             junction_positions = {
                 junction.id: junction.position for junction in city.intersections
             }
@@ -277,6 +394,24 @@ class MergeLab:
             }
             digest.update(json.dumps(state, sort_keys=True).encode())
         frames = tuple(traffic.debugger.frames) if traffic.debugger is not None else ()
+        windows = tuple(
+            TrafficWindow(
+                started_at=round(index * window_seconds, 6),
+                ended_at=round(min(seconds, (index + 1) * window_seconds), 6),
+                tick_count=len(sample["tick_times_ms"]),
+                completed=int(sample["completed"]),
+                mean_active=round(mean(sample["active"]), 3) if sample["active"] else 0.0,
+                peak_active=max(sample["active"], default=0),
+                overlap_pair_ticks=int(sample["overlaps"]),
+                hard_gridlock_seconds=round(float(sample["hard_gridlock_seconds"]), 6),
+                temporary_winner_ticks=int(sample["temporary_winner_ticks"]),
+                median_tick_ms=round(median(sample["tick_times_ms"]), 4)
+                if sample["tick_times_ms"] else 0.0,
+                p95_tick_ms=round(_percentile(sample["tick_times_ms"], 0.95), 4),
+                p99_tick_ms=round(_percentile(sample["tick_times_ms"], 0.99), 4),
+            )
+            for index, sample in enumerate(window_samples)
+        )
         return MergeLabReport(
             scenario=scenario_name, seed=self.seed, engine=engine, seconds=seconds,
             completed=completed, remaining=len(traffic.cars),
@@ -285,8 +420,17 @@ class MergeLab:
             tick_times_ms=tuple(tick_times_ms),
             hard_gridlock_seconds=round(hard_gridlock_seconds, 6),
             state_digest=digest.hexdigest(),
+            peak_active=max((window.peak_active for window in windows), default=0),
+            windows=windows,
             frames=frames,
         )
+
+
+def _percentile(values: list[float], percentile: float) -> float:
+    ordered = sorted(values)
+    if not ordered:
+        return 0.0
+    return ordered[max(0, ceil(percentile * len(ordered)) - 1)]
 
 
 def _timing_summary(frames: tuple[FrameTrace, ...]) -> dict[str, float]:
@@ -311,3 +455,29 @@ def _cars_overlap(a: RoutedTestCar, b: RoutedTestCar) -> bool:
             if separation >= radius(a) + radius(b) - 0.01:
                 return False
     return True
+
+
+def _overlapping_pairs(
+    cars: list[RoutedTestCar],
+) -> list[tuple[RoutedTestCar, RoutedTestCar]]:
+    """Broad-phase the exact rectangle audit through neighboring grid cells."""
+    if not cars:
+        return []
+    cell_size = max(
+        32.0,
+        max(hypot(car.length, car.width) for car in cars),
+    )
+    bins: defaultdict[tuple[int, int], list[RoutedTestCar]] = defaultdict(list)
+    overlaps = []
+    for car in cars:
+        cell = (
+            int(car.position[0] // cell_size),
+            int(car.position[1] // cell_size),
+        )
+        for x in range(cell[0] - 1, cell[0] + 2):
+            for y in range(cell[1] - 1, cell[1] + 2):
+                for other in bins[(x, y)]:
+                    if _cars_overlap(other, car):
+                        overlaps.append((other, car))
+        bins[cell].append(car)
+    return overlaps

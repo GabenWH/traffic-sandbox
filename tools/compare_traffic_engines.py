@@ -3,6 +3,8 @@
 Example:
     python3 tools/compare_traffic_engines.py slip-lane-short-link \
         --seeds 3,7,42 --seconds 120 --repeats 3
+    python3 tools/compare_traffic_engines.py dense-network-gauntlet \
+        --seeds 7 --seconds 600 --repeats 1 --window-seconds 60
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ def main() -> None:
     parser.add_argument("--seconds", type=float, default=120.0)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--dt", type=float, default=0.05)
+    parser.add_argument("--window-seconds", type=float, default=60.0)
     args = parser.parse_args()
     seeds = tuple(int(value.strip()) for value in args.seeds.split(",") if value.strip())
     result = compare_traffic_engines(
@@ -33,6 +36,7 @@ def main() -> None:
         seconds=args.seconds,
         repeats=args.repeats,
         dt=args.dt,
+        window_seconds=args.window_seconds,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
 
