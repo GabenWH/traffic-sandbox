@@ -9,9 +9,11 @@ priority facts, and resulting motion—not a screenshot of a particular object.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 import random
+from time import perf_counter
 from typing import Callable
 
 from city import CityMap, Terrain
@@ -38,12 +40,16 @@ class MergeLabScenario:
 class MergeLabReport:
     scenario: str
     seed: int
+    engine: str
     seconds: float
     completed: int
     remaining: int
     overlap_pair_ticks: int
     first_overlap: dict[str, object] | None
     timing_summary_ms: dict[str, float]
+    tick_times_ms: tuple[float, ...]
+    hard_gridlock_seconds: float
+    state_digest: str
     frames: tuple[FrameTrace, ...]
 
 
@@ -170,17 +176,48 @@ class MergeLab:
     def __init__(self, seed: int = 42) -> None:
         self.seed = seed
 
-    def run(self, scenario_name: str, *, seconds: float = 30.0, dt: float = 0.05) -> MergeLabReport:
+    def run(
+        self,
+        scenario_name: str,
+        *,
+        seconds: float = 30.0,
+        dt: float = 0.05,
+        engine: str = "legacy",
+        trace: bool = True,
+    ) -> MergeLabReport:
         if seconds <= 0 or not 0 < dt <= 0.05:
             raise ValueError("Use positive seconds and 0 < dt <= 0.05")
+        if engine not in ("legacy", "data_first"):
+            raise ValueError("Traffic engine must be legacy or data_first")
         scenarios = {scenario.name: scenario for scenario in scenario_catalog()}
         if scenario_name not in scenarios:
             raise ValueError("Unknown scenario. Available scenarios: " + ", ".join(scenarios))
         city, traffic = scenarios[scenario_name].build(self.seed)
+        traffic.update_mode = engine
+        if not trace:
+            traffic.debugger = None
         completed = overlaps = 0
+        hard_gridlock_seconds = 0.0
         first_overlap: dict[str, object] | None = None
-        for _ in range(round(seconds / dt)):
-            completed += len(traffic.update(city, dt))
+        tick_times_ms: list[float] = []
+        digest = hashlib.sha256()
+        ordinals: dict[str, int] = {}
+        next_ordinal = 1
+        for tick in range(round(seconds / dt)):
+            for car in traffic.cars:
+                if car.id not in ordinals:
+                    ordinals[car.id] = next_ordinal
+                    next_ordinal += 1
+            started = perf_counter()
+            finished = traffic.update(city, dt)
+            tick_times_ms.append((perf_counter() - started) * 1000)
+            for car in (*traffic.cars, *finished):
+                if car.id not in ordinals:
+                    ordinals[car.id] = next_ordinal
+                    next_ordinal += 1
+            completed += len(finished)
+            if traffic.deadlock_resolver.hard_gridlock:
+                hard_gridlock_seconds += dt
             for index, car in enumerate(traffic.cars):
                 for other in traffic.cars[index + 1:]:
                     if _cars_overlap(car, other):
@@ -191,12 +228,64 @@ class MergeLab:
                                 "cars": (car.id, other.id),
                                 "positions": (car.position, other.position),
                             }
+            junction_positions = {
+                junction.id: junction.position for junction in city.intersections
+            }
+
+            def movement_state(connection):
+                if connection is None:
+                    return None
+                return (
+                    connection.roundabout_role,
+                    connection.control.kind.value,
+                    tuple(connection.path),
+                )
+
+            state = {
+                "tick": tick,
+                "completed": sorted(ordinals[car.id] for car in finished),
+                "cars": sorted((
+                    ordinals[car.id],
+                    tuple(car.points),
+                    round(car.distance, 6),
+                    round(car.speed, 6),
+                    car.brain.state.value,
+                    car.brain.wait_reason,
+                    round(car.brain.stopped_elapsed, 6),
+                    car.brain.signal_intent.value,
+                    movement_state(car._claimed_movement),
+                    car.brain.merge_style,
+                ) for car in traffic.cars),
+                "arrivals": sorted((
+                    car_id,
+                    round(arrival.stopped_at, 6),
+                    movement_state(arrival.connection),
+                ) for car_id, arrival in traffic.stop_coordinator.arrivals.items()),
+                "claims": sorted((
+                    owner,
+                    movement_state(connection),
+                ) for (owner, _), connection in traffic.stop_coordinator.claims.items()),
+                "deadlock": (
+                    round(traffic.deadlock_resolver.stall_seconds, 6),
+                    traffic.deadlock_resolver.winner_id,
+                    traffic.deadlock_resolver.hard_gridlock,
+                ),
+                "spawn_timers": sorted((
+                    junction_positions[junction_id], round(value, 6),
+                ) for junction_id, value in traffic._spawn_elapsed.items()),
+                "rng": repr(traffic.rng.getstate()),
+            }
+            digest.update(json.dumps(state, sort_keys=True).encode())
         frames = tuple(traffic.debugger.frames) if traffic.debugger is not None else ()
         return MergeLabReport(
-            scenario=scenario_name, seed=self.seed, seconds=seconds,
+            scenario=scenario_name, seed=self.seed, engine=engine, seconds=seconds,
             completed=completed, remaining=len(traffic.cars),
             overlap_pair_ticks=overlaps, first_overlap=first_overlap,
-            timing_summary_ms=_timing_summary(frames), frames=frames,
+            timing_summary_ms=_timing_summary(frames),
+            tick_times_ms=tuple(tick_times_ms),
+            hard_gridlock_seconds=round(hard_gridlock_seconds, 6),
+            state_digest=digest.hexdigest(),
+            frames=frames,
         )
 
 

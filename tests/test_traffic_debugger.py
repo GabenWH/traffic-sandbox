@@ -51,3 +51,18 @@ class TrafficDebuggerTests(unittest.TestCase):
         exported = debugger.as_dict()
         self.assertEqual(len(exported["frames"]), 2)
         self.assertIn("timings_ms", exported["frames"][-1])
+
+    def test_data_first_summary_reports_intent_timing(self):
+        debugger = TrafficDebugger(max_frames=2)
+        traffic = TestTrafficSimulation(
+            spawn_interval=1000,
+            rng=random.Random(3),
+            debugger=debugger,
+            update_mode="data_first",
+        )
+        traffic.spawn_car(self.city, self.ends[0], self.ends[1])
+
+        traffic.update(self.city, 0.05)
+
+        self.assertIn("decision=", debugger.latest_summary())
+        self.assertIn("intent", debugger.latest_frame.timings_ms)

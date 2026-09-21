@@ -136,7 +136,9 @@ class TrafficDebugger:
         if frame is None:
             return None
         total = frame.timings_ms.get("total", 0.0)
-        decision = frame.timings_ms.get("decision", 0.0)
+        decision = frame.timings_ms.get(
+            "decision", frame.timings_ms.get("intent", 0.0),
+        )
         deadlock = ""
         if frame.temporary_winner_id is not None:
             deadlock = f" deadlock-winner={frame.temporary_winner_id}"

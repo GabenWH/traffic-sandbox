@@ -93,7 +93,14 @@ class TrafficOccupancyIndex:
         our route's ruler before comparing them. This works through corners,
         lane boundaries and a ring made from several ordinary lane sections.
         """
-        nearest = None
+        result = self.lead_from(car, distance, lookahead)
+        return result[1] if result is not None else None
+
+    def lead_from(
+        self, car: OccupancyCar, distance: float, lookahead: float,
+    ) -> tuple[OccupancyCar, float] | None:
+        """Return the nearest forward car and its bumper clearance."""
+        nearest: tuple[OccupancyCar, float] | None = None
         for start, end, key, offset in car.route_segments:
             if end < distance - car.length / 2 or start > distance + lookahead:
                 continue
@@ -104,8 +111,8 @@ class TrafficOccupancyIndex:
                 if center < distance:
                     continue
                 gap = center - distance - (entry.car.length + car.length) / 2
-                if gap <= lookahead and (nearest is None or gap < nearest):
-                    nearest = gap
+                if gap <= lookahead and (nearest is None or gap < nearest[1]):
+                    nearest = (entry.car, gap)
         return nearest
 
     def lead_gap(self, car: OccupancyCar, lookahead: float) -> float | None:
@@ -113,3 +120,11 @@ class TrafficOccupancyIndex:
         if getattr(car, "route_segments", ()):
             return self.gap_from(car, car.distance, lookahead)
         return self._same_link_gap(car, lookahead)
+
+    def lead_car_gap(
+        self, car: OccupancyCar, lookahead: float,
+    ) -> tuple[OccupancyCar, float] | None:
+        """Return the nearest lead vehicle when route-section data is available."""
+        if getattr(car, "route_segments", ()):
+            return self.lead_from(car, car.distance, lookahead)
+        return None

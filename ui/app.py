@@ -50,7 +50,10 @@ class FreewaySimulator(
         self.city_map = CityMap()
         # Keep a short, bounded history so the debug window can explain what
         # happened during a bad frame without retaining an entire long run.
-        self.test_traffic = TestTrafficSimulation(debugger=TrafficDebugger())
+        self.test_traffic = TestTrafficSimulation(
+            update_mode="data_first",
+            debugger=TrafficDebugger(),
+        )
         self.blank_map = True
         self.viewport = Viewport(
             (self.city_map.width - WIDTH) / 2,

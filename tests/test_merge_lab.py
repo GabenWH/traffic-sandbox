@@ -49,3 +49,11 @@ class MergeLabTests(unittest.TestCase):
         self.assertTrue(any(
             frame.temporary_winner_id is not None for frame in report.frames
         ))
+
+    def test_data_first_slip_lane_has_basic_safe_throughput(self):
+        report = MergeLab(seed=7).run(
+            "slip-lane-short-link", seconds=20.0, engine="data_first",
+        )
+
+        self.assertEqual(report.overlap_pair_ticks, 0, report.first_overlap)
+        self.assertGreater(report.completed, 0)
