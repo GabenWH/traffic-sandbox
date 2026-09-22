@@ -1,10 +1,10 @@
-# Freely rotating 3D city view and elevated roads
+# Freely rotating 3D city environment and elevated roads
 
 ## Intent and success criteria
 
-The city builder needs a freely rotating view in which roads can be drawn at different heights, including ramps and overpasses. Road construction uses Page Up and Page Down to change the height of the next point, in the style of Cities: Skylines or Workers & Resources. A road crossing another road at a different height stays separate in routing and traffic. The existing Tkinter toolbar, menus, and inspector remain the controls.
+The city builder needs a freely rotating 3D world for building, viewing, selecting, and editing many kinds of city objects as the game grows. Its viewport and tool interface must accommodate new object types without redesigning the camera or picker. Elevated roads are the first construction feature that uses vertical space: Page Up and Page Down change the height of the next road point, in the style of Cities: Skylines or Workers & Resources. A road crossing another road at a different height stays separate in routing and traffic. The existing Tkinter toolbar, menus, and inspector remain the controls.
 
-Success means a user can draw a ground road, draw a ramp and overpass across it, orbit to inspect the separation, route traffic over both roads without a false junction, save, and reload with the same geometry and connectivity. Existing ground-level saves still load.
+Success means the current city objects and tools work in the freely rotating 3D world, and a representative new object type can be drawn and picked through registration without changing camera or picker code. For the first vertical construction case, a user can draw a ground road, draw a ramp and overpass across it, orbit to inspect the separation, route traffic over both roads without a false junction, save, and reload with the same geometry and connectivity. Existing ground-level saves still load. Future object categories use the same scene and tool interfaces as they are introduced.
 
 ## Rendering and application boundary
 
