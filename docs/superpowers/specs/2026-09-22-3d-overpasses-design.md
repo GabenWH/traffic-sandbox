@@ -12,7 +12,7 @@ Panda3D renders the world inside a native child window hosted by a Tkinter frame
 
 An initial integration step proves that the embedded viewport displays, resizes, and receives pointer and keyboard input in the current Tk window on the target system. If same-window embedding fails, stop for a design revision; a separate 3D window does not meet this design. Panda3D becomes a documented runtime dependency.
 
-A scene adapter owns 3D objects for terrain, trees, roads, junctions, buildings, signs, traffic, route highlights, and construction previews. Static geometry is rebuilt when the city changes; moving vehicles update their transforms each tick. Roads have visible decks and edges, elevated spans have supports, and buildings have simple extruded forms. Existing model positions and dimensions continue to use feet. The legacy merge scene is drawn on a flat ground plane from its existing simulation data.
+A scene registry accepts providers of world objects and presentation adapters for their types. Each adapter creates, updates, and removes its 3D nodes and, when appropriate, declares a pick target and highlight behavior. The camera and picker do not contain a fixed list of object types. Terrain, trees, roads, junctions, buildings, signs, traffic, route highlights, and construction previews are the first adapters, not the complete set. Static geometry is rebuilt when its source changes; moving objects update their transforms each tick. Roads have visible decks and edges, elevated spans have supports, and buildings have simple extruded forms. Existing model positions and dimensions continue to use feet. The legacy merge scene is drawn on a flat ground plane from its existing simulation data.
 
 The perspective camera orbits around a map target with right-drag, pans with middle-drag, and moves toward or away from the target with the wheel. A right click without a drag still opens its context menu. Camera pitch is bounded so the ground remains usable for editing. The saved view records orbit target, orientation, and distance. Older camera saves map to a default angled view.
 
@@ -26,7 +26,7 @@ Crossing detection compares interpolated heights at the planar crossing. It crea
 
 ## Tools and input
 
-A viewport-facing interaction API supplies world picking, screen projection for labels, highlights, and temporary geometry to existing tools. Build road, Build building, Inspect, Test route, Test traffic, and context-menu actions work in the 3D view. Ground clicks use a ground-plane ray intersection; clicking a visible road, car, building, or junction selects the closest 3D hit. Road construction uses the selected draft-height plane, so an overpass can be drawn across a road underneath it. Tk panels continue to edit the same model objects.
+A viewport-facing interaction API supplies world picking, screen projection for labels, highlights, and temporary geometry to tools. A pick returns a common hit record: world position and height, surface normal, distance, and a reference to the hit model object when there is one. Tools may filter hits by model capability, such as inspectable, buildable connection, or traffic endpoint, rather than requiring the picker to know each concrete type. Ground clicks use a ground-plane ray intersection; selectable objects supply their own hit geometry through their presentation adapters. Road construction uses the selected draft-height plane, so an overpass can be drawn across a road underneath it. Existing Build road, Build building, Inspect, Test route, Test traffic, and context-menu actions are the first consumers of this API. New object types can register a provider and adapter, then participate in drawing and picking without changes to the camera or picker. Tk panels continue to edit the same model objects.
 
 ## Saves and compatibility
 
@@ -34,7 +34,7 @@ Increment the world format version. New saves include per-road heights, junction
 
 ## Verification
 
-Headless tests cover height interpolation, road splitting, same-height versus grade-separated crossings, endpoint snapping, vertically stacked junctions, route connectivity, car height sampling, and version 4/new-format save loads. Tool tests cover Page Up/Page Down state, height-plane picking, and preview values. A manual graphical check covers Tk embedding, resize, panel visibility, orbit/pan/zoom, right-click behavior, construction from different camera angles, traffic on an overpass, and save/reload. The existing test suite continues to pass.
+Headless tests cover height interpolation, road splitting, same-height versus grade-separated crossings, endpoint snapping, vertically stacked junctions, route connectivity, car height sampling, and version 4/new-format save loads. Tool tests cover Page Up/Page Down state, height-plane picking, preview values, and a registered example object that can be drawn and picked without changing camera or picker code. A manual graphical check covers Tk embedding, resize, panel visibility, orbit/pan/zoom, right-click behavior, construction from different camera angles, traffic on an overpass, and save/reload. The existing test suite continues to pass.
 
 ## Integration risk
 
