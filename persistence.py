@@ -456,6 +456,7 @@ def _buildable_state_to_dict(buildable: Buildable) -> dict[str, Any]:
         "phase": buildable.phase.value,
         "condition": buildable.condition,
         "inventory": dict(buildable.inventory.amounts),
+        "construction_needs": dict(buildable.construction_needs),
         "active_work": None if work is None else {
             "kind": work.kind.value,
             "required_work": work.required_work,
@@ -483,6 +484,15 @@ def _buildable_state_from_dict(value: object, path: str) -> dict[str, Any]:
             raise WorldFormatError(f"{path}.inventory.{resource} cannot be negative.")
         if amount > 0:
             inventory[resource] = amount
+
+    raw_needs = _mapping(state.get("construction_needs", {}), f"{path}.construction_needs")
+    needs: dict[str, float] = {}
+    for raw_resource, raw_amount in raw_needs.items():
+        resource = _string(raw_resource, f"{path}.construction_needs resource")
+        amount = _number(raw_amount, f"{path}.construction_needs.{resource}")
+        if amount <= 0:
+            raise WorldFormatError(f"{path}.construction_needs.{resource} must be positive.")
+        needs[resource] = amount
 
     raw_work = state.get("active_work")
     work: WorkOrder | None = None
@@ -514,6 +524,7 @@ def _buildable_state_from_dict(value: object, path: str) -> dict[str, Any]:
         "phase": phase,
         "condition": condition,
         "inventory": ResourceInventory(inventory),
+        "construction_needs": needs,
         "active_work": work,
     }
 
@@ -522,6 +533,7 @@ def _apply_buildable_state(buildable: Buildable, state: dict[str, Any]) -> None:
     buildable.phase = state["phase"]
     buildable.condition = state["condition"]
     buildable.inventory = state["inventory"]
+    buildable.construction_needs = state["construction_needs"]
     buildable.active_work = state["active_work"]
 
 

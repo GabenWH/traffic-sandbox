@@ -115,6 +115,15 @@ def _validate_building_specs(specs: dict[str, object], path: str) -> None:
         specs.get("residents", 0), f"{path}.specs.residents"
     )
     specs["jobs"] = _nonnegative_int(specs.get("jobs", 0), f"{path}.specs.jobs")
+    needs = specs.get("construction_needs", {})
+    if not isinstance(needs, dict):
+        raise BuildableCatalogError(f"{path}.specs.construction_needs must be an object")
+    checked_needs = {}
+    for resource, amount in needs.items():
+        checked_needs[_required_string(resource, f"{path}.specs.construction_needs resource")] = _positive_number(
+            amount, f"{path}.specs.construction_needs.{resource}"
+        )
+    specs["construction_needs"] = checked_needs
     zone = _required_string(specs.get("zone"), f"{path}.specs.zone")
     try:
         ZoneType(zone)

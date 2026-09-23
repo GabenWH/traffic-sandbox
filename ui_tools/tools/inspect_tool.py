@@ -5,6 +5,7 @@ from __future__ import annotations
 import tkinter as tk
 from collections.abc import Callable
 from dataclasses import dataclass
+from math import isfinite
 from typing import Any, Literal
 
 from city import Building
@@ -112,6 +113,23 @@ def set_intersection_all_way_stop(
         draw_scene()
 
 
+def deliver_building_resource(building: Building, value: str) -> None:
+    """Record an externally delivered quantity against a building's needs."""
+    parts = value.rsplit(" ", 1)
+    if len(parts) != 2:
+        raise ValueError("Enter a resource and amount, for example: lumber 10.")
+    resource, raw_amount = parts[0].strip(), parts[1]
+    try:
+        amount = float(raw_amount)
+    except ValueError as error:
+        raise ValueError("Delivery amount must be a positive number.") from error
+    if resource not in building.construction_needs:
+        raise ValueError(f"{resource!r} is not needed for this building.")
+    if not isfinite(amount) or amount <= 0:
+        raise ValueError("Delivery amount must be a positive number.")
+    building.add_resource(resource, amount)
+
+
 def set_intersection_kind(host, intersection, value):
     """Convert a junction and discard temporary cars holding old route shapes."""
     value = value.strip().lower()
@@ -215,6 +233,13 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
                     f"{distance_unit(unit_system)}"
                 )
             rows.append(InspectionRow(item.label, str(value), target=item.target))
+        if isinstance(selected, Building) and selected.construction_needs:
+            rows.append(InspectionRow("Construction needs", ", ".join(
+                f"{name}: {amount:g} (on site {selected.inventory.amounts.get(name, 0):g})"
+                for name, amount in selected.construction_needs.items()
+            )))
+            rows.append(InspectionRow("Deliver resource", "lumber 10", "text",
+                lambda value: deliver_building_resource(selected, value)))
         return selected.inspection_title, rows
 
     simulation = host.simulation

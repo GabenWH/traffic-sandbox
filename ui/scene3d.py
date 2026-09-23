@@ -18,8 +18,8 @@ from panda3d.core import (
     NodePath,
 )
 
-from models import Road
-from .scene_geometry import DeckQuad, road_deck_quads
+from models import Intersection, IntersectionKind, Road
+from .scene_geometry import DeckQuad, road_deck_quads, roundabout_deck_quads
 from .tree_primitives import TreeFeature, draw_tree
 from .car_primitives import CarFeature, draw_car, update_car_lights
 
@@ -118,6 +118,21 @@ def draw_road(road: Road, parent: NodePath) -> NodePath:
             pillar = support.attachNewNode(quad_geom(_support_quads(x, y, height), "pillar"))
             pillar.setColor(0.7, 0.72, 0.73, 1)
             pillar.setTwoSided(True)
+    return root
+
+
+def draw_intersection(junction: Intersection, parent: NodePath) -> NodePath:
+    """Draw a roundabout's drivable ring and raised landscaped center."""
+    root = parent.attachNewNode(f"intersection:{junction.id}")
+    if junction.kind is not IntersectionKind.ROUNDABOUT:
+        return root
+    road_quads, island_quads = roundabout_deck_quads(junction)
+    deck = root.attachNewNode(quad_geom(road_quads, "roundabout-road"))
+    deck.setColor(0.28, 0.32, 0.36, 1)
+    deck.setTwoSided(True)
+    center = root.attachNewNode(quad_geom(island_quads, "roundabout-island"))
+    center.setColor(0.30, 0.48, 0.24, 1)
+    center.setTwoSided(True)
     return root
 
 

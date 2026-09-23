@@ -45,7 +45,8 @@
         "zone": "residential",
         "residents": 4,
         "jobs": 0,
-        "color": "#d9b38c"
+        "color": "#d9b38c",
+        "construction_needs": {"lumber": 20, "stone": 10}
       }
     },
     {
@@ -59,7 +60,8 @@
         "zone": "residential",
         "residents": 24,
         "jobs": 2,
-        "color": "#c9936f"
+        "color": "#c9936f",
+        "construction_needs": {"lumber": 80, "stone": 50, "steel": 20}
       }
     },
     {
@@ -73,7 +75,8 @@
         "zone": "commercial",
         "residents": 0,
         "jobs": 8,
-        "color": "#70a8c9"
+        "color": "#70a8c9",
+        "construction_needs": {"lumber": 60, "stone": 40, "steel": 15}
       }
     },
     {
@@ -87,7 +90,8 @@
         "zone": "commercial",
         "residents": 0,
         "jobs": 60,
-        "color": "#658aa8"
+        "color": "#658aa8",
+        "construction_needs": {"lumber": 150, "stone": 120, "steel": 100}
       }
     },
     {
@@ -101,7 +105,8 @@
         "zone": "industrial",
         "residents": 0,
         "jobs": 45,
-        "color": "#8b8580"
+        "color": "#8b8580",
+        "construction_needs": {"stone": 180, "steel": 160}
       }
     }
   ]

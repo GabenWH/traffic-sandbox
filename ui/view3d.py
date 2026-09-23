@@ -14,9 +14,10 @@ from panda3d.core import (
 
 from city import CityMap
 from models import Road
+from models import Intersection
 from .camera3d import OrbitCamera, ray_to_height
 from .scene3d import (
-    SceneRegistry, TerrainFeature, TreeFeature, draw_road, draw_terrain, draw_tree,
+    SceneRegistry, TerrainFeature, TreeFeature, draw_intersection, draw_road, draw_terrain, draw_tree,
     update_car_layer,
 )
 
@@ -38,6 +39,7 @@ class PandaWorldView:
         self.vehicle_nodes = {}
         self.scene.register(TerrainFeature, draw_terrain)
         self.scene.register(Road, draw_road)
+        self.scene.register(Intersection, draw_intersection)
         self.scene.register(TreeFeature, draw_tree)
         self.on_click: Callable[[int, int], None] | None = None
         self.on_motion: Callable[[int, int], None] | None = None
@@ -154,6 +156,7 @@ class PandaWorldView:
         self.scene.replace([
             TerrainFeature(city.width, city.height, city.terrain.grass_color),
             *city.roads,
+            *city.intersections,
             *(
                 TreeFeature(
                     "redwood" if index % 4 == 0 else "pine",

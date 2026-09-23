@@ -148,6 +148,7 @@ class Buildable(CityObject):
 
     phase: BuildablePhase = BuildablePhase.PLANNING
     inventory: ResourceInventory = field(default_factory=ResourceInventory)
+    construction_needs: dict[str, float] = field(default_factory=dict)
     condition: float = 1.0
     active_work: WorkOrder | None = None
 
@@ -164,12 +165,27 @@ class Buildable(CityObject):
             raise ValueError("This buildable already has active work")
         if not isfinite(required_work) or required_work <= 0:
             raise ValueError("Required work must be positive")
+        if kind is WorkType.CONSTRUCTION:
+            missing = self.construction_shortages()
+            if missing:
+                details = ", ".join(f"{name}: {amount:g}" for name, amount in missing.items())
+                raise ValueError(f"Construction needs are not met: {details}")
+            for resource, amount in self.construction_needs.items():
+                self.inventory.consume(resource, amount)
         self.active_work = WorkOrder(kind, float(required_work))
         if kind is WorkType.CONSTRUCTION:
             self.phase = BuildablePhase.UNDER_CONSTRUCTION
         elif kind is WorkType.DEMOLITION:
             self.phase = BuildablePhase.DEMOLISHING
         return self.active_work
+
+    def construction_shortages(self) -> dict[str, float]:
+        """Return the undelivered amount for each construction resource."""
+        return {
+            resource: amount - self.inventory.amounts.get(resource, 0.0)
+            for resource, amount in self.construction_needs.items()
+            if self.inventory.amounts.get(resource, 0.0) < amount
+        }
 
     def perform_work(self, amount: float) -> bool:
         if self.active_work is None:

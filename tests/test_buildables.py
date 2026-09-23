@@ -10,6 +10,8 @@ from persistence import world_from_dict, world_to_dict
 from ui.interactions import InteractionMixin
 from ui_tools.buildables import BuildableCatalogError, buildables_of_kind, load_buildables
 from ui_tools.tools.road_tool import BuildingTool
+from ui_tools.tools.inspect_tool import deliver_building_resource
+from models import WorkType
 
 
 class BuildablesTests(unittest.TestCase):
@@ -61,6 +63,13 @@ class BuildablesTests(unittest.TestCase):
         self.assertEqual(building.parcel.zone, ZoneType.COMMERCIAL)
         self.assertEqual((building.jobs, building.residents), (8, 0))
         self.assertEqual((building.parcel.width, building.parcel.height), (54.0, 42.0))
+        self.assertTrue(building.construction_needs)
+        with self.assertRaisesRegex(ValueError, "needs"):
+            building.begin_work(WorkType.CONSTRUCTION, 10)
+        for resource, amount in building.construction_needs.items():
+            deliver_building_resource(building, f"{resource} {amount}")
+        building.begin_work(WorkType.CONSTRUCTION, 10)
+        self.assertEqual(building.inventory.amounts, {})
         self.assertIs(host.building_at((100, 120)), building)
         self.assertEqual(redraws, [True])
 
@@ -73,6 +82,7 @@ class BuildablesTests(unittest.TestCase):
         )
         loaded = world_from_dict(encoded).city_map.buildings[0]
         self.assertEqual((loaded.buildable_id, loaded.color), ("corner_shop", "#70a8c9"))
+        self.assertEqual(loaded.construction_needs, building.construction_needs)
 
     def test_building_tool_rejects_placement_outside_the_map(self) -> None:
         class Host:

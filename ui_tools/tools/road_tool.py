@@ -291,6 +291,7 @@ class BuildingTool(CanvasTool):
             jobs=int(details["jobs"]),
             buildable_id=self.selected_spec.id,
             color=str(details["color"]),
+            construction_needs=dict(details.get("construction_needs", {})),
         )
         self.host.city_map.parcels.append(parcel)
         self.host.city_map.buildings.append(building)

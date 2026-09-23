@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from math import hypot
+from math import cos, hypot, pi, sin
 
-from models import Road
+from models import Intersection, IntersectionKind, Road
 
 
 Point3 = tuple[float, float, float]
@@ -30,3 +30,24 @@ def road_deck_quads(road: Road) -> list[DeckQuad]:
             (end[0] - offset_x, end[1] - offset_y, end_height),
         ))
     return quads
+
+
+def roundabout_deck_quads(junction: Intersection, segments: int = 32) -> tuple[list[DeckQuad], list[DeckQuad]]:
+    """Return an asphalt annulus and a slightly raised central island."""
+    if segments < 3:
+        raise ValueError("A roundabout needs at least three segments")
+    if junction.kind is not IntersectionKind.ROUNDABOUT:
+        return [], []
+    cx, cy = junction.position
+    outer, inner, island_radius = junction.radius, junction.radius * 0.65, junction.radius * 0.43
+    road: list[DeckQuad] = []
+    island: list[DeckQuad] = []
+    for i in range(segments):
+        a, b = 2 * pi * i / segments, 2 * pi * (i + 1) / segments
+        def point(radius: float, angle: float, z: float) -> Point3:
+            return (cx + radius * cos(angle), cy + radius * sin(angle), z)
+        road.append((point(inner, a, junction.elevation), point(outer, a, junction.elevation),
+                     point(outer, b, junction.elevation), point(inner, b, junction.elevation)))
+        island.append((point(0, a, junction.elevation + 1.5), point(island_radius, a, junction.elevation + 1.5),
+                       point(island_radius, b, junction.elevation + 1.5), point(0, b, junction.elevation + 1.5)))
+    return road, island
