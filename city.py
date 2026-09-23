@@ -31,6 +31,7 @@ from models import (
     Road,
 )
 from pathfinding import Path
+from roundabouts import validate_roundabout_dimensions
 
 
 GEOMETRY_TOLERANCE = 1e-6
@@ -418,6 +419,8 @@ class CityMap:
                 self.minimum_intersection_radius(intersection),
                 intersection.radius_override or 0.0,
             )
+            if intersection.kind is IntersectionKind.ROUNDABOUT:
+                validate_roundabout_dimensions(intersection)
 
         endpoint_junctions: dict[tuple[str, bool], Intersection] = {}
         free_endpoints: list[tuple[Road, bool, Point]] = []

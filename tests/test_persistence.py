@@ -8,6 +8,7 @@ from unittest.mock import patch
 from city import Building, CityMap, Parcel, Terrain, ZoneType
 from models import ControlDefinition, ControlType, IntersectionKind
 from persistence import WORLD_FORMAT, WorldFormatError, world_from_dict, world_to_dict
+from roundabouts import island_radius, ring_radius
 
 
 class WorldPersistenceTests(unittest.TestCase):
@@ -43,6 +44,32 @@ class WorldPersistenceTests(unittest.TestCase):
         self.assertEqual(round_trip.roundabout_island_radius, 35.0)
         self.assertEqual(round_trip.roundabout_outer_band_width, 5.0)
         self.assertEqual(round_trip.radius_override, 72.0)
+
+    def test_widened_roundabout_with_derived_island_reopens(self) -> None:
+        city, _ = self._roundabout_save()
+        intersection = city.standard_intersections[0]
+        intersection.roundabout_ring_radius = 42.0
+        city.rebuild_mobility_network()
+        self.assertEqual(intersection.radius, 60.0)
+        self.assertEqual(island_radius(intersection), 30.0)
+        intersection.connected_roads[0].lane_width = 80.0
+        city.rebuild_mobility_network()
+
+        encoded = world_to_dict(
+            city, unit_system="imperial", camera_x=0, camera_y=0, camera_zoom=1,
+        )
+        loaded = world_from_dict(json.loads(json.dumps(encoded)))
+        round_trip = next(
+            item for item in loaded.city_map.intersections if item.id == intersection.id
+        )
+
+        self.assertEqual(round_trip.radius, 92.0)
+        self.assertEqual(round_trip.roundabout_ring_radius, 42.0)
+        self.assertIsNone(round_trip.roundabout_island_radius)
+        self.assertIsNone(round_trip.radius_override)
+        self.assertEqual(island_radius(round_trip), 38.0)
+        self.assertGreaterEqual(ring_radius(round_trip) - island_radius(round_trip) - 3.0, 1.0)
+        self.assertTrue(round_trip.lane_connections)
 
     def test_legacy_versions_without_intersection_traits_load_defaults(self) -> None:
         for version in (4, 5):

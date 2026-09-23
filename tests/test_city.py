@@ -4,6 +4,8 @@ from math import dist
 import unittest
 
 from city import CityMap, Terrain
+from mobility import VEHICLE_LAYER
+from roundabouts import island_radius, ring_radius
 from models import (
     CityObject,
     ControlDefinition,
@@ -17,6 +19,64 @@ from models import (
 
 
 class RoadConstructionTests(unittest.TestCase):
+    def test_roundabout_road_widening_preserves_ring_and_island_clearance(self) -> None:
+        for authored_island, expected_island in ((None, 38.0), (28.0, 28.0)):
+            with self.subTest(authored_island=authored_island):
+                city = CityMap(terrain=Terrain(trees=[]))
+                city.add_road([(0, 200), (400, 200)])
+                city.add_road([(200, 0), (200, 400)])
+                junction = city.standard_intersections[0]
+                junction.kind = IntersectionKind.ROUNDABOUT
+                junction.roundabout_ring_radius = 42.0
+                junction.roundabout_island_radius = authored_island
+                city.rebuild_mobility_network()
+                self.assertEqual(junction.radius, 60.0)
+                self.assertEqual(island_radius(junction), 30.0 if authored_island is None else 28.0)
+
+                junction.connected_roads[0].lane_width = 80.0
+                city.rebuild_mobility_network()
+
+                self.assertEqual(junction.radius, 92.0)
+                self.assertEqual(junction.roundabout_ring_radius, 42.0)
+                self.assertEqual(junction.roundabout_island_radius, authored_island)
+                self.assertIsNone(junction.radius_override)
+                self.assertEqual(island_radius(junction), expected_island)
+                self.assertGreaterEqual(ring_radius(junction) - island_radius(junction) - 3.0, 1.0)
+                graph = city.mobility.layers[VEHICLE_LAYER].graph
+                arcs = [
+                    transition.edge.value
+                    for node in graph.nodes
+                    for transition in graph.transitions_from(node)
+                    if transition.edge.kind == "lane"
+                    and transition.edge.value.road_id == f"roundabout:{junction.id}"
+                ]
+                self.assertTrue(arcs)
+                for arc in arcs:
+                    for point in arc.points:
+                        self.assertAlmostEqual(dist(point, junction.position), 42.0)
+
+    def test_rebuild_rejects_invalid_roundabout_dimensions_before_route_generation(self) -> None:
+        for ring, island in ((61.0, None), (42.0, 39.0), (3.0, None)):
+            with self.subTest(ring=ring, island=island):
+                city = CityMap(terrain=Terrain(trees=[]))
+                city.add_road([(0, 200), (400, 200)])
+                city.add_road([(200, 0), (200, 400)])
+                junction = city.standard_intersections[0]
+                junction.kind = IntersectionKind.ROUNDABOUT
+                junction.roundabout_ring_radius = ring
+                junction.roundabout_island_radius = island
+                old_layer = city.mobility.layers[VEHICLE_LAYER]
+                old_connections = junction.lane_connections
+
+                with self.assertRaises(ValueError):
+                    city.rebuild_mobility_network()
+
+                self.assertEqual(junction.radius, 60.0)
+                self.assertEqual(junction.roundabout_ring_radius, ring)
+                self.assertEqual(junction.roundabout_island_radius, island)
+                self.assertIs(city.mobility.layers[VEHICLE_LAYER], old_layer)
+                self.assertIs(junction.lane_connections, old_connections)
+
     def test_radius_override_survives_rebuild_and_road_widening(self) -> None:
         city = CityMap(terrain=Terrain(trees=[]))
         city.add_road([(0, 50), (100, 50)])

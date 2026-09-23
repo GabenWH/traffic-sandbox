@@ -24,7 +24,12 @@ def ring_radius(junction):
 def island_radius(junction):
     if junction.roundabout_island_radius is not None:
         return junction.roundabout_island_radius
-    return junction.radius * _ISLAND_RADIUS_RATIO
+    radius = junction.radius * _ISLAND_RADIUS_RATIO
+    if junction.roundabout_ring_radius is not None:
+        # Road clearance can grow the junction around a fixed authored ring.
+        # Leave room for the three-unit vehicle half-width and one unit gap.
+        radius = min(radius, ring_radius(junction) - 4.0)
+    return radius
 
 
 def outer_band_width(junction):
