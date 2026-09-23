@@ -242,9 +242,9 @@ class RendererMixin:
             roundabout = intersection.kind is IntersectionKind.ROUNDABOUT
             if roundabout:
                 from roundabouts import (
-                    ROUNDABOUT_OUTER_BAND_WIDTH, island_radius, yield_mark,
+                    island_radius, outer_band_width, yield_mark,
                 )
-                visibility_radius = intersection.radius + ROUNDABOUT_OUTER_BAND_WIDTH
+                visibility_radius = intersection.radius + outer_band_width(intersection)
             else:
                 visibility_radius = intersection.radius
             if not self._circle_is_visible(intersection.position, visibility_radius):
@@ -253,7 +253,7 @@ class RendererMixin:
             surface_radius = max(1, intersection.radius * self.camera_zoom)
             if roundabout:
                 outer_radius = (
-                    intersection.radius + ROUNDABOUT_OUTER_BAND_WIDTH
+                    intersection.radius + outer_band_width(intersection)
                 ) * self.camera_zoom
                 self.canvas.create_oval(
                     x - outer_radius, y - outer_radius,

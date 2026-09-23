@@ -1,12 +1,42 @@
 """Roundabout road and island geometry stays shared across the map views."""
 
 import unittest
-from math import inf, nan
+from math import hypot, inf, nan
 
 from models import Intersection, IntersectionKind
 
 
 class RoundaboutVisualTests(unittest.TestCase):
+    def test_custom_ring_radius_controls_every_circulating_arc(self) -> None:
+        from city import CityMap, Terrain
+        from mobility import VEHICLE_LAYER
+
+        city = CityMap(terrain=Terrain(trees=[]))
+        city.add_road([(0, 100), (200, 100)])
+        city.add_road([(100, 0), (100, 200)])
+        junction = city.standard_intersections[0]
+        junction.kind = IntersectionKind.ROUNDABOUT
+        junction.roundabout_ring_radius = 42.0
+        city.rebuild_mobility_network()
+
+        graph = city.mobility.layers[VEHICLE_LAYER].graph
+        arcs = [
+            transition.edge.value
+            for node in graph.nodes
+            for transition in graph.transitions_from(node)
+            if transition.edge.kind == "lane"
+            and transition.edge.value.road_id == f"roundabout:{junction.id}"
+        ]
+
+        self.assertGreater(len(arcs), 0)
+        for arc in arcs:
+            self.assertGreater(len(arc.points), 2)
+            for point in arc.points:
+                self.assertAlmostEqual(
+                    hypot(point[0] - junction.position[0], point[1] - junction.position[1]),
+                    42.0,
+                )
+
     def test_car_path_leaves_clearance_inside_the_roundabout(self) -> None:
         from roundabouts import island_radius, outer_band_width, ring_radius
 

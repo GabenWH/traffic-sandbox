@@ -257,6 +257,9 @@ class UIPackageTests(unittest.TestCase):
         host.city_map.add_road([(50, 0), (50, 100)])
         junction = host.city_map.standard_intersections[0]
         junction.kind = IntersectionKind.ROUNDABOUT
+        junction.roundabout_ring_radius = 40.0
+        junction.roundabout_island_radius = 25.0
+        junction.roundabout_outer_band_width = 5.0
         host.city_map.rebuild_mobility_network()
 
         host._draw_junction_surfaces()
@@ -266,9 +269,9 @@ class UIPackageTests(unittest.TestCase):
             for args, options in host.canvas.ovals
             if args[0] < 50 < args[2] and args[1] < 50 < args[3]
         }
-        self.assertEqual((circles["#c6a96b"][2] - circles["#c6a96b"][0]) / 2, 63)
+        self.assertEqual((circles["#c6a96b"][2] - circles["#c6a96b"][0]) / 2, 65)
         self.assertEqual((circles["#4d535a"][2] - circles["#4d535a"][0]) / 2, 60)
-        self.assertEqual((circles["#67884b"][2] - circles["#67884b"][0]) / 2, 30)
+        self.assertEqual((circles["#67884b"][2] - circles["#67884b"][0]) / 2, 25)
 
 
 if __name__ == "__main__":
