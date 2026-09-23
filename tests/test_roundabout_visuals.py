@@ -51,6 +51,15 @@ class RoundaboutVisualTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     validate_roundabout_dimensions(candidate)
 
+    def test_roundabout_dimensions_reject_zero_island_radius(self) -> None:
+        from roundabouts import validate_roundabout_dimensions
+
+        junction = Intersection("r", (100, 100), radius=60, kind=IntersectionKind.ROUNDABOUT)
+        junction.roundabout_island_radius = 0.0
+
+        with self.assertRaises(ValueError):
+            validate_roundabout_dimensions(junction)
+
 
 if __name__ == "__main__":
     unittest.main()

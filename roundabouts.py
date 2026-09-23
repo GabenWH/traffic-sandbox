@@ -39,8 +39,10 @@ def validate_roundabout_dimensions(junction):
     ring = ring_radius(junction)
     island = island_radius(junction)
     band = outer_band_width(junction)
-    if any(not isfinite(value) or value < 0 for value in (radius, ring, island, band)):
-        raise ValueError("Roundabout dimensions must be finite and non-negative.")
+    if any(not isfinite(value) for value in (radius, ring, island, band)):
+        raise ValueError("Roundabout dimensions must be finite.")
+    if any(value <= 0 for value in (radius, ring, island)) or band < 0:
+        raise ValueError("Roundabout radii must be positive and band width non-negative.")
     if ring > radius:
         raise ValueError("The circulating radius exceeds the intersection radius.")
     if island >= ring:
