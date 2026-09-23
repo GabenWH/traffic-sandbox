@@ -3,6 +3,7 @@
 import json
 import unittest
 from math import nan
+from unittest.mock import patch
 
 from city import Building, CityMap, Parcel, Terrain, ZoneType
 from models import ControlDefinition, ControlType, IntersectionKind
@@ -79,6 +80,26 @@ class WorldPersistenceTests(unittest.TestCase):
                     WorldFormatError, r"world\.intersections\[0\]",
                 ):
                     world_from_dict(encoded)
+
+    def test_oversized_roundabout_ring_is_rejected_before_mobility_rebuild(self) -> None:
+        _, encoded = self._roundabout_save()
+        encoded["world"]["intersections"][0]["roundabout_ring_radius"] = 1e308
+        original_rebuild = CityMap.rebuild_mobility_network
+
+        def reject_unsafe_geometry(city_map: CityMap) -> None:
+            if any(
+                intersection.kind is IntersectionKind.ROUNDABOUT
+                and intersection.roundabout_ring_radius == 1e308
+                for intersection in city_map.intersections
+            ):
+                raise AssertionError("oversized roundabout reached mobility rebuild")
+            original_rebuild(city_map)
+
+        with patch.object(CityMap, "rebuild_mobility_network", reject_unsafe_geometry):
+            with self.assertRaisesRegex(
+                WorldFormatError, r"world\.intersections\[0\]",
+            ):
+                world_from_dict(encoded)
 
     def test_world_round_trip_preserves_hierarchy_and_view(self) -> None:
         city = CityMap(width=900, height=700, terrain=Terrain("#123456", [(400, 400)]))

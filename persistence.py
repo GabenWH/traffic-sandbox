@@ -323,6 +323,20 @@ def world_from_dict(data: object) -> LoadedWorld:
         city_map.intersections.append(intersection)
         saved_intersections.append((intersection, intersection_data, path))
 
+    # Validate roundabout dimensions before geometry generation. The saved road
+    # references provide the provisional minimum radius; rebuilding may derive
+    # different connections, so validate again against the rebuilt radius below.
+    for intersection, _, path in saved_intersections:
+        if intersection.kind is IntersectionKind.ROUNDABOUT:
+            intersection.radius = max(
+                city_map.minimum_intersection_radius(intersection),
+                intersection.radius_override or 0.0,
+            )
+            try:
+                validate_roundabout_dimensions(intersection)
+            except (TypeError, ValueError) as error:
+                raise WorldFormatError(f"Invalid {path}: {error}") from error
+
     # Lane connections are derived from road inputs and outputs.
     city_map.rebuild_mobility_network()
     for intersection, intersection_data, path in saved_intersections:
