@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import tkinter as tk
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import isfinite
 from typing import Any, Literal
 
 from city import Building
 from config import MAX_SPEED_PREFERENCE_MPH, MIN_SPEED_PREFERENCE_MPH
 from models import Car, CityObject, Intersection, IntersectionKind, Lane, Road, SpeedLimit
+from roundabouts import island_radius, outer_band_width, ring_radius, validate_roundabout_dimensions
 from traffic_testbed import RoutedTestCar
 from units import (
     acceleration_unit,
@@ -130,6 +131,53 @@ def deliver_building_resource(building: Building, value: str) -> None:
     building.add_resource(resource, amount)
 
 
+def clear_routed_test_cars(host: Any) -> None:
+    """Remove temporary cars and their canvas items before routes change."""
+    traffic = getattr(host, "test_traffic", None)
+    if traffic is None:
+        return
+    for car in traffic.clear_cars():
+        canvas = getattr(host, "canvas", None)
+        if canvas is not None:
+            for item in [car.item, *car.signal_items]:
+                if item is not None:
+                    canvas.delete(item)
+
+
+def set_intersection_trait(host: Any, intersection: Intersection, trait: str, value: str) -> None:
+    """Validate and apply a displayed intersection distance."""
+    attribute = {
+        "radius": "radius_override",
+        "roundabout_ring_radius": "roundabout_ring_radius",
+        "roundabout_island_radius": "roundabout_island_radius",
+        "roundabout_outer_band_width": "roundabout_outer_band_width",
+    }[trait]
+    try:
+        world_value = display_distance_to_pixels(float(value), host.unit_system)
+    except ValueError as error:
+        raise ValueError("Enter a numeric distance.") from error
+    if not isfinite(world_value):
+        raise ValueError("Enter a finite distance.")
+
+    candidate = replace(intersection, **{attribute: world_value})
+    if trait == "radius":
+        if world_value < host.city_map.minimum_intersection_radius(intersection):
+            raise ValueError("Junction radius is below the required road clearance.")
+        candidate.radius = world_value
+    if intersection.kind is IntersectionKind.ROUNDABOUT or trait != "radius":
+        validate_roundabout_dimensions(candidate)
+
+    setattr(intersection, attribute, world_value)
+    if trait == "radius":
+        intersection.radius = world_value
+    if trait in {"radius", "roundabout_ring_radius"}:
+        clear_routed_test_cars(host)
+        host.city_map.rebuild_mobility_network()
+    redraw = getattr(host, "redraw_world", None)
+    if callable(redraw):
+        redraw()
+
+
 def set_intersection_kind(host, intersection, value):
     """Convert a junction and discard temporary cars holding old route shapes."""
     value = value.strip().lower()
@@ -138,14 +186,14 @@ def set_intersection_kind(host, intersection, value):
     kind = IntersectionKind(value)
     if intersection.kind is kind:
         return
-    traffic = getattr(host, "test_traffic", None)
-    if traffic is not None:
-        for car in traffic.clear_cars():
-            canvas = getattr(host, "canvas", None)
-            if canvas is not None:
-                for item in [car.item, *car.signal_items]:
-                    if item is not None:
-                        canvas.delete(item)
+    if kind is IntersectionKind.ROUNDABOUT:
+        candidate = replace(intersection, kind=kind)
+        candidate.radius = max(
+            host.city_map.minimum_intersection_radius(candidate),
+            candidate.radius_override or 0.0,
+        )
+        validate_roundabout_dimensions(candidate)
+    clear_routed_test_cars(host)
     intersection.kind = kind
     # Stop signs from the former layout do not carry over to roundabout entries.
     from models import ControlDefinition
@@ -201,6 +249,30 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
     if isinstance(selected, Intersection):
         rows = []
         for item in selected.inspection_properties():
+            if item.label == "Radius":
+                radius_label = (
+                    "Turnaround radius" if selected.kind is IntersectionKind.CUL_DE_SAC
+                    else "Junction radius"
+                )
+                rows.append(InspectionRow(
+                    radius_label,
+                    f"{pixels_to_display_distance(selected.radius, unit_system):g}",
+                    "text",
+                    lambda value: set_intersection_trait(host, selected, "radius", value),
+                ))
+                if selected.kind is IntersectionKind.ROUNDABOUT:
+                    for label, trait, distance in (
+                        ("Circulating radius", "roundabout_ring_radius", ring_radius(selected)),
+                        ("Island radius", "roundabout_island_radius", island_radius(selected)),
+                        ("Outer band width", "roundabout_outer_band_width", outer_band_width(selected)),
+                    ):
+                        rows.append(InspectionRow(
+                            label,
+                            f"{pixels_to_display_distance(distance, unit_system):g}",
+                            "text",
+                            lambda value, trait=trait: set_intersection_trait(host, selected, trait, value),
+                        ))
+                continue
             value = item.value
             if item.unit == "distance":
                 value = (

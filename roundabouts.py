@@ -4,7 +4,7 @@ There is deliberately no driving AI here. This module only draws the roads and
 connects them. A car entering the circle uses the same yield/gap decision that
 another merge can use. A car already on the circle follows ordinary lane traffic.
 """
-from math import atan2, cos, sin, pi, ceil, dist
+from math import atan2, cos, sin, pi, ceil, dist, isfinite
 
 from models import (Lane, LaneConnection, ManeuverDefinition, ManeuverType,
                     ControlDefinition, ControlType)
@@ -16,11 +16,44 @@ _ISLAND_RADIUS_RATIO = 0.50
 
 
 def ring_radius(junction):
+    if junction.roundabout_ring_radius is not None:
+        return junction.roundabout_ring_radius
     return junction.radius * _RING_RADIUS_RATIO
 
 
 def island_radius(junction):
-    return junction.radius * _ISLAND_RADIUS_RATIO
+    if junction.roundabout_island_radius is not None:
+        return junction.roundabout_island_radius
+    radius = junction.radius * _ISLAND_RADIUS_RATIO
+    if junction.roundabout_ring_radius is not None:
+        # Road clearance can grow the junction around a fixed authored ring.
+        # Leave room for the three-unit vehicle half-width and one unit gap.
+        radius = min(radius, ring_radius(junction) - 4.0)
+    return radius
+
+
+def outer_band_width(junction):
+    if junction.roundabout_outer_band_width is not None:
+        return junction.roundabout_outer_band_width
+    return ROUNDABOUT_OUTER_BAND_WIDTH
+
+
+def validate_roundabout_dimensions(junction):
+    """Reject roundabout dimensions that cannot contain a usable traffic lane."""
+    radius = junction.radius
+    ring = ring_radius(junction)
+    island = island_radius(junction)
+    band = outer_band_width(junction)
+    if any(not isfinite(value) for value in (radius, ring, island, band)):
+        raise ValueError("Roundabout dimensions must be finite.")
+    if any(value <= 0 for value in (radius, ring, island)) or band < 0:
+        raise ValueError("Roundabout radii must be positive and band width non-negative.")
+    if ring > radius:
+        raise ValueError("The circulating radius exceeds the intersection radius.")
+    if island >= ring:
+        raise ValueError("The island must be inside the circulating path.")
+    if ring - island - 3.0 < 1.0:
+        raise ValueError("The circulating lane is too close to the island.")
 
 
 def _curve(start, end, heading_in, heading_out):

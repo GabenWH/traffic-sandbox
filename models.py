@@ -804,6 +804,10 @@ class Intersection(CityObject):
     radius: float = 24.0
     kind: IntersectionKind = IntersectionKind.STANDARD
     elevation: float = 0.0
+    radius_override: float | None = None
+    roundabout_ring_radius: float | None = None
+    roundabout_island_radius: float | None = None
+    roundabout_outer_band_width: float | None = None
 
     @property
     def inspection_title(self) -> str:

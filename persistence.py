@@ -23,10 +23,11 @@ from models import (
     WorkType,
 )
 from units import validate_unit_system
+from roundabouts import validate_roundabout_dimensions
 
 
 WORLD_FORMAT = "lanesimulator.world"
-WORLD_VERSION = 5
+WORLD_VERSION = 6
 
 
 class WorldFormatError(ValueError):
@@ -92,6 +93,10 @@ def world_to_dict(
                     "kind": intersection.kind.value,
                     "position": [*intersection.position],
                     "elevation": intersection.elevation,
+                    "radius_override": intersection.radius_override,
+                    "roundabout_ring_radius": intersection.roundabout_ring_radius,
+                    "roundabout_island_radius": intersection.roundabout_island_radius,
+                    "roundabout_outer_band_width": intersection.roundabout_outer_band_width,
                     "road_ids": [road.id for road in intersection.connected_roads],
                     "lane_connections": [
                         {
@@ -156,7 +161,7 @@ def world_from_dict(data: object) -> LoadedWorld:
     if root.get("format") != WORLD_FORMAT:
         raise WorldFormatError("This is not a city-builder world save.")
     version = root.get("version")
-    if version not in (4, WORLD_VERSION):
+    if version not in (4, 5, WORLD_VERSION):
         raise WorldFormatError(f"Unsupported world-save version: {root.get('version')!r}.")
 
     world = _mapping(root.get("world"), "world")
@@ -297,15 +302,49 @@ def world_from_dict(data: object) -> LoadedWorld:
                     intersection_data.get("elevation"), f"{path}.elevation",
                 )
             ),
+            radius_override=_optional_positive_number(
+                intersection_data.get("radius_override"), f"{path}.radius_override",
+            ),
+            roundabout_ring_radius=_optional_positive_number(
+                intersection_data.get("roundabout_ring_radius"),
+                f"{path}.roundabout_ring_radius",
+            ),
+            roundabout_island_radius=_optional_positive_number(
+                intersection_data.get("roundabout_island_radius"),
+                f"{path}.roundabout_island_radius",
+            ),
+            roundabout_outer_band_width=_optional_number(
+                intersection_data.get("roundabout_outer_band_width"),
+                f"{path}.roundabout_outer_band_width",
+            ),
         )
         if intersection.elevation < 0:
             raise WorldFormatError(f"{path}.elevation cannot be negative.")
         city_map.intersections.append(intersection)
         saved_intersections.append((intersection, intersection_data, path))
 
+    # Validate roundabout dimensions before geometry generation. The saved road
+    # references provide the provisional minimum radius; rebuilding may derive
+    # different connections, so validate again against the rebuilt radius below.
+    for intersection, _, path in saved_intersections:
+        if intersection.kind is IntersectionKind.ROUNDABOUT:
+            intersection.radius = max(
+                city_map.minimum_intersection_radius(intersection),
+                intersection.radius_override or 0.0,
+            )
+            try:
+                validate_roundabout_dimensions(intersection)
+            except (TypeError, ValueError) as error:
+                raise WorldFormatError(f"Invalid {path}: {error}") from error
+
     # Lane connections are derived from road inputs and outputs.
     city_map.rebuild_mobility_network()
     for intersection, intersection_data, path in saved_intersections:
+        if intersection.kind is IntersectionKind.ROUNDABOUT:
+            try:
+                validate_roundabout_dimensions(intersection)
+            except (TypeError, ValueError) as error:
+                raise WorldFormatError(f"Invalid {path}: {error}") from error
         raw_connections = intersection_data.get("lane_connections")
         expected = {
             (
@@ -585,6 +624,14 @@ def _positive_number(value: object, path: str) -> float:
     if number <= 0:
         raise WorldFormatError(f"{path} must be positive.")
     return number
+
+
+def _optional_number(value: object, path: str) -> float | None:
+    return None if value is None else _number(value, path)
+
+
+def _optional_positive_number(value: object, path: str) -> float | None:
+    return None if value is None else _positive_number(value, path)
 
 
 def _nonnegative_int(value: object, path: str) -> int:

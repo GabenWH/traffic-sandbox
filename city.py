@@ -31,6 +31,7 @@ from models import (
     Road,
 )
 from pathfinding import Path
+from roundabouts import validate_roundabout_dimensions
 
 
 GEOMETRY_TOLERANCE = 1e-6
@@ -360,6 +361,26 @@ class CityMap:
             )
         ]
 
+    def minimum_intersection_radius(self, intersection: Intersection) -> float:
+        """Return the radius required to clear connected road endpoints."""
+        cul_de_sac = intersection.kind is IntersectionKind.CUL_DE_SAC
+        base = MINIMUM_CUL_DE_SAC_RADIUS if cul_de_sac else (
+            60.0 if intersection.kind is IntersectionKind.ROUNDABOUT
+            else MINIMUM_INTERSECTION_RADIUS
+        )
+        clearance = CUL_DE_SAC_CLEARANCE if cul_de_sac else INTERSECTION_CLEARANCE
+        return max(
+            base,
+            *(
+                road.width / 2
+                + clearance
+                + min(dist(intersection.position, endpoint) for endpoint in (
+                    road.centerline[0], road.centerline[-1],
+                ))
+                for road in intersection.connected_roads
+            ),
+        )
+
     def rebuild_mobility_network(self) -> None:
         """Derive junction footprints, lane endpoints, and the vehicle layer."""
         lane_metadata = {
@@ -395,16 +416,11 @@ class CityMap:
                 )
             ]
             intersection.radius = max(
-                60.0 if intersection.kind is IntersectionKind.ROUNDABOUT else MINIMUM_INTERSECTION_RADIUS,
-                *(
-                    road.width / 2
-                    + INTERSECTION_CLEARANCE
-                    + min(dist(intersection.position, endpoint) for endpoint in (
-                        road.centerline[0], road.centerline[-1],
-                    ))
-                    for road in intersection.connected_roads
-                ),
+                self.minimum_intersection_radius(intersection),
+                intersection.radius_override or 0.0,
             )
+            if intersection.kind is IntersectionKind.ROUNDABOUT:
+                validate_roundabout_dimensions(intersection)
 
         endpoint_junctions: dict[tuple[str, bool], Intersection] = {}
         free_endpoints: list[tuple[Road, bool, Point]] = []
@@ -505,16 +521,8 @@ class CityMap:
         ]
         for cul_de_sac in cul_de_sacs:
             cul_de_sac.radius = max(
-                MINIMUM_CUL_DE_SAC_RADIUS,
-                *(
-                    road.width / 2
-                    + CUL_DE_SAC_CLEARANCE
-                    + min(
-                        dist(cul_de_sac.position, road.centerline[0]),
-                        dist(cul_de_sac.position, road.centerline[-1]),
-                    )
-                    for road in cul_de_sac.connected_roads
-                ),
+                self.minimum_intersection_radius(cul_de_sac),
+                cul_de_sac.radius_override or 0.0,
             )
         self.intersections = [*standard_intersections, *cul_de_sacs]
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from math import atan2, ceil, cos, dist, hypot, pi, sin, sqrt
 
 from models import Intersection, IntersectionKind, Road
-from roundabouts import ROUNDABOUT_OUTER_BAND_WIDTH, island_radius
+from roundabouts import island_radius, outer_band_width
 
 
 Point3 = tuple[float, float, float]
@@ -303,7 +303,7 @@ def road_divider_runs(
         if junction.kind is IntersectionKind.ROUNDABOUT:
             circles.append((
                 junction.position,
-                junction.radius + ROUNDABOUT_OUTER_BAND_WIDTH,
+                junction.radius + outer_band_width(junction),
             ))
         elif junction.kind is IntersectionKind.CUL_DE_SAC:
             circles.append((junction.position, junction.radius))
@@ -398,7 +398,7 @@ def roundabout_deck_quads(
         return [], [], []
     cx, cy = junction.position
     outer = junction.radius
-    outer_band_radius = outer + ROUNDABOUT_OUTER_BAND_WIDTH
+    outer_band_radius = outer + outer_band_width(junction)
     island_outer_radius = island_radius(junction)
     connected_heights = [junction.elevation]
     for road in junction.connected_roads:

@@ -235,12 +235,11 @@ class RendererMixin:
         for intersection in self.city_map.intersections:
             x,y = self.world_to_screen(intersection.position)
             if intersection.kind is IntersectionKind.ROUNDABOUT:
-                roundabout = intersection.kind is IntersectionKind.ROUNDABOUT
                 from roundabouts import(
-                    ROUNDABOUT_OUTER_BAND_WIDTH, island_radius, yield_mark,
+                    outer_band_width,
                 )
                 outer_radius = (
-                    intersection.radius + ROUNDABOUT_OUTER_BAND_WIDTH
+                    intersection.radius + outer_band_width(intersection)
                 ) * self.camera_zoom
                 self.canvas.create_oval(
                     x - outer_radius, y - outer_radius,
@@ -258,15 +257,24 @@ class RendererMixin:
             roundabout = intersection.kind is IntersectionKind.ROUNDABOUT
             if roundabout:
                 from roundabouts import (
-                    ROUNDABOUT_OUTER_BAND_WIDTH, island_radius, yield_mark,
+                    island_radius, outer_band_width, yield_mark,
                 )
-                visibility_radius = intersection.radius + ROUNDABOUT_OUTER_BAND_WIDTH
+                visibility_radius = intersection.radius + outer_band_width(intersection)
             else:
                 visibility_radius = intersection.radius
             if not self._circle_is_visible(intersection.position, visibility_radius):
                 continue
             x, y = self.world_to_screen(intersection.position)
             surface_radius = max(1, intersection.radius * self.camera_zoom)
+            if roundabout:
+                outer_radius = (
+                    intersection.radius + outer_band_width(intersection)
+                ) * self.camera_zoom
+                self.canvas.create_oval(
+                    x - outer_radius, y - outer_radius,
+                    x + outer_radius, y + outer_radius,
+                    fill="#c6a96b", outline="", tags=STATIC_TAG,
+                )
             self.canvas.create_oval(
                 x - surface_radius, y - surface_radius,
                 x + surface_radius, y + surface_radius,

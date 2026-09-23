@@ -2,12 +2,67 @@
 
 import importlib.util
 import unittest
+from math import hypot
 
 from models import Road
 
 
 @unittest.skipUnless(importlib.util.find_spec("panda3d"), "Panda3D is required")
 class Scene3DTests(unittest.TestCase):
+    def test_custom_roundabout_surfaces_and_car_use_shared_route_geometry(self) -> None:
+        from panda3d.core import GeomVertexReader, NodePath
+        from city import CityMap, Terrain
+        from mobility import VEHICLE_LAYER
+        from models import IntersectionKind
+        from ui.scene3d import SceneRegistry, draw_intersection, update_car_layer
+
+        city = CityMap(terrain=Terrain(trees=[]))
+        city.add_road([(0, 100), (200, 100)])
+        city.add_road([(100, 0), (100, 200)])
+        junction = city.standard_intersections[0]
+        junction.kind = IntersectionKind.ROUNDABOUT
+        junction.roundabout_ring_radius = 42.0
+        junction.roundabout_island_radius = 25.0
+        junction.roundabout_outer_band_width = 5.0
+        city.rebuild_mobility_network()
+
+        root = NodePath("scene")
+        registry = SceneRegistry(root)
+        registry.register(type(junction), draw_intersection)
+        registry.replace([junction])
+
+        def surface_radii(name: str) -> set[float]:
+            surface = root.find(f"**/{name}")
+            self.assertFalse(surface.isEmpty())
+            data = surface.node().getGeom(0).getVertexData()
+            reader = GeomVertexReader(data, "vertex")
+            return {
+                round(hypot((vertex := reader.getData3()).x - 100, vertex.y - 100), 3)
+                for _ in range(data.getNumRows())
+            }
+
+        self.assertEqual(surface_radii("roundabout-island"), {0.0, 25.0})
+        self.assertEqual(surface_radii("roundabout-outer-band"), {60.0, 65.0})
+
+        graph = city.mobility.layers[VEHICLE_LAYER].graph
+        arc = next(
+            transition.edge.value
+            for node in graph.nodes
+            for transition in graph.transitions_from(node)
+            if transition.edge.kind == "lane"
+            and transition.edge.value.road_id == f"roundabout:{junction.id}"
+        )
+        position = arc.points[len(arc.points) // 2]
+        car = type("Car", (), {
+            "id": "ring-car", "position": position, "heading": (1.0, 0.0),
+            "color": "#ff0000", "length": 14.0, "width": 6.0,
+        })()
+        vehicles = {}
+        update_car_layer([car], root, vehicles, 0.0)
+
+        self.assertAlmostEqual(vehicles["ring-car"].getX(), position[0], delta=1e-4)
+        self.assertAlmostEqual(vehicles["ring-car"].getY(), position[1], delta=1e-4)
+
     def test_car_layer_tracks_position_heading_and_removes_finished_cars(self) -> None:
         from panda3d.core import NodePath
         from ui.scene3d import update_car_layer

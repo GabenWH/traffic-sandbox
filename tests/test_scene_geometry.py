@@ -1,6 +1,7 @@
 """Road deck coordinates used by the 3D scene."""
 
 import unittest
+from math import hypot
 
 from models import Road
 from ui.scene_geometry import road_deck_quads
@@ -8,6 +9,50 @@ from ui.scene_geometry import roundabout_deck_quads
 
 
 class SceneGeometryTests(unittest.TestCase):
+    def test_roundabout_geometry_uses_custom_island_and_outer_band(self) -> None:
+        from models import Intersection, IntersectionKind
+
+        junction = Intersection("r", (100, 100), radius=24, kind=IntersectionKind.ROUNDABOUT)
+        junction.roundabout_ring_radius = 18.0
+        junction.roundabout_island_radius = 9.0
+        junction.roundabout_outer_band_width = 5.0
+
+        deck, band, island = roundabout_deck_quads(junction)
+        island_radii = {
+            round(hypot(vertex[0] - junction.position[0], vertex[1] - junction.position[1]), 6)
+            for quad in island for vertex in quad
+        }
+        band_radii = {
+            round(hypot(vertex[0] - junction.position[0], vertex[1] - junction.position[1]), 6)
+            for quad in band for vertex in quad
+        }
+
+        self.assertEqual(len(deck), 32)
+        self.assertEqual(island_radii, {0.0, 9.0})
+        self.assertEqual(max(band_radii), junction.radius + 5.0)
+
+    def test_zero_width_roundabout_band_is_degenerate_and_keeps_island(self) -> None:
+        from models import Intersection, IntersectionKind
+
+        junction = Intersection("r", (100, 100), radius=24, kind=IntersectionKind.ROUNDABOUT)
+        junction.roundabout_ring_radius = 18.0
+        junction.roundabout_island_radius = 9.0
+        junction.roundabout_outer_band_width = 0.0
+
+        _, band, island = roundabout_deck_quads(junction)
+        band_radii = {
+            round(hypot(vertex[0] - 100, vertex[1] - 100), 6)
+            for quad in band for vertex in quad
+        }
+        island_radii = {
+            round(hypot(vertex[0] - 100, vertex[1] - 100), 6)
+            for quad in island for vertex in quad
+        }
+
+        self.assertEqual(len(band), 32)
+        self.assertEqual(band_radii, {24.0})
+        self.assertEqual(island_radii, {0.0, 9.0})
+
     def test_roundabout_geometry_has_road_ring_and_raised_central_island(self) -> None:
         from models import Intersection, IntersectionKind
         approach = Road(
