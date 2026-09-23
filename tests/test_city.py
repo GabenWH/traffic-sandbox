@@ -17,6 +17,21 @@ from models import (
 
 
 class RoadConstructionTests(unittest.TestCase):
+    def test_radius_override_survives_rebuild_and_road_widening(self) -> None:
+        city = CityMap(terrain=Terrain(trees=[]))
+        city.add_road([(0, 50), (100, 50)])
+        city.add_road([(50, 0), (50, 100)])
+        junction = city.standard_intersections[0]
+        junction.radius_override = 50.0
+
+        city.rebuild_mobility_network()
+        self.assertEqual(junction.radius, 50.0)
+
+        junction.connected_roads[0].lane_width = 48.0
+        city.rebuild_mobility_network()
+        self.assertGreaterEqual(junction.radius, city.minimum_intersection_radius(junction))
+        self.assertEqual(junction.radius_override, 50.0)
+
     def test_short_crossing_overrun_ends_at_three_way_junction(self) -> None:
         city = CityMap(terrain=Terrain(trees=[]))
         city.add_road([(0, 0), (200, 0)])
