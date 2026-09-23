@@ -26,7 +26,7 @@ from units import validate_unit_system
 
 
 WORLD_FORMAT = "lanesimulator.world"
-WORLD_VERSION = 4
+WORLD_VERSION = 5
 
 
 class WorldFormatError(ValueError):
@@ -40,6 +40,7 @@ class LoadedWorld:
     camera_x: float
     camera_y: float
     camera_zoom: float
+    camera_3d: dict[str, object] | None = None
 
 
 def world_to_dict(
@@ -49,6 +50,7 @@ def world_to_dict(
     camera_x: float,
     camera_y: float,
     camera_zoom: float,
+    camera_3d: dict[str, object] | None = None,
 ) -> dict[str, Any]:
     """Return a JSON-compatible snapshot without any Tkinter state."""
     return {
@@ -66,6 +68,7 @@ def world_to_dict(
                     "id": road.id,
                     "name": road.name,
                     "centerline": [[x, y] for x, y in road.centerline],
+                    "elevations": list(road.elevations),
                     "lane_width": road.lane_width,
                     "forward_lane_count": road.forward_lane_count,
                     "reverse_lane_count": road.reverse_lane_count,
@@ -88,6 +91,7 @@ def world_to_dict(
                     "id": intersection.id,
                     "kind": intersection.kind.value,
                     "position": [*intersection.position],
+                    "elevation": intersection.elevation,
                     "road_ids": [road.id for road in intersection.connected_roads],
                     "lane_connections": [
                         {
@@ -141,6 +145,7 @@ def world_to_dict(
         "view": {
             "unit_system": validate_unit_system(unit_system),
             "camera": {"x": camera_x, "y": camera_y, "zoom": camera_zoom},
+            **({"camera_3d": camera_3d} if camera_3d is not None else {}),
         },
     }
 
@@ -150,7 +155,8 @@ def world_from_dict(data: object) -> LoadedWorld:
     root = _mapping(data, "save")
     if root.get("format") != WORLD_FORMAT:
         raise WorldFormatError("This is not a city-builder world save.")
-    if root.get("version") != WORLD_VERSION:
+    version = root.get("version")
+    if version not in (4, WORLD_VERSION):
         raise WorldFormatError(f"Unsupported world-save version: {root.get('version')!r}.")
 
     world = _mapping(root.get("world"), "world")
@@ -174,6 +180,16 @@ def world_from_dict(data: object) -> LoadedWorld:
         if road_id in road_ids:
             raise WorldFormatError(f"Duplicate road id: {road_id!r}.")
         road_ids.add(road_id)
+        centerline = _points(road_data.get("centerline"), f"{path}.centerline")
+        if version == 4:
+            elevations = [0.0] * len(centerline)
+        else:
+            elevations = [
+                _number(value, f"{path}.elevations[{index}]")
+                for index, value in enumerate(_list(road_data.get("elevations"), f"{path}.elevations"))
+            ]
+            if len(elevations) != len(centerline) or any(value < 0 for value in elevations):
+                raise WorldFormatError(f"{path}.elevations must contain one nonnegative height per point.")
         forward_lane_count = _nonnegative_int(
             road_data.get("forward_lane_count"), f"{path}.forward_lane_count"
         )
@@ -210,7 +226,8 @@ def world_from_dict(data: object) -> LoadedWorld:
             raise WorldFormatError(f"{path}.lanes must describe every configured lane exactly once.")
         try:
             road = city_map.add_road(
-                _points(road_data.get("centerline"), f"{path}.centerline"),
+                centerline,
+                elevations=elevations,
                 road_id=road_id,
                 name=_string(road_data.get("name"), f"{path}.name"),
                 lane_width=_positive_number(road_data.get("lane_width"), f"{path}.lane_width"),
@@ -275,7 +292,14 @@ def world_from_dict(data: object) -> LoadedWorld:
             position=position_data[0],
             connected_roads=connected_roads,
             kind=intersection_kind,
+            elevation=(
+                0.0 if version == 4 else _number(
+                    intersection_data.get("elevation"), f"{path}.elevation",
+                )
+            ),
         )
+        if intersection.elevation < 0:
+            raise WorldFormatError(f"{path}.elevation cannot be negative.")
         city_map.intersections.append(intersection)
         saved_intersections.append((intersection, intersection_data, path))
 
@@ -396,12 +420,33 @@ def world_from_dict(data: object) -> LoadedWorld:
 
     view = _mapping(root.get("view", {}), "view")
     camera = _mapping(view.get("camera", {}), "view.camera")
+    camera_3d: dict[str, object] | None = None
+    if "camera_3d" in view:
+        raw_camera_3d = _mapping(view["camera_3d"], "view.camera_3d")
+        raw_target = _list(raw_camera_3d.get("target"), "view.camera_3d.target")
+        if len(raw_target) != 3:
+            raise WorldFormatError("view.camera_3d.target must contain three coordinates.")
+        pitch = _number(raw_camera_3d.get("pitch"), "view.camera_3d.pitch")
+        if not 10 <= pitch <= 85:
+            raise WorldFormatError("view.camera_3d.pitch must be between 10 and 85 degrees.")
+        camera_3d = {
+            "target": [
+                _number(value, f"view.camera_3d.target[{index}]")
+                for index, value in enumerate(raw_target)
+            ],
+            "yaw": _number(raw_camera_3d.get("yaw"), "view.camera_3d.yaw"),
+            "pitch": pitch,
+            "distance": _positive_number(
+                raw_camera_3d.get("distance"), "view.camera_3d.distance",
+            ),
+        }
     return LoadedWorld(
         city_map=city_map,
         unit_system=validate_unit_system(str(view.get("unit_system", "imperial"))),
         camera_x=_number(camera.get("x", 0.0), "view.camera.x"),
         camera_y=_number(camera.get("y", 0.0), "view.camera.y"),
         camera_zoom=_positive_number(camera.get("zoom", 1.0), "view.camera.zoom"),
+        camera_3d=camera_3d,
     )
 
 

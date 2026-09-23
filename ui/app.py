@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import tkinter as tk
+from types import SimpleNamespace
 
 from city import CityMap
 from config import DEFAULT_UNIT_SYSTEM, HEIGHT, WIDTH
@@ -23,6 +24,7 @@ from .renderer import (
     TEST_TRAFFIC_SOURCE_TAG,
 )
 from .viewport import Viewport, ViewportMixin
+from .camera3d import OrbitCamera
 
 
 PERFORMANCE_HISTORY_SECONDS = 20.0
@@ -42,6 +44,7 @@ class FreewaySimulator(
         self.root = root
         root.title("Freeway Simulator")
         root.report_callback_exception = self.report_callback_exception
+        root.protocol("WM_DELETE_WINDOW", self.exit_app)
 
         self.running = True
         self.simulation_speed = 1.0
@@ -60,6 +63,9 @@ class FreewaySimulator(
             (self.city_map.height - HEIGHT) / 2,
         )
         self._pan_anchor: tuple[int, int] | None = None
+        self.view3d_active = False
+        self.view3d = None
+        self._saved_3d_camera_state: dict[str, object] | None = None
 
         self.analytics_window: tk.Toplevel | None = None
         self.analytics_canvas: tk.Canvas | None = None
@@ -87,8 +93,13 @@ class FreewaySimulator(
         self.last_performance_refresh = 0.0
 
         self.build_toolbar()
+        self.viewport_shell = tk.Frame(root)
+        self.viewport_shell.pack(fill="both", expand=True)
+        self.sidebar = tk.Frame(self.viewport_shell, width=500, bg="#e8edf2")
+        self.sidebar.pack_propagate(False)
         self.canvas = tk.Canvas(
-            root, width=WIDTH, height=HEIGHT, highlightthickness=0, bg="#e83ccb",
+            self.viewport_shell, width=WIDTH, height=HEIGHT,
+            highlightthickness=0, bg="#e83ccb",
         )
         self.canvas.pack(fill="both", expand=True)
         self._bind_canvas_events()
@@ -113,6 +124,10 @@ class FreewaySimulator(
             toolbar, text="Pan: middle-drag · Zoom: wheel", bg="#e8edf2",
         )
         self.camera_label.pack(side="left", padx=(12, 0))
+        self.view_button = tk.Button(
+            toolbar, text="3D roads", command=self.toggle_3d_view, bg="#e8edf2",
+        )
+        self.view_button.pack(side="right")
         from ui_tools.menu_theme import style_panel
         style_panel(toolbar)
 
@@ -129,6 +144,10 @@ class FreewaySimulator(
         self.canvas.bind("<Configure>", lambda _event: self.redraw_world())
 
     def select_tool(self, tool: CanvasTool) -> None:
+        if self.view3d_active:
+            from ui_tools.tools.road_tool import RoadTool
+            if not isinstance(tool, RoadTool):
+                self.toggle_3d_view()
         if self.active_tool is tool:
             self.deactivate_tool(tool)
             return
@@ -159,6 +178,131 @@ class FreewaySimulator(
     def handle_tool_motion(self, event: tk.Event[tk.Misc]) -> None:
         if self.active_tool is not None:
             self.active_tool.on_canvas_motion(event)
+
+    def toggle_3d_view(self) -> None:
+        """Swap the map canvas for a 3D road view in the same Tk window."""
+        if self.active_tool is not None:
+            self.deactivate_tool(self.active_tool)
+        if self.view3d_active:
+            assert self.view3d is not None
+            self.view3d.frame.pack_forget()
+            self.sidebar.pack_forget()
+            self.canvas.pack(fill="both", expand=True)
+            self.view3d_active = False
+            self.view_button.configure(text="3D roads")
+            self.camera_label.configure(text="Pan: middle-drag · Zoom: wheel")
+            self.redraw_world()
+            return
+        if self.view3d is None:
+            try:
+                from .view3d import PandaWorldView
+            except ImportError as error:
+                from tkinter import messagebox
+                messagebox.showerror(
+                    "3D roads", "Panda3D is required. Install requirements.txt first.",
+                    parent=self.root,
+                )
+                return
+            self.view3d = PandaWorldView(self.viewport_shell)
+            self.view3d.set_callbacks(
+                on_click=self._handle_3d_click,
+                on_motion=self._handle_3d_motion,
+                on_key=self._handle_3d_key,
+            )
+        self.canvas.pack_forget()
+        self.sidebar.pack(side="right", fill="y")
+        self.view3d.frame.pack(side="left", fill="both", expand=True)
+        self.view3d_active = True
+        self.view_button.configure(text="2D map")
+        self.camera_label.configure(
+            text="Orbit: right-drag · Pan: middle-drag · Zoom: wheel · Height: Page Up/Down",
+        )
+        self.root.update_idletasks()
+        self.view3d.step()
+        self.view3d.show_city(self.city_map)
+        if self._saved_3d_camera_state is not None:
+            self.restore_3d_camera(self._saved_3d_camera_state)
+
+    def camera_3d_state(self) -> dict[str, object] | None:
+        if self.view3d is None:
+            return self._saved_3d_camera_state
+        orbit = self.view3d.orbit
+        return {
+            "target": list(orbit.target),
+            "yaw": orbit.yaw,
+            "pitch": orbit.pitch,
+            "distance": orbit.distance,
+        }
+
+    def restore_3d_camera(self, state: dict[str, object] | None) -> None:
+        """Keep a loaded camera until the 3D view exists, then apply it."""
+        if self.view3d is None:
+            self._saved_3d_camera_state = state
+            return
+        self._saved_3d_camera_state = None
+        if state is None:
+            self.view3d.orbit = OrbitCamera(
+                (self.city_map.width / 2, self.city_map.height / 2, 0),
+            )
+        else:
+            target = state["target"]
+            self.view3d.orbit = OrbitCamera(
+                (float(target[0]), float(target[1]), float(target[2])),
+                yaw=float(state["yaw"]),
+                pitch=float(state["pitch"]),
+                distance=float(state["distance"]),
+            )
+        self.view3d._apply_camera()
+
+    def road_point_from_event(
+        self, event: object, elevation: float,
+    ) -> tuple[float, float] | None:
+        if self.view3d_active and self.view3d is not None:
+            return self.view3d.point_at_screen(event.x, event.y, elevation)
+        return self.screen_to_world((event.x, event.y))
+
+    def road_endpoint_from_event(
+        self, event: object,
+    ) -> tuple[tuple[float, float], float] | None:
+        if self.view3d_active and self.view3d is not None:
+            return self.view3d.nearest_road_endpoint(event.x, event.y)
+        return None
+
+    def _handle_3d_click(self, x: int, y: int) -> None:
+        if self.active_tool is not None:
+            self.handle_tool_click(SimpleNamespace(x=x, y=y))
+
+    def _handle_3d_motion(self, x: int, y: int) -> None:
+        if self.active_tool is not None:
+            self.handle_tool_motion(SimpleNamespace(x=x, y=y))
+
+    def _handle_3d_key(self, key: str) -> None:
+        from ui_tools.tools.road_tool import RoadTool
+        if not isinstance(self.active_tool, RoadTool):
+            return
+        if key == "page_up":
+            self.active_tool.adjust_elevation(1)
+        elif key == "page_down":
+            self.active_tool.adjust_elevation(-1)
+        elif key == "enter":
+            self.active_tool.finish()
+        elif key == "escape":
+            self.active_tool.cancel()
+        self.active_tool.refresh()
+
+    def redraw_world(self) -> None:
+        RendererMixin.redraw_world(self)
+        if self.view3d_active and self.view3d is not None:
+            self.view3d.show_city(self.city_map)
+
+    def reset_camera(self) -> None:
+        if self.view3d_active and self.view3d is not None:
+            self.view3d.orbit = OrbitCamera(
+                (self.city_map.width / 2, self.city_map.height / 2, 0),
+            )
+            self.view3d.show_city(self.city_map)
+            return
+        ViewportMixin.reset_camera(self)
 
     def tick(self) -> None:
         """Advance traffic, refresh tools/windows, and schedule the next frame."""
@@ -195,6 +339,9 @@ class FreewaySimulator(
                     self.canvas.delete(item)
         for car in self.test_traffic.cars:
             self.draw_test_car(car)
+        if self.view3d_active and self.view3d is not None:
+            self.view3d.update_cars(self.test_traffic.cars, self.test_traffic.elapsed_time)
+            self.view3d.step()
         self.canvas.tag_raise(TEST_TRAFFIC_CAR_TAG)
         self.canvas.tag_raise(TEST_TRAFFIC_SOURCE_TAG)
         self.canvas.tag_raise(SPEED_LIMIT_TAG)

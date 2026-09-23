@@ -75,6 +75,7 @@ class FileActionsMixin:
             camera_x=self.camera_x,
             camera_y=self.camera_y,
             camera_zoom=self.camera_zoom,
+            camera_3d=self.camera_3d_state(),
         )
         try:
             with open(path, "w", encoding="utf-8") as output:
@@ -93,6 +94,7 @@ class FileActionsMixin:
         self.clear_cars()
         self.simulation = TrafficSimulation()
         self.city_map = CityMap()
+        self.restore_3d_camera(None)
         self.blank_map = True
         self.select_lane(self.simulation.lanes[0])
         for toolbar_tool in self.tools:
@@ -125,7 +127,10 @@ class FileActionsMixin:
         self.camera_zoom = max(0.35, min(3.0, loaded.camera_zoom))
         self.select_lane(self.simulation.lanes[0])
         self.redraw_world()
+        self.restore_3d_camera(loaded.camera_3d)
 
     def exit_app(self) -> None:
         if messagebox.askyesno("Exit simulator", "Exit the freeway simulator?"):
+            if self.view3d is not None:
+                self.view3d.close()
             self.root.destroy()

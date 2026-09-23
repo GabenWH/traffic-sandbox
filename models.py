@@ -409,12 +409,41 @@ class Road(Buildable):
     id: str
     name: str
     centerline: list[Point]
+    elevations: list[float] = field(default_factory=list)
     lane_width: float = 12.0
     forward_lane_count: int = 1
     reverse_lane_count: int = 1
     buildable_id: str | None = None
     lanes: list[Lane] = field(default_factory=list)
     inspection_title = "Road"
+
+    def __post_init__(self) -> None:
+        if not self.elevations:
+            self.elevations = [0.0] * len(self.centerline)
+        if len(self.elevations) != len(self.centerline):
+            raise ValueError("Road elevations must match centerline points")
+        if any(not isfinite(height) or height < 0 for height in self.elevations):
+            raise ValueError("Road elevations must be finite and nonnegative")
+
+    def elevation_at(self, position: Point) -> float:
+        """Interpolate height at the nearest point on the authored centerline."""
+        best_distance = float("inf")
+        best_height = self.elevations[0]
+        for index, (start, end) in enumerate(zip(self.centerline, self.centerline[1:])):
+            dx, dy = end[0] - start[0], end[1] - start[1]
+            length_squared = dx * dx + dy * dy
+            fraction = 0.0 if length_squared == 0 else max(0.0, min(
+                1.0, ((position[0] - start[0]) * dx + (position[1] - start[1]) * dy)
+                / length_squared,
+            ))
+            nearest = (start[0] + dx * fraction, start[1] + dy * fraction)
+            distance = dist(position, nearest)
+            if distance < best_distance:
+                best_distance = distance
+                best_height = self.elevations[index] + fraction * (
+                    self.elevations[index + 1] - self.elevations[index]
+                )
+        return best_height
 
     @property
     def width(self) -> float:
@@ -519,15 +548,22 @@ class Road(Buildable):
             raise ValueError("Split point must be inside the road, not at an endpoint")
 
         start, end = self.centerline[split_index:split_index + 2]
+        split_height = self.elevation_at(split_point)
         if dist(split_point, start) <= tolerance:
             left_points = self.centerline[:split_index + 1]
             right_points = self.centerline[split_index:]
+            left_heights = self.elevations[:split_index + 1]
+            right_heights = self.elevations[split_index:]
         elif dist(split_point, end) <= tolerance:
             left_points = self.centerline[:split_index + 2]
             right_points = self.centerline[split_index + 1:]
+            left_heights = self.elevations[:split_index + 2]
+            right_heights = self.elevations[split_index + 1:]
         else:
             left_points = [*self.centerline[:split_index + 1], split_point]
             right_points = [split_point, *self.centerline[split_index + 1:]]
+            left_heights = [*self.elevations[:split_index + 1], split_height]
+            right_heights = [split_height, *self.elevations[split_index + 1:]]
 
         left_length = sum(dist(a, b) for a, b in zip(left_points, left_points[1:]))
         right_length = sum(dist(a, b) for a, b in zip(right_points, right_points[1:]))
@@ -538,6 +574,7 @@ class Road(Buildable):
             id=self.id,
             name=self.name,
             centerline=left_points,
+            elevations=left_heights,
             lane_width=self.lane_width,
             forward_lane_count=self.forward_lane_count,
             reverse_lane_count=self.reverse_lane_count,
@@ -562,6 +599,7 @@ class Road(Buildable):
             id=str(uuid4()),
             name=self.name,
             centerline=right_points,
+            elevations=right_heights,
             lane_width=self.lane_width,
             forward_lane_count=self.forward_lane_count,
             reverse_lane_count=self.reverse_lane_count,
@@ -749,6 +787,7 @@ class Intersection(CityObject):
     lane_connections: list[LaneConnection] = field(default_factory=list)
     radius: float = 24.0
     kind: IntersectionKind = IntersectionKind.STANDARD
+    elevation: float = 0.0
 
     @property
     def inspection_title(self) -> str:
