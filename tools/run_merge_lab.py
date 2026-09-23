@@ -25,6 +25,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--seconds", type=float, default=30.0)
     parser.add_argument("--dt", type=float, default=0.05)
+    parser.add_argument("--engine", choices=("legacy", "data_first"), default="legacy")
+    parser.add_argument("--window-seconds", type=float, default=60.0)
     parser.add_argument("--list", action="store_true", help="List scenarios and exit")
     parser.add_argument("--trace", type=Path, help="Write the complete frame trace as JSON")
     args = parser.parse_args()
@@ -32,19 +34,30 @@ def main() -> None:
         for scenario in scenario_catalog():
             print(f"{scenario.name}: {scenario.description} [{', '.join(scenario.conditions)}]")
         return
-    report = MergeLab(args.seed).run(args.scenario, seconds=args.seconds, dt=args.dt)
+    report = MergeLab(args.seed).run(
+        args.scenario,
+        seconds=args.seconds,
+        dt=args.dt,
+        engine=args.engine,
+        window_seconds=args.window_seconds,
+    )
     if args.trace is not None:
         args.trace.write_text(json.dumps({"frames": [asdict(frame) for frame in report.frames]}, indent=2))
     # The short report is intentionally easy to paste into an issue or chat.
     print(json.dumps({
         "scenario": report.scenario,
         "seed": report.seed,
+        "engine": report.engine,
         "seconds": report.seconds,
         "completed": report.completed,
         "remaining": report.remaining,
         "overlap_pair_ticks": report.overlap_pair_ticks,
         "first_overlap": report.first_overlap,
         "timing_summary_ms": report.timing_summary_ms,
+        "hard_gridlock_seconds": report.hard_gridlock_seconds,
+        "state_digest": report.state_digest,
+        "peak_active": report.peak_active,
+        "windows": [asdict(window) for window in report.windows],
         "frames": len(report.frames),
     }, indent=2))
 

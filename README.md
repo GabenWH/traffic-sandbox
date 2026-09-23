@@ -110,3 +110,18 @@ Run the model and persistence tests with:
 ```bash
 python3 -m unittest discover -s tests -v
 ```
+
+Compare the legacy and data-first traffic updates on the mixed 240-car stress
+network with:
+
+```bash
+python3 tools/compare_traffic_engines.py dense-network-gauntlet \
+  --seeds 7 --seconds 60 --repeats 2 --window-seconds 10
+```
+
+The report includes per-window completions, mean/peak active cars, overlaps,
+hard-gridlock time, and p99 tick cost so flow degradation is visible over time.
+For an intentionally long soak, increase `--seconds` to `600` or `1800`; dense
+paired runs can take substantially longer than simulated time.
+Use `--repeats 1` only for scouting: a single ordered pair cannot evaluate
+determinism or eliminate engine-order bias from its performance gate.

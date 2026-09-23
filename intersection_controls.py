@@ -137,6 +137,11 @@ class AllWayStopCoordinator:
         clockwise = (atan2(heading[0], -heading[1]) + 2 * pi) % (2 * pi)
         return (round(arrival.stopped_at, 6), clockwise, arrival.car_id)
 
+    def priority_key(self, car_id: str) -> tuple[float, float, str] | None:
+        """Expose the coordinator's stable order for batch claim resolution."""
+        arrival = self.arrivals.get(car_id)
+        return self._priority_key(arrival) if arrival is not None else None
+
 
 def movements_conflict(a: LaneConnection, b: LaneConnection) -> bool:
     """Would the two vehicle paths cross, join, or pass too close together?

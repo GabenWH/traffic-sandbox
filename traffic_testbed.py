@@ -9,7 +9,7 @@ import random
 from time import perf_counter
 
 from city import CityMap
-from car_brain import CarBrain, CarObservation
+from car_brain import CarBrain, CarDecision, CarObservation
 from intersection_controls import AllWayStopCoordinator
 from merge_behavior import observe_merge, MERGE_STRATEGIES
 from soft_deadlock import DeadlockCandidate, SoftDeadlockResolver, merge_space_clear
@@ -37,6 +37,25 @@ TEST_CAR_BRAKING = 24.0
 TEST_CAR_FOLLOWING_GAP = 22.0
 TEST_CAR_LOOKAHEAD = 128.0
 _car_ids = count(1)
+
+
+@dataclass(frozen=True)
+class TrafficIntent:
+    """One car's decision from the immutable start-of-tick traffic snapshot."""
+
+    car: "RoutedTestCar"
+    distance_before: float
+    speed_before: float
+    route_movement: tuple[float, float, LaneConnection] | None
+    movement: tuple[float, float, LaneConnection] | None
+    has_claim: bool
+    is_merge: bool
+    merge_observation: object | None
+    priority: bool
+    distance_to_stop: float | None
+    lead_car: "RoutedTestCar" | None
+    lead_distance: float | None
+    decision: CarDecision
 
 
 @dataclass
@@ -129,6 +148,7 @@ class TestTrafficSimulation:
     deadlock_resolver: SoftDeadlockResolver = field(
         default_factory=SoftDeadlockResolver, repr=False,
     )
+    update_mode: str = "legacy"
 
     colors = ("#ff5b72", "#37e6ff", "#f7d154", "#7fea8c", "#c98cff")
 
@@ -139,6 +159,14 @@ class TestTrafficSimulation:
             raise ValueError("Test traffic must allow at least one car")
         if not isfinite(self.speed_mph) or self.speed_mph <= 0:
             raise ValueError("Test-traffic speed must be positive")
+        self._validate_update_mode()
+        if len({car.id for car in self.cars}) != len(self.cars):
+            raise ValueError("Preloaded traffic cars must have unique IDs")
+        self._spawned_count = len(self.cars)
+
+    def _validate_update_mode(self) -> None:
+        if self.update_mode not in ("legacy", "data_first"):
+            raise ValueError("Traffic update mode must be legacy or data_first")
 
     def toggle_junction(self, junction: Intersection) -> bool:
         """Toggle a junction as a combined source/sink; return its new state."""
@@ -172,6 +200,10 @@ class TestTrafficSimulation:
         points = vehicle_route_points(route)
         if len(points) < 2 or polyline_length(list(points)) <= 0:
             return None
+        existing_ids = {car.id for car in self.cars}
+        next_spawn_id = self._spawned_count + 1
+        while f"test-car-{next_spawn_id:06d}" in existing_ids:
+            next_spawn_id += 1
         car = RoutedTestCar(
             source_id=source.id,
             destination_id=destination.id,
@@ -179,6 +211,9 @@ class TestTrafficSimulation:
             points=points,
             speed=mph_to_pixels_per_second(self.speed_mph),
             color=self.rng.choice(self.colors),
+            # Simulation-local, zero-padded IDs make every stable tie-break
+            # reproducible and preserve spawn order across digit boundaries.
+            id=f"test-car-{next_spawn_id:06d}",
         )
         self.occupancy.rebuild(self.cars)
         spawn_gap = self.occupancy.lead_gap(car, TEST_CAR_FOLLOWING_GAP + car.length)
@@ -186,13 +221,14 @@ class TestTrafficSimulation:
             return None
         # Mix driver decisions on the same road. No global road mode decides
         # that every driver must use the same merging behavior.
-        self._spawned_count += 1
+        self._spawned_count = next_spawn_id
         car.brain.merge_style = "cautious" if self._spawned_count % 5 == 0 else "rolling"
         self.cars.append(car)
         return car
 
     def update(self, city_map: CityMap, elapsed_seconds: float) -> list[RoutedTestCar]:
         """Spawn and advance test cars, returning cars that reached a sink."""
+        self._validate_update_mode()
         if not isfinite(elapsed_seconds) or elapsed_seconds < 0:
             raise ValueError("Elapsed time must be finite and nonnegative")
         # Keep observations frequent even when the UI fast-forwards or a test
@@ -232,6 +268,13 @@ class TestTrafficSimulation:
                     if self.spawn_car(city_map, source, destination) is not None:
                         break
         spawned_at = perf_counter() if self.debugger is not None else 0.0
+
+        if self.update_mode == "data_first":
+            return self._update_data_first(
+                elapsed_seconds,
+                frame_started=frame_started,
+                spawned_at=spawned_at,
+            )
 
         self.occupancy.rebuild(self.cars)
         # Observe EVERY approach before granting ANY entry. The order of cars
@@ -496,6 +539,362 @@ class TestTrafficSimulation:
                     # converts that intent into this frame's final position.
                     "decision": decision_seconds * 1000,
                     "resolution": resolution_seconds * 1000,
+                    "total": (finished_at - frame_started) * 1000,
+                },
+                deadlock_stall_seconds=self.deadlock_resolver.stall_seconds,
+                temporary_winner_id=(
+                    temporary_winner or self.deadlock_resolver.winner_id
+                ),
+                hard_gridlock=self.deadlock_resolver.hard_gridlock,
+            )
+        return completed
+
+    def _update_data_first(
+        self,
+        elapsed_seconds: float,
+        *,
+        frame_started: float,
+        spawned_at: float,
+    ) -> list[RoutedTestCar]:
+        """Advance one frame as snapshot -> intents -> resolve -> batch apply."""
+        occupancy_started = perf_counter() if self.debugger is not None else 0.0
+        self.occupancy.rebuild(self.cars)
+        snapshot_at = perf_counter() if self.debugger is not None else 0.0
+        cars = tuple(sorted(self.cars, key=lambda car: car.id))
+
+        for car in cars:
+            car.cruise_speed_bound = _route_cruise_speed(car, self.speed_mph)
+
+        deadlock_candidates = []
+        for car in cars:
+            is_waiting = (
+                car.speed <= 0.1
+                and car.brain.state.value
+                in ("waiting_for_priority", "entering_intersection")
+            )
+            if car.id != self.deadlock_resolver.winner_id and not is_waiting:
+                continue
+            movement = _next_controlled_movement(car, self.stop_coordinator)
+            if movement is None:
+                continue
+            deadlock_candidates.append(DeadlockCandidate(
+                car.id,
+                car.brain.wait_reason != "following queued car"
+                and _temporary_winner_path_clear(
+                    car, movement, cars, self.occupancy,
+                    self.stop_coordinator,
+                ),
+                movement_id=movement[2].id,
+            ))
+        deadlock_candidates = tuple(deadlock_candidates)
+        temporary_winner = self.deadlock_resolver.choose_winner(deadlock_candidates)
+
+        # Update shared arrival facts before asking any brain for a decision.
+        for car in cars:
+            movement = _next_controlled_movement(car, self.stop_coordinator)
+            if (movement is not None and movement[2].merge_target is not None
+                    and car.distance + car.length / 2 < movement[0]
+                    and self.stop_coordinator.has_claim(car.id, movement[2])):
+                self.stop_coordinator.release(car.id, movement[2])
+                car._claimed_movement = None
+            if movement is None or self.stop_coordinator.has_claim(car.id, movement[2]):
+                continue
+            distance = max(0.0, movement[0] - car.length / 2 - car.distance)
+            if movement[2].control.kind is ControlType.STOP:
+                if distance <= 0.05 and car.speed <= 0.1:
+                    self.stop_coordinator.observe_stop(
+                        car.id, movement[2], self.elapsed_time,
+                    )
+            elif movement[2].merge_target is None and distance <= TEST_CAR_LOOKAHEAD:
+                self.stop_coordinator.observe_approach(
+                    car.id,
+                    movement[2],
+                    self.elapsed_time + distance / max(car.speed, 1.0),
+                )
+
+        observed_at = perf_counter() if self.debugger is not None else 0.0
+        frame_car_count = len(cars)
+        intents: list[TrafficIntent] = []
+        for car in cars:
+            route_movement = _next_route_movement(car)
+            movement = _next_controlled_movement(car, self.stop_coordinator)
+            has_claim = (
+                movement is not None
+                and self.stop_coordinator.has_claim(car.id, movement[2])
+            )
+            inside = any(
+                self.stop_coordinator.has_claim(car.id, connection)
+                and start <= car.distance + car.length / 2
+                and car.distance - car.length / 2 < end
+                for start, end, connection in car.controlled_movements
+            )
+            distance_to_stop = (
+                max(0.0, movement[0] - car.length / 2 - car.distance)
+                if movement is not None and not has_claim
+                else None
+            )
+            is_merge = movement is not None and movement[2].merge_target is not None
+            merge_observation = observe_merge(car, movement, cars) if is_merge else None
+            priority = movement is not None and (
+                self.stop_coordinator.can_enter_merge(car.id, movement[2])
+                if is_merge
+                else self.stop_coordinator.can_claim(car.id, movement[2])
+            )
+            priority_reason = "waiting for intersection priority"
+            if movement is not None and not has_claim and not is_merge:
+                exit_gap = self.occupancy.gap_from(
+                    car, movement[1], TEST_CAR_LOOKAHEAD,
+                )
+                if (exit_gap is not None
+                        and exit_gap < TEST_CAR_FOLLOWING_GAP + car.length / 2):
+                    priority = False
+                    priority_reason = "waiting for room beyond the junction"
+                chain_end = movement[1]
+                for following in car.controlled_movements:
+                    if following[0] < movement[1]:
+                        continue
+                    if following[0] - chain_end >= car.length + 4.0:
+                        break
+                    if following[2].merge_target is not None:
+                        opening = MERGE_STRATEGIES[car.brain.merge_style].decide(
+                            observe_merge(car, following, cars),
+                            car.speed,
+                            _route_cruise_speed(car, self.speed_mph),
+                        )
+                        if (not opening.can_enter
+                                or not self.stop_coordinator.can_enter_merge(
+                                    car.id, following[2],
+                                )):
+                            priority = False
+                            priority_reason = (
+                                "waiting before short link for the next yield"
+                            )
+                            break
+                    chain_end = following[1]
+            lead = self.occupancy.lead_car_gap(car, TEST_CAR_LOOKAHEAD)
+            lead_car = lead[0] if lead is not None else None
+            lead_distance = lead[1] if lead is not None else None
+            cruise_speed = _route_cruise_speed(car, self.speed_mph)
+            for active in car.controlled_movements:
+                if (active[2].merge_target is not None
+                        and self.stop_coordinator.has_claim(car.id, active[2])
+                        and car.distance + car.length / 2 >= active[0]
+                        and car.distance - car.length / 2 < active[1]
+                        and car._merge_entry_speed is not None):
+                    cruise_speed = min(cruise_speed, car._merge_entry_speed)
+            decision = car.brain.decide(
+                CarObservation(
+                    cruise_speed=cruise_speed,
+                    speed=car.speed,
+                    distance_to_stop=distance_to_stop,
+                    must_stop=(
+                        movement is not None and not has_claim
+                        and movement[2].control.kind is ControlType.STOP
+                    ),
+                    must_yield=(
+                        movement is not None and not has_claim
+                        and movement[2].control.kind is not ControlType.STOP
+                    ),
+                    priority_reason=priority_reason,
+                    merge=merge_observation,
+                    has_priority=priority,
+                    lead_car_distance=lead_distance,
+                    following_gap=car.brain.following_distance(car.speed),
+                    inside_intersection=inside,
+                    next_maneuver=_signaled_maneuver(car, route_movement),
+                    distance_to_maneuver=(
+                        max(0.0, route_movement[0] - car.distance)
+                        if route_movement is not None else None
+                    ),
+                    inside_maneuver=(
+                        route_movement is not None
+                        and route_movement[0] <= car.distance < route_movement[1]
+                    ),
+                    temporary_winner=car.id == temporary_winner,
+                    temporary_winner_blocked=(
+                        car.id == self.deadlock_resolver.winner_id
+                        and temporary_winner is None
+                    ),
+                ),
+                elapsed_seconds,
+            )
+            intents.append(TrafficIntent(
+                car=car,
+                distance_before=car.distance,
+                speed_before=car.speed,
+                route_movement=route_movement,
+                movement=movement,
+                has_claim=has_claim,
+                is_merge=is_merge,
+                merge_observation=merge_observation,
+                priority=priority,
+                distance_to_stop=distance_to_stop,
+                lead_car=lead_car,
+                lead_distance=lead_distance,
+                decision=decision,
+            ))
+        intents_at = perf_counter() if self.debugger is not None else 0.0
+
+        # Resolve every request against the same collected intent set. Stable
+        # priority order makes arbitration independent of the mutable car list.
+        for intent in intents:
+            if intent.decision.register_stop and intent.movement is not None:
+                self.stop_coordinator.observe_stop(
+                    intent.car.id, intent.movement[2], self.elapsed_time,
+                )
+
+        def claim_order(intent: TrafficIntent) -> tuple[object, ...]:
+            if intent.car.id == temporary_winner:
+                return (0, 0.0, 0.0, intent.car.id)
+            priority_key = self.stop_coordinator.priority_key(intent.car.id)
+            if priority_key is not None:
+                return (1, *priority_key)
+            return (2, 0.0, 0.0, intent.car.id)
+
+        by_id = {intent.car.id: intent for intent in intents}
+        for intent in sorted(intents, key=claim_order):
+            movement = intent.movement
+            decision = intent.decision
+            has_claim = intent.has_claim
+            if (decision.request_claim and movement is not None
+                    and (intent.distance_to_stop or 0.0)
+                    <= max(10.0, intent.speed_before * 0.6)):
+                if intent.car.id == temporary_winner:
+                    has_claim = self.stop_coordinator.claim_temporary_winner(
+                        intent.car.id, movement[2],
+                    )
+                elif intent.is_merge:
+                    has_claim = self.stop_coordinator.claim_merge(
+                        intent.car.id, movement[2],
+                    )
+                else:
+                    has_claim = self.stop_coordinator.claim(
+                        intent.car.id, movement[2],
+                    )
+                if has_claim:
+                    intent.car._claimed_movement = movement[2]
+                    if intent.is_merge:
+                        intent.car._merge_entry_speed = decision.merge_entry_speed
+                        decision = replace(
+                            decision,
+                            desired_speed=decision.merge_entry_speed,
+                        )
+            by_id[intent.car.id] = replace(
+                intent, has_claim=has_claim, decision=decision,
+            )
+        resolved = [by_id[intent.car.id] for intent in intents]
+        resolved_at = perf_counter() if self.debugger is not None else 0.0
+
+        next_speeds: dict[str, float] = {}
+        planned_travel: dict[str, float] = {}
+        for intent in resolved:
+            car = intent.car
+            decision = intent.decision
+            speed_delta = decision.desired_speed - car.speed
+            limit = (
+                TEST_CAR_ACCELERATION if speed_delta > 0 else TEST_CAR_BRAKING
+            ) * elapsed_seconds
+            next_speed = car.speed + max(-limit, min(limit, speed_delta))
+            travel = next_speed * elapsed_seconds
+            if intent.movement is not None and not intent.has_claim:
+                stop_distance = intent.movement[0] - car.length / 2
+                travel = min(
+                    travel,
+                    max(0.0, stop_distance - intent.distance_before),
+                )
+            next_speeds[car.id] = next_speed
+            planned_travel[car.id] = travel
+
+        # A follower may use space its leader creates in this same accepted
+        # batch. Relaxing the dependency chain preserves four feet of final
+        # clearance without reintroducing car-list update order.
+        for _ in range(len(resolved)):
+            changed = False
+            for intent in resolved:
+                if intent.lead_car is None or intent.lead_distance is None:
+                    continue
+                leader_travel = planned_travel.get(intent.lead_car.id, 0.0)
+                safe_travel = max(0.0, intent.lead_distance + leader_travel - 4.0)
+                if planned_travel[intent.car.id] > safe_travel:
+                    planned_travel[intent.car.id] = safe_travel
+                    changed = True
+            if not changed:
+                break
+
+        completed: list[RoutedTestCar] = []
+        temporary_winner_entered = False
+        for intent in resolved:
+            car = intent.car
+            travel = planned_travel[car.id]
+            car.speed = next_speeds[car.id] if travel > 0.0 else 0.0
+            alive = car.advance(travel / car.speed if car.speed > 0 else 0.0)
+            if (car.id == temporary_winner and intent.has_claim
+                    and intent.movement is not None
+                    and car.distance + car.length / 2 >= intent.movement[0]):
+                temporary_winner_entered = True
+            if not alive:
+                completed.append(car)
+        applied_at = perf_counter() if self.debugger is not None else 0.0
+
+        # Claims and occupancy change only after the full position batch lands.
+        for intent in resolved:
+            car = intent.car
+            for _, end, connection in car.controlled_movements:
+                if car.distance - car.length / 2 >= end:
+                    self.stop_coordinator.release(car.id, connection)
+            remaining_claims = [
+                connection for _, _, connection in car.controlled_movements
+                if self.stop_coordinator.has_claim(car.id, connection)
+            ]
+            car._claimed_movement = remaining_claims[-1] if remaining_claims else None
+        for car in completed:
+            self.stop_coordinator.forget_car(car.id)
+            self.cars.remove(car)
+        self.occupancy.rebuild(self.cars)
+        occupancy_at = perf_counter() if self.debugger is not None else 0.0
+
+        stopped_count = sum(car.speed <= 0.1 for car in self.cars)
+        traffic_is_flowing = bool(self.cars) and stopped_count < 0.8 * len(self.cars)
+        self.deadlock_resolver.observe_frame(
+            elapsed_seconds,
+            made_progress=traffic_is_flowing or bool(completed),
+            candidate_ids=tuple(candidate.car_id for candidate in deadlock_candidates),
+            winner_resolved=(
+                temporary_winner_entered
+                or any(car.id == self.deadlock_resolver.winner_id for car in completed)
+            ),
+        )
+        if self.debugger is not None:
+            for intent in resolved:
+                self.debugger.record_car(
+                    intent.car,
+                    distance_before=intent.distance_before,
+                    speed_before=intent.speed_before,
+                    decision=intent.decision,
+                    movement=intent.movement,
+                    has_priority=intent.priority,
+                    has_claim=(
+                        intent.movement is not None
+                        and self.stop_coordinator.has_claim(
+                            intent.car.id, intent.movement[2],
+                        )
+                    ),
+                    merge_observation=intent.merge_observation,
+                )
+            finished_at = perf_counter()
+            self.debugger.end_frame(
+                simulated_time=self.elapsed_time,
+                elapsed_seconds=elapsed_seconds,
+                car_count=frame_car_count,
+                completed_ids=[car.id for car in completed],
+                timings_ms={
+                    "spawn": (spawned_at - frame_started) * 1000,
+                    "snapshot": (snapshot_at - occupancy_started) * 1000,
+                    "observe": (observed_at - snapshot_at) * 1000,
+                    "intent": (intents_at - observed_at) * 1000,
+                    "resolve": (resolved_at - intents_at) * 1000,
+                    "apply": (applied_at - resolved_at) * 1000,
+                    "occupancy": (occupancy_at - applied_at) * 1000,
                     "total": (finished_at - frame_started) * 1000,
                 },
                 deadlock_stall_seconds=self.deadlock_resolver.stall_seconds,
