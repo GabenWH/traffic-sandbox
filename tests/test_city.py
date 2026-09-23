@@ -183,7 +183,7 @@ class RoadConstructionTests(unittest.TestCase):
         self.assertEqual(road_input.width, 24.0)
         self.assertEqual(road_input.lanes, tuple(road.lanes))
 
-    def test_cul_de_sac_is_a_generic_multi_road_intersection(self) -> None:
+    def test_adding_a_road_to_a_cul_de_sac_promotes_it_to_an_intersection(self) -> None:
         city = CityMap(terrain=Terrain(trees=[]))
         main_road = city.add_road([(0, 0), (200, 0)], name="Main road")
         original = next(
@@ -198,18 +198,18 @@ class RoadConstructionTests(unittest.TestCase):
             reverse_lane_count=0,
         )
 
-        cul_de_sac = next(
-            intersection for intersection in city.cul_de_sacs
+        intersection = next(
+            intersection for intersection in city.intersections
             if intersection.position == (0.0, 0.0)
         )
-        self.assertIsInstance(cul_de_sac, Intersection)
-        self.assertEqual(cul_de_sac.kind, IntersectionKind.CUL_DE_SAC)
-        self.assertEqual(cul_de_sac.id, original.id)
-        self.assertEqual(cul_de_sac.connected_roads, [main_road, driveway])
+        self.assertIsInstance(intersection, Intersection)
+        self.assertEqual(intersection.kind, IntersectionKind.STANDARD)
+        self.assertEqual(intersection.id, original.id)
+        self.assertEqual(intersection.connected_roads, [main_road, driveway])
         self.assertTrue(any(
             connection.source_output.road is driveway
             and connection.destination_input.road is main_road
-            for connection in cul_de_sac.lane_connections
+            for connection in intersection.lane_connections
         ))
 
     def test_loading_road_geometry_does_not_modify_saved_trees(self) -> None:

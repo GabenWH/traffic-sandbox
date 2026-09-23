@@ -52,8 +52,9 @@ Use **Test route** to click a starting and destination lane on constructed
 roads. It draws the shortest directed A* route, highlighting lane travel and
 intersection movements, from the exact clicked positions without requiring cars
 or building demand yet. Intersections have real lane setbacks, and every
-unconnected two-way road endpoint derives a visible cul-de-sac with turnaround
-routing. One-way roads keep ordinary terminal endpoints. Clicking an
+single-road two-way endpoint derives a visible cul-de-sac with turnaround
+routing. If another road joins that endpoint, it becomes a standard multi-road
+intersection. One-way roads keep ordinary terminal endpoints. Clicking an
 intersection or cul-de-sac in the route tester uses that whole junction rather
 than guessing a nearby lane.
 

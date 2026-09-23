@@ -55,9 +55,11 @@ only their connected road centerlines. A pass-through collision inserts the
 existing junction center into the new road; an endpoint collision snaps that
 endpoint to the center. Junction capture uses both footprint radii so the
 builder reuses a nearby intersection instead of creating overlapping junctions.
-Cul-de-sacs use this same generic intersection model with a different footprint
-and movement policy. A road or future driveway that reaches the bulb joins that
-existing intersection; the bulb is not owned by a single road.
+Single-road two-way endpoints use this generic intersection model with a
+cul-de-sac footprint and turnaround movement policy. When another road or
+driveway reaches that endpoint, the junction becomes a standard multi-road
+intersection with the same persistent ID; the cul-de-sac turnaround policy
+applies only while one road is attached.
 
 IDs must be unique across the entire catalog. Invalid files raise a focused
 `BuildableCatalogError` during tool loading rather than producing partially

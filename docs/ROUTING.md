@@ -35,8 +35,9 @@ footprint boundary so connection curves have real space instead of collapsing
 at the crossing center. Intersections collect road outputs and road inputs and
 generate explicit curved `LaneConnection` objects between those ports.
 Same-segment and intersection U-turn movements are omitted by default.
-Unconnected two-way road endpoints derive cul-de-sac footprints and U-turn
-connections between their road outputs and inputs. One-way roads retain
+Single-road two-way endpoints derive cul-de-sac footprints and U-turn
+connections between their road outputs and inputs. If another road joins that
+endpoint, it becomes a standard multi-road intersection. One-way roads retain
 ordinary open endpoints with no bulb, setback, or turnaround. Each connection separates its
 geometric `ManeuverDefinition` from its `ControlDefinition`, allowing driving
 systems to interpret turns, merges, yields, stops, or signals without putting

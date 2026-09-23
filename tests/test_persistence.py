@@ -88,7 +88,7 @@ class WorldPersistenceTests(unittest.TestCase):
         )
         self.assertEqual(intersection.lane_connections[0].control.kind, ControlType.STOP)
 
-    def test_multi_road_cul_de_sac_round_trip_uses_generic_intersection(self) -> None:
+    def test_multi_road_endpoint_round_trip_keeps_standard_intersection(self) -> None:
         city = CityMap(terrain=Terrain(trees=[]))
         city.add_road([(0, 0), (200, 0)], name="Main road")
         city.add_road(
@@ -103,18 +103,18 @@ class WorldPersistenceTests(unittest.TestCase):
 
         loaded = world_from_dict(json.loads(json.dumps(encoded))).city_map
 
-        cul_de_sac = next(
+        intersection = next(
             intersection for intersection in loaded.intersections
             if intersection.position == (0.0, 0.0)
         )
-        self.assertEqual(cul_de_sac.kind, IntersectionKind.CUL_DE_SAC)
+        self.assertEqual(intersection.kind, IntersectionKind.STANDARD)
         self.assertEqual(
-            [road.name for road in cul_de_sac.connected_roads],
+            [road.name for road in intersection.connected_roads],
             ["Main road", "Driveway"],
         )
         self.assertTrue(any(
             connection.source_output.road is not connection.destination_input.road
-            for connection in cul_de_sac.lane_connections
+            for connection in intersection.lane_connections
         ))
 
 

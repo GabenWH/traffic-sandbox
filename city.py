@@ -472,9 +472,32 @@ class CityMap:
             if not any(road is connected for connected in cul_de_sac.connected_roads):
                 cul_de_sac.connected_roads.append(road)
 
+        promoted_intersections = [
+            cul_de_sac for cul_de_sac in cul_de_sacs
+            if len(cul_de_sac.connected_roads) > 1
+        ]
+        for intersection in promoted_intersections:
+            # A cul-de-sac is the turnaround at one two-way road endpoint.
+            # Once another road joins it, treat the shared node as an ordinary
+            # multi-road intersection so its Inspector and movement rules match.
+            intersection.kind = IntersectionKind.STANDARD
+            intersection.radius = max(
+                MINIMUM_INTERSECTION_RADIUS,
+                *(
+                    road.width / 2
+                    + INTERSECTION_CLEARANCE
+                    + min(dist(intersection.position, endpoint) for endpoint in (
+                        road.centerline[0], road.centerline[-1],
+                    ))
+                    for road in intersection.connected_roads
+                ),
+            )
+            standard_intersections.append(intersection)
+
         cul_de_sacs = [
             cul_de_sac for cul_de_sac in cul_de_sacs
-            if cul_de_sac.connected_roads
+            if cul_de_sac.kind is IntersectionKind.CUL_DE_SAC
+            and cul_de_sac.connected_roads
             and any(
                 road.forward_lane_count > 0 and road.reverse_lane_count > 0
                 for road in cul_de_sac.connected_roads
