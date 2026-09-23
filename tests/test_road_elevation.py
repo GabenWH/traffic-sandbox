@@ -109,7 +109,7 @@ class RoadElevationTests(unittest.TestCase):
 
     def test_save_round_trip_preserves_3d_camera(self) -> None:
         city = CityMap(terrain=Terrain(trees=[]))
-        camera = {"target": [250, 350, 0], "yaw": 120, "pitch": 45, "distance": 900}
+        camera = {"target": [250, 350, 0], "yaw": 120, "pitch": 90, "distance": 900}
 
         saved = world_to_dict(
             city, unit_system="imperial", camera_x=0, camera_y=0, camera_zoom=1,

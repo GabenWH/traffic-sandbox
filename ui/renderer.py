@@ -239,25 +239,39 @@ class RendererMixin:
                 continue
             if not intersection.connected_roads:
                 continue
-            if not self._circle_is_visible(intersection.position, intersection.radius):
+            roundabout = intersection.kind is IntersectionKind.ROUNDABOUT
+            if roundabout:
+                from roundabouts import (
+                    ROUNDABOUT_OUTER_BAND_WIDTH, island_radius, yield_mark,
+                )
+                visibility_radius = intersection.radius + ROUNDABOUT_OUTER_BAND_WIDTH
+            else:
+                visibility_radius = intersection.radius
+            if not self._circle_is_visible(intersection.position, visibility_radius):
                 continue
             x, y = self.world_to_screen(intersection.position)
             surface_radius = max(1, intersection.radius * self.camera_zoom)
+            if roundabout:
+                outer_radius = (
+                    intersection.radius + ROUNDABOUT_OUTER_BAND_WIDTH
+                ) * self.camera_zoom
+                self.canvas.create_oval(
+                    x - outer_radius, y - outer_radius,
+                    x + outer_radius, y + outer_radius,
+                    fill="#c6a96b", outline="", tags=STATIC_TAG,
+                )
             self.canvas.create_oval(
                 x - surface_radius, y - surface_radius,
                 x + surface_radius, y + surface_radius,
                 fill="#4d535a", outline="", tags=STATIC_TAG,
             )
-            if intersection.kind is IntersectionKind.ROUNDABOUT:
-                from roundabouts import ring_radius
-                # Leave twelve feet of circulating roadway around the island.
-                island = max(1, (ring_radius(intersection) - 7) * self.camera_zoom)
+            if roundabout:
+                island = max(1, island_radius(intersection) * self.camera_zoom)
                 self.canvas.create_oval(
                     x-island, y-island, x+island, y+island,
                     fill="#67884b", outline="#e6dfbe",
                     width=max(1, 2*self.camera_zoom), tags=STATIC_TAG)
                 from mobility import VEHICLE_LAYER, road_output_node
-                from roundabouts import yield_mark
                 graph = self.city_map.mobility.layers[VEHICLE_LAYER].graph
                 for port in intersection.incoming_ports():
                     entry = next((t.edge.value for t in graph.transitions_from(road_output_node(port))

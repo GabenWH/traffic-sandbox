@@ -84,6 +84,25 @@ class Scene3DTests(unittest.TestCase):
         self.assertFalse(node.isEmpty())
         self.assertGreater(node.findAllMatches("**/+GeomNode").getNumPaths(), 0)
 
+    def test_roundabout_draws_colored_outer_band(self) -> None:
+        from panda3d.core import NodePath
+        from models import Intersection, IntersectionKind
+        from ui.scene3d import draw_intersection
+
+        root = NodePath("scene")
+        junction = Intersection(
+            "r", (100, 100), radius=24, kind=IntersectionKind.ROUNDABOUT,
+        )
+
+        draw_intersection(junction, root)
+
+        band = root.find("**/roundabout-outer-band")
+        self.assertFalse(band.isEmpty())
+        color = band.getColor()
+        self.assertAlmostEqual(color.x, 0.776, delta=0.002)
+        self.assertAlmostEqual(color.y, 0.663, delta=0.002)
+        self.assertAlmostEqual(color.z, 0.420, delta=0.002)
+
     def test_new_feature_type_uses_registry_without_camera_changes(self) -> None:
         from panda3d.core import NodePath
         from ui.scene3d import SceneRegistry

@@ -1,6 +1,6 @@
 {
   "format": "lanesimulator.world",
-  "version": 4,
+  "version": 5,
   "world": {
     "width": 5000,
     "height": 3500,
@@ -150,10 +150,6 @@
         [
           717,
           1957
-        ],
-        [
-          3371,
-          1823
         ],
         [
           4440,
@@ -731,17 +727,21 @@
     },
     "roads": [
       {
-        "id": "2269e222-c825-4325-a589-0b27e031c766",
+        "id": "44911310-d4f2-4fca-9a70-88137e6997c1",
         "name": "Two-lane street 1",
         "centerline": [
           [
-            2624.0,
-            1521.0
+            2462.0,
+            1855.0
           ],
           [
-            2752.6278065898573,
-            1717.5147045122822
+            2854.755933017488,
+            1838.1168264087505
           ]
+        ],
+        "elevations": [
+          0.0,
+          0.0
         ],
         "lane_width": 12.0,
         "forward_lane_count": 1,
@@ -751,6 +751,7 @@
           "phase": "planning",
           "condition": 1.0,
           "inventory": {},
+          "construction_needs": {},
           "active_work": null
         },
         "lanes": [
@@ -769,17 +770,21 @@
         ]
       },
       {
-        "id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
+        "id": "0d78a682-b80c-429e-8de6-75b48d2de526",
         "name": "Two-lane street 1",
         "centerline": [
           [
-            2752.6278065898573,
-            1717.5147045122822
+            2854.755933017488,
+            1838.1168264087505
           ],
           [
-            2876.0,
-            1906.0
+            3346.0,
+            1817.0
           ]
+        ],
+        "elevations": [
+          0.0,
+          0.0
         ],
         "lane_width": 12.0,
         "forward_lane_count": 1,
@@ -789,6 +794,7 @@
           "phase": "planning",
           "condition": 1.0,
           "inventory": {},
+          "construction_needs": {},
           "active_work": null
         },
         "lanes": [
@@ -807,17 +813,21 @@
         ]
       },
       {
-        "id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
+        "id": "cf321998-2b03-43cb-b50b-954d54dbed96",
         "name": "Two-lane street 2",
         "centerline": [
           [
-            2923.0,
-            1592.0
+            2801.0,
+            1591.0
           ],
           [
-            2752.6278065898573,
-            1717.5147045122824
+            2854.755933017488,
+            1838.1168264087505
           ]
+        ],
+        "elevations": [
+          0.0,
+          0.0
         ],
         "lane_width": 12.0,
         "forward_lane_count": 1,
@@ -827,6 +837,7 @@
           "phase": "planning",
           "condition": 1.0,
           "inventory": {},
+          "construction_needs": {},
           "active_work": null
         },
         "lanes": [
@@ -845,17 +856,21 @@
         ]
       },
       {
-        "id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
+        "id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
         "name": "Two-lane street 2",
         "centerline": [
           [
-            2752.6278065898573,
-            1717.5147045122824
+            2854.755933017488,
+            1838.1168264087505
           ],
           [
-            2528.0,
-            1883.0
+            2935.0,
+            2207.0
           ]
+        ],
+        "elevations": [
+          0.0,
+          0.0
         ],
         "lane_width": 12.0,
         "forward_lane_count": 1,
@@ -865,6 +880,7 @@
           "phase": "planning",
           "condition": 1.0,
           "inventory": {},
+          "construction_needs": {},
           "active_work": null
         },
         "lanes": [
@@ -885,206 +901,27 @@
     ],
     "intersections": [
       {
-        "id": "e73b6a22-97a5-498a-a2cc-643373741f86",
+        "id": "b35336c6-97f7-47fe-94ff-41bdbf6d1e57",
         "kind": "roundabout",
         "position": [
-          2752.6278065898573,
-          1717.5147045122822
+          2854.755933017488,
+          1838.1168264087505
         ],
+        "elevation": 0.0,
         "road_ids": [
-          "2269e222-c825-4325-a589-0b27e031c766",
-          "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
-          "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
-          "e7ec64e9-8e21-4580-939d-ea292b766f71"
+          "44911310-d4f2-4fca-9a70-88137e6997c1",
+          "0d78a682-b80c-429e-8de6-75b48d2de526",
+          "cf321998-2b03-43cb-b50b-954d54dbed96",
+          "9b989fa2-eef0-4782-80ad-c37fdd51b2a2"
         ],
         "lane_connections": [
           {
             "source_output": {
-              "road_id": "2269e222-c825-4325-a589-0b27e031c766",
+              "road_id": "44911310-d4f2-4fca-9a70-88137e6997c1",
               "end": "end"
             },
             "destination_input": {
-              "road_id": "2269e222-c825-4325-a589-0b27e031c766",
-              "end": "end"
-            },
-            "maneuver": {
-              "kind": "u_turn",
-              "angle": 3.141592653589793
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          },
-          {
-            "source_output": {
-              "road_id": "2269e222-c825-4325-a589-0b27e031c766",
-              "end": "end"
-            },
-            "destination_input": {
-              "road_id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
-              "end": "start"
-            },
-            "maneuver": {
-              "kind": "through",
-              "angle": -1.1657341758564144e-15
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          },
-          {
-            "source_output": {
-              "road_id": "2269e222-c825-4325-a589-0b27e031c766",
-              "end": "end"
-            },
-            "destination_input": {
-              "road_id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
-              "end": "end"
-            },
-            "maneuver": {
-              "kind": "left_turn",
-              "angle": -1.6261727136482975
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          },
-          {
-            "source_output": {
-              "road_id": "2269e222-c825-4325-a589-0b27e031c766",
-              "end": "end"
-            },
-            "destination_input": {
-              "road_id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
-              "end": "start"
-            },
-            "maneuver": {
-              "kind": "right_turn",
-              "angle": 1.5154199399414956
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          },
-          {
-            "source_output": {
-              "road_id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
-              "end": "start"
-            },
-            "destination_input": {
-              "road_id": "2269e222-c825-4325-a589-0b27e031c766",
-              "end": "end"
-            },
-            "maneuver": {
-              "kind": "through",
-              "angle": 1.1657341758564144e-15
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          },
-          {
-            "source_output": {
-              "road_id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
-              "end": "start"
-            },
-            "destination_input": {
-              "road_id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
-              "end": "start"
-            },
-            "maneuver": {
-              "kind": "u_turn",
-              "angle": 3.141592653589793
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          },
-          {
-            "source_output": {
-              "road_id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
-              "end": "start"
-            },
-            "destination_input": {
-              "road_id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
-              "end": "end"
-            },
-            "maneuver": {
-              "kind": "right_turn",
-              "angle": 1.5154199399414967
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          },
-          {
-            "source_output": {
-              "road_id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
-              "end": "start"
-            },
-            "destination_input": {
-              "road_id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
-              "end": "start"
-            },
-            "maneuver": {
-              "kind": "left_turn",
-              "angle": -1.6261727136482964
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          },
-          {
-            "source_output": {
-              "road_id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
-              "end": "end"
-            },
-            "destination_input": {
-              "road_id": "2269e222-c825-4325-a589-0b27e031c766",
-              "end": "end"
-            },
-            "maneuver": {
-              "kind": "right_turn",
-              "angle": 1.6261727136482975
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          },
-          {
-            "source_output": {
-              "road_id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
-              "end": "end"
-            },
-            "destination_input": {
-              "road_id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
-              "end": "start"
-            },
-            "maneuver": {
-              "kind": "left_turn",
-              "angle": -1.5154199399414967
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          },
-          {
-            "source_output": {
-              "road_id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
-              "end": "end"
-            },
-            "destination_input": {
-              "road_id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
+              "road_id": "44911310-d4f2-4fca-9a70-88137e6997c1",
               "end": "end"
             },
             "maneuver": {
@@ -1098,16 +935,16 @@
           },
           {
             "source_output": {
-              "road_id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
+              "road_id": "44911310-d4f2-4fca-9a70-88137e6997c1",
               "end": "end"
             },
             "destination_input": {
-              "road_id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
+              "road_id": "0d78a682-b80c-429e-8de6-75b48d2de526",
               "end": "start"
             },
             "maneuver": {
               "kind": "through",
-              "angle": 0.0
+              "angle": -4.85722573273506e-17
             },
             "control": {
               "kind": "uncontrolled",
@@ -1116,16 +953,16 @@
           },
           {
             "source_output": {
-              "road_id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
-              "end": "start"
+              "road_id": "44911310-d4f2-4fca-9a70-88137e6997c1",
+              "end": "end"
             },
             "destination_input": {
-              "road_id": "2269e222-c825-4325-a589-0b27e031c766",
+              "road_id": "cf321998-2b03-43cb-b50b-954d54dbed96",
               "end": "end"
             },
             "maneuver": {
               "kind": "left_turn",
-              "angle": -1.5154199399414956
+              "angle": -1.7420318219987563
             },
             "control": {
               "kind": "uncontrolled",
@@ -1134,16 +971,16 @@
           },
           {
             "source_output": {
-              "road_id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
-              "end": "start"
+              "road_id": "44911310-d4f2-4fca-9a70-88137e6997c1",
+              "end": "end"
             },
             "destination_input": {
-              "road_id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
+              "road_id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
               "end": "start"
             },
             "maneuver": {
               "kind": "right_turn",
-              "angle": 1.6261727136482964
+              "angle": 1.3995608315910393
             },
             "control": {
               "kind": "uncontrolled",
@@ -1152,16 +989,16 @@
           },
           {
             "source_output": {
-              "road_id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
+              "road_id": "0d78a682-b80c-429e-8de6-75b48d2de526",
               "end": "start"
             },
             "destination_input": {
-              "road_id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
+              "road_id": "44911310-d4f2-4fca-9a70-88137e6997c1",
               "end": "end"
             },
             "maneuver": {
               "kind": "through",
-              "angle": 0.0
+              "angle": 4.85722573273506e-17
             },
             "control": {
               "kind": "uncontrolled",
@@ -1170,11 +1007,191 @@
           },
           {
             "source_output": {
-              "road_id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
+              "road_id": "0d78a682-b80c-429e-8de6-75b48d2de526",
               "end": "start"
             },
             "destination_input": {
-              "road_id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
+              "road_id": "0d78a682-b80c-429e-8de6-75b48d2de526",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "u_turn",
+              "angle": 3.141592653589793
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "0d78a682-b80c-429e-8de6-75b48d2de526",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "cf321998-2b03-43cb-b50b-954d54dbed96",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 1.3995608315910368
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "0d78a682-b80c-429e-8de6-75b48d2de526",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -1.742031821998754
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "cf321998-2b03-43cb-b50b-954d54dbed96",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "44911310-d4f2-4fca-9a70-88137e6997c1",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 1.7420318219987563
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "cf321998-2b03-43cb-b50b-954d54dbed96",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "0d78a682-b80c-429e-8de6-75b48d2de526",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -1.3995608315910368
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "cf321998-2b03-43cb-b50b-954d54dbed96",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "cf321998-2b03-43cb-b50b-954d54dbed96",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "u_turn",
+              "angle": 3.141592653589793
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "cf321998-2b03-43cb-b50b-954d54dbed96",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "through",
+              "angle": 2.3037127760972e-15
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "44911310-d4f2-4fca-9a70-88137e6997c1",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "left_turn",
+              "angle": -1.3995608315910393
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "0d78a682-b80c-429e-8de6-75b48d2de526",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "right_turn",
+              "angle": 1.742031821998754
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "cf321998-2b03-43cb-b50b-954d54dbed96",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "through",
+              "angle": -2.3037127760972e-15
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          },
+          {
+            "source_output": {
+              "road_id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
               "end": "start"
             },
             "maneuver": {
@@ -1189,85 +1206,24 @@
         ]
       },
       {
-        "id": "cul_de_sac:2269e222-c825-4325-a589-0b27e031c766:start",
+        "id": "cul_de_sac:44911310-d4f2-4fca-9a70-88137e6997c1:start",
         "kind": "cul_de_sac",
         "position": [
-          2624.0,
-          1521.0
+          2462.0,
+          1855.0
         ],
+        "elevation": 0.0,
         "road_ids": [
-          "2269e222-c825-4325-a589-0b27e031c766"
+          "44911310-d4f2-4fca-9a70-88137e6997c1"
         ],
         "lane_connections": [
           {
             "source_output": {
-              "road_id": "2269e222-c825-4325-a589-0b27e031c766",
+              "road_id": "44911310-d4f2-4fca-9a70-88137e6997c1",
               "end": "start"
             },
             "destination_input": {
-              "road_id": "2269e222-c825-4325-a589-0b27e031c766",
-              "end": "start"
-            },
-            "maneuver": {
-              "kind": "u_turn",
-              "angle": 3.141592653589793
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          }
-        ]
-      },
-      {
-        "id": "cul_de_sac:2269e222-c825-4325-a589-0b27e031c766:end",
-        "kind": "cul_de_sac",
-        "position": [
-          2876.0,
-          1906.0
-        ],
-        "road_ids": [
-          "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c"
-        ],
-        "lane_connections": [
-          {
-            "source_output": {
-              "road_id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
-              "end": "end"
-            },
-            "destination_input": {
-              "road_id": "be5b8a38-941f-4ec0-bff5-59e7a39d3c0c",
-              "end": "end"
-            },
-            "maneuver": {
-              "kind": "u_turn",
-              "angle": 3.141592653589793
-            },
-            "control": {
-              "kind": "uncontrolled",
-              "controller_id": null
-            }
-          }
-        ]
-      },
-      {
-        "id": "cul_de_sac:6aebde93-d3bb-42fa-9dd3-1aef06e53d61:start",
-        "kind": "cul_de_sac",
-        "position": [
-          2923.0,
-          1592.0
-        ],
-        "road_ids": [
-          "6aebde93-d3bb-42fa-9dd3-1aef06e53d61"
-        ],
-        "lane_connections": [
-          {
-            "source_output": {
-              "road_id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
-              "end": "start"
-            },
-            "destination_input": {
-              "road_id": "6aebde93-d3bb-42fa-9dd3-1aef06e53d61",
+              "road_id": "44911310-d4f2-4fca-9a70-88137e6997c1",
               "end": "start"
             },
             "maneuver": {
@@ -1282,23 +1238,88 @@
         ]
       },
       {
-        "id": "cul_de_sac:e7ec64e9-8e21-4580-939d-ea292b766f71:end",
+        "id": "cul_de_sac:44911310-d4f2-4fca-9a70-88137e6997c1:end",
         "kind": "cul_de_sac",
         "position": [
-          2528.0,
-          1883.0
+          3346.0,
+          1817.0
         ],
+        "elevation": 0.0,
         "road_ids": [
-          "e7ec64e9-8e21-4580-939d-ea292b766f71"
+          "0d78a682-b80c-429e-8de6-75b48d2de526"
         ],
         "lane_connections": [
           {
             "source_output": {
-              "road_id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
+              "road_id": "0d78a682-b80c-429e-8de6-75b48d2de526",
               "end": "end"
             },
             "destination_input": {
-              "road_id": "e7ec64e9-8e21-4580-939d-ea292b766f71",
+              "road_id": "0d78a682-b80c-429e-8de6-75b48d2de526",
+              "end": "end"
+            },
+            "maneuver": {
+              "kind": "u_turn",
+              "angle": 3.141592653589793
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "cul_de_sac:cf321998-2b03-43cb-b50b-954d54dbed96:start",
+        "kind": "cul_de_sac",
+        "position": [
+          2801.0,
+          1591.0
+        ],
+        "elevation": 0.0,
+        "road_ids": [
+          "cf321998-2b03-43cb-b50b-954d54dbed96"
+        ],
+        "lane_connections": [
+          {
+            "source_output": {
+              "road_id": "cf321998-2b03-43cb-b50b-954d54dbed96",
+              "end": "start"
+            },
+            "destination_input": {
+              "road_id": "cf321998-2b03-43cb-b50b-954d54dbed96",
+              "end": "start"
+            },
+            "maneuver": {
+              "kind": "u_turn",
+              "angle": 3.141592653589793
+            },
+            "control": {
+              "kind": "uncontrolled",
+              "controller_id": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "cul_de_sac:9b989fa2-eef0-4782-80ad-c37fdd51b2a2:end",
+        "kind": "cul_de_sac",
+        "position": [
+          2935.0,
+          2207.0
+        ],
+        "elevation": 0.0,
+        "road_ids": [
+          "9b989fa2-eef0-4782-80ad-c37fdd51b2a2"
+        ],
+        "lane_connections": [
+          {
+            "source_output": {
+              "road_id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
+              "end": "end"
+            },
+            "destination_input": {
+              "road_id": "9b989fa2-eef0-4782-80ad-c37fdd51b2a2",
               "end": "end"
             },
             "maneuver": {
@@ -1319,9 +1340,9 @@
   "view": {
     "unit_system": "imperial",
     "camera": {
-      "x": 2186.740692035835,
-      "y": 1482.337881153941,
-      "zoom": 1.3224999999999998
+      "x": 2000.0,
+      "y": 1430.0,
+      "zoom": 1.0
     }
   }
 }

@@ -10,12 +10,29 @@ from ui.scene_geometry import roundabout_deck_quads
 class SceneGeometryTests(unittest.TestCase):
     def test_roundabout_geometry_has_road_ring_and_raised_central_island(self) -> None:
         from models import Intersection, IntersectionKind
-        junction = Intersection("r", (100, 100), radius=24, kind=IntersectionKind.ROUNDABOUT, elevation=3)
-        road, island = roundabout_deck_quads(junction)
-        self.assertEqual(len(road), 32)
+        approach = Road(
+            "approach", "Approach", [(0, 100), (100, 100)], elevations=[0, 5],
+        )
+        junction = Intersection(
+            "r", (100, 100), connected_roads=[approach], radius=24,
+            kind=IntersectionKind.ROUNDABOUT, elevation=3,
+        )
+        deck, outer_band, island = roundabout_deck_quads(junction)
+        self.assertEqual(len(deck), 32)
+        self.assertEqual(len(outer_band), 32)
         self.assertEqual(len(island), 32)
-        self.assertTrue(all(vertex[2] == 3 for quad in road for vertex in quad))
-        self.assertTrue(all(vertex[2] > 3 for quad in island for vertex in quad))
+        self.assertTrue(all(vertex[2] == 5.25 for quad in deck for vertex in quad))
+        self.assertTrue(all((100, 100, 5.25) in quad for quad in deck))
+        self.assertTrue(all(
+            {round(((vertex[0] - 100) ** 2 + (vertex[1] - 100) ** 2) ** 0.5, 6)
+             for vertex in quad} == {24, 27}
+            for quad in outer_band
+        ))
+        self.assertTrue(all(
+            round(((vertex[0] - 100) ** 2 + (vertex[1] - 100) ** 2) ** 0.5, 6) in {0, 12}
+            for quad in island for vertex in quad
+        ))
+        self.assertTrue(all(vertex[2] > 5.25 for quad in island for vertex in quad))
     def test_ramp_deck_follows_vertex_elevations(self) -> None:
         road = Road("r", "Ramp", [(0, 0), (100, 0)], elevations=[0, 20])
 

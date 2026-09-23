@@ -34,6 +34,15 @@ class TerrainFeature:
     color: str
 
 
+def attach_map_root(parent: NodePath, name: str) -> NodePath:
+    """Create a Y-reflected root for geometry authored in map coordinates."""
+    root = parent.attachNewNode(name)
+    root.setScale(1, -1, 1)
+    # The reflection reverses triangle winding, so keep both sides visible.
+    root.setTwoSided(True)
+    return root
+
+
 class SceneRegistry:
     """Attach model-specific geometry without teaching the camera model types."""
 
@@ -126,10 +135,13 @@ def draw_intersection(junction: Intersection, parent: NodePath) -> NodePath:
     root = parent.attachNewNode(f"intersection:{junction.id}")
     if junction.kind is not IntersectionKind.ROUNDABOUT:
         return root
-    road_quads, island_quads = roundabout_deck_quads(junction)
+    road_quads, outer_band_quads, island_quads = roundabout_deck_quads(junction)
     deck = root.attachNewNode(quad_geom(road_quads, "roundabout-road"))
     deck.setColor(0.28, 0.32, 0.36, 1)
     deck.setTwoSided(True)
+    band = root.attachNewNode(quad_geom(outer_band_quads, "roundabout-outer-band"))
+    band.setColor(0.776, 0.663, 0.420, 1)
+    band.setTwoSided(True)
     center = root.attachNewNode(quad_geom(island_quads, "roundabout-island"))
     center.setColor(0.30, 0.48, 0.24, 1)
     center.setTwoSided(True)

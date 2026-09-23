@@ -220,6 +220,56 @@ class UIPackageTests(unittest.TestCase):
             ["#c9cdd0"] * 4 + ["#4d535a"] * 5,
         )
 
+    def test_roundabout_outer_band_and_island_match_shared_geometry(self) -> None:
+        from models import IntersectionKind
+
+        class FakeCanvas:
+            def __init__(self) -> None:
+                self.ovals: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+            def create_oval(self, *args: object, **kwargs: object) -> None:
+                self.ovals.append((args, kwargs))
+
+            @staticmethod
+            def create_line(*_args: object, **_kwargs: object) -> None:
+                pass
+
+        class Host(RendererMixin):
+            def __init__(self) -> None:
+                self.canvas = FakeCanvas()
+                self.city_map = CityMap(terrain=Terrain(trees=[]))
+                self.camera_zoom = 1.0
+
+            @staticmethod
+            def visible_world_bounds() -> tuple[float, float, float, float]:
+                return (-100, -100, 200, 200)
+
+            @staticmethod
+            def world_points(*points: tuple[float, float]) -> list[float]:
+                return [coordinate for point in points for coordinate in point]
+
+            @staticmethod
+            def world_to_screen(point: tuple[float, float]) -> tuple[float, float]:
+                return point
+
+        host = Host()
+        host.city_map.add_road([(0, 50), (100, 50)])
+        host.city_map.add_road([(50, 0), (50, 100)])
+        junction = host.city_map.standard_intersections[0]
+        junction.kind = IntersectionKind.ROUNDABOUT
+        host.city_map.rebuild_mobility_network()
+
+        host._draw_junction_surfaces()
+
+        circles = {
+            options.get("fill"): args
+            for args, options in host.canvas.ovals
+            if args[0] < 50 < args[2] and args[1] < 50 < args[3]
+        }
+        self.assertEqual((circles["#c6a96b"][2] - circles["#c6a96b"][0]) / 2, 63)
+        self.assertEqual((circles["#4d535a"][2] - circles["#4d535a"][0]) / 2, 60)
+        self.assertEqual((circles["#67884b"][2] - circles["#67884b"][0]) / 2, 30)
+
 
 if __name__ == "__main__":
     unittest.main()

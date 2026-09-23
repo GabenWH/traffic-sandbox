@@ -22,7 +22,7 @@ class OrbitCameraTests(unittest.TestCase):
         camera.rotate(0, 200)
         camera.zoom(0.001)
 
-        self.assertLess(camera.pitch, 90)
+        self.assertEqual(camera.pitch, 90)
         self.assertGreater(camera.distance, 0)
 
     def test_screen_ray_intersects_selected_road_height(self) -> None:
