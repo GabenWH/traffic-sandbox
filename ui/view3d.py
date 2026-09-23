@@ -8,17 +8,17 @@ from math import cos, hypot, radians, sin
 
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
-    LineSegs, NativeWindowHandle, Point2, Point3, WindowProperties,
+    LineSegs, NativeWindowHandle, Point2, Point3, Vec3, WindowProperties,
     loadPrcFileData,
 )
 
 from city import CityMap
 from models import Road
 from models import Intersection
-from .camera3d import OrbitCamera, ray_to_height
+from .camera3d import OrbitCamera, map_to_panda, panda_to_map, ray_to_height
 from .scene3d import (
-    SceneRegistry, TerrainFeature, TreeFeature, draw_intersection, draw_road, draw_terrain, draw_tree,
-    update_car_layer,
+    SceneRegistry, TerrainFeature, TreeFeature, attach_map_root, draw_intersection,
+    draw_road, draw_road_dividers, draw_terrain, draw_tree, update_car_layer,
 )
 
 
@@ -33,9 +33,9 @@ class PandaWorldView:
         self.base.setBackgroundColor(0.55, 0.7, 0.85)
         self.orbit = OrbitCamera((2500, 1750, 0))
         self.city: CityMap | None = None
-        self.scene = SceneRegistry(self.base.render.attachNewNode("city"))
-        self.preview_root = self.base.render.attachNewNode("preview-layer")
-        self.vehicle_root = self.base.render.attachNewNode("vehicles")
+        self.scene = SceneRegistry(attach_map_root(self.base.render, "city"))
+        self.preview_root = attach_map_root(self.base.render, "preview-layer")
+        self.vehicle_root = attach_map_root(self.base.render, "vehicles")
         self.vehicle_nodes = {}
         self.scene.register(TerrainFeature, draw_terrain)
         self.scene.register(Road, draw_road)
@@ -132,15 +132,24 @@ class PandaWorldView:
             dx = point[0] - self._last_pointer[0]
             dy = point[1] - self._last_pointer[1]
             if self._drag_mode == "orbit":
-                self.orbit.rotate(-dx * 0.35, dy * 0.35)
+                # Pointer Y grows down, while positive pitch raises the camera.
+                self.orbit.rotate(-dx * 0.35, -dy * 0.35)
                 self._apply_camera()
             elif self._drag_mode == "pan":
-                angle = radians(self.orbit.yaw)
                 scale = self.orbit.distance / max(1, self.frame.winfo_height())
+                orientation = self.base.camera.getQuat(self.base.render)
+                right = orientation.xform(Vec3(1, 0, 0))
+                up = orientation.xform(Vec3(0, 0, 1))
+                right_length = hypot(right.x, right.y) or 1
+                up_length = hypot(up.x, up.y) or 1
                 target_x, target_y, target_z = self.orbit.target
                 self.orbit.target = (
-                    target_x + (sin(angle) * dx + cos(angle) * dy) * scale,
-                    target_y + (-cos(angle) * dx + sin(angle) * dy) * scale,
+                    target_x + (
+                        -right.x / right_length * dx + up.x / up_length * dy
+                    ) * scale,
+                    target_y - (
+                        -right.y / right_length * dx + up.y / up_length * dy
+                    ) * scale,
                     target_z,
                 )
                 self._apply_camera()
@@ -166,6 +175,7 @@ class PandaWorldView:
                 for index, (x, y) in enumerate(city.terrain.trees)
             ),
         ])
+        draw_road_dividers(city.roads, city.intersections, self.scene.root)
         self._apply_camera()
 
     def update_cars(self, cars, elapsed_seconds: float) -> None:
@@ -175,8 +185,15 @@ class PandaWorldView:
     def _apply_camera(self) -> None:
         if self.base.camera is None or self.base.camera.isEmpty():
             return
-        self.base.camera.setPos(*self.orbit.position)
-        self.base.camera.lookAt(*self.orbit.target)
+        self.base.camera.setPos(*map_to_panda(self.orbit.position))
+        target = Point3(*map_to_panda(self.orbit.target))
+        # Keep Z vertical while orbiting; derive the zenith up direction from
+        # yaw because world-up becomes parallel to the view at exactly 90°.
+        camera_up = Vec3(0, 0, 1)
+        if self.orbit.pitch >= 90:
+            yaw = radians(self.orbit.yaw)
+            camera_up = Vec3(-cos(yaw), sin(yaw), 0)
+        self.base.camera.lookAt(target, camera_up)
 
     def point_at_screen(
         self, screen_x: float, screen_y: float, elevation: float,
@@ -192,11 +209,14 @@ class PandaWorldView:
         transform = self.base.camera.getMat(self.base.render)
         start = transform.xformPoint(near)
         end = transform.xformPoint(far)
-        return ray_to_height(
+        point = ray_to_height(
             (start.x, start.y, start.z),
             (end.x - start.x, end.y - start.y, end.z - start.z),
             elevation,
         )
+        if point is None:
+            return None
+        return panda_to_map((point[0], point[1], elevation))[:2]
 
     def screen_position(
         self, point: tuple[float, float], elevation: float,
@@ -205,7 +225,7 @@ class PandaWorldView:
         if self.base.win is None:
             return None
         camera_point = self.base.camera.getRelativePoint(
-            self.base.render, Point3(*point, elevation),
+            self.base.render, Point3(*map_to_panda((*point, elevation))),
         )
         projected = Point2()
         if not self.base.camLens.project(camera_point, projected):

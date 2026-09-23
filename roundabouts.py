@@ -10,8 +10,17 @@ from models import (Lane, LaneConnection, ManeuverDefinition, ManeuverType,
                     ControlDefinition, ControlType)
 
 
+ROUNDABOUT_OUTER_BAND_WIDTH = 3.0
+_RING_RADIUS_RATIO = 0.67
+_ISLAND_RADIUS_RATIO = 0.50
+
+
 def ring_radius(junction):
-    return junction.radius * 0.65
+    return junction.radius * _RING_RADIUS_RATIO
+
+
+def island_radius(junction):
+    return junction.radius * _ISLAND_RADIUS_RATIO
 
 
 def _curve(start, end, heading_in, heading_out):

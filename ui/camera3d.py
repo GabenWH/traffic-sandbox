@@ -10,6 +10,16 @@ Point3 = tuple[float, float, float]
 Point2 = tuple[float, float]
 
 
+def map_to_panda(point: Point3) -> Point3:
+    """Convert map coordinates (Y down) to Panda coordinates (Y up)."""
+    return (point[0], -point[1], point[2])
+
+
+def panda_to_map(point: Point3) -> Point3:
+    """Convert Panda coordinates back to the map's Y-down convention."""
+    return (point[0], -point[1], point[2])
+
+
 @dataclass
 class OrbitCamera:
     target: Point3
@@ -29,7 +39,7 @@ class OrbitCamera:
 
     def rotate(self, yaw_change: float, pitch_change: float) -> None:
         self.yaw = (self.yaw + yaw_change) % 360
-        self.pitch = max(10.0, min(85.0, self.pitch + pitch_change))
+        self.pitch = max(10.0, min(90.0, self.pitch + pitch_change))
 
     def zoom(self, factor: float) -> None:
         self.distance = max(60.0, min(10000.0, self.distance * factor))

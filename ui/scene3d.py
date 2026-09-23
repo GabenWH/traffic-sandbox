@@ -19,7 +19,9 @@ from panda3d.core import (
 )
 
 from models import Intersection, IntersectionKind, Road
-from .scene_geometry import DeckQuad, road_deck_quads, roundabout_deck_quads
+from .scene_geometry import (
+    DeckQuad, road_deck_quads, road_divider_runs, roundabout_deck_quads,
+)
 from .tree_primitives import TreeFeature, draw_tree
 from .car_primitives import CarFeature, draw_car, update_car_lights
 
@@ -32,6 +34,15 @@ class TerrainFeature:
     width: float
     height: float
     color: str
+
+
+def attach_map_root(parent: NodePath, name: str) -> NodePath:
+    """Create a Y-reflected root for geometry authored in map coordinates."""
+    root = parent.attachNewNode(name)
+    root.setScale(1, -1, 1)
+    # The reflection reverses triangle winding, so keep both sides visible.
+    root.setTwoSided(True)
+    return root
 
 
 class SceneRegistry:
@@ -94,15 +105,6 @@ def draw_road(road: Road, parent: NodePath) -> NodePath:
     side_node.setColor(0.62, 0.65, 0.68, 1)
     side_node.setTwoSided(True)
 
-    if road.forward_lane_count and road.reverse_lane_count:
-        divider = LineSegs("center-divider")
-        divider.setColor(0.95, 0.72, 0.13, 1)
-        divider.setThickness(2)
-        divider.moveTo(*road.centerline[0], road.elevations[0] + 0.2)
-        for point, height in zip(road.centerline[1:], road.elevations[1:]):
-            divider.drawTo(*point, height + 0.2)
-        root.attachNewNode(divider.create())
-
     for index, (start, end) in enumerate(zip(road.centerline, road.centerline[1:])):
         segment_length = dist(start, end)
         fractions = (0.25, 0.75) if segment_length >= 40 else (0.5,)
@@ -121,15 +123,43 @@ def draw_road(road: Road, parent: NodePath) -> NodePath:
     return root
 
 
+def draw_road_dividers(
+    roads: Iterable[Road], intersections: Iterable[Intersection], parent: NodePath,
+) -> NodePath:
+    """Draw center dividers with their connected intersection areas removed."""
+    junctions = list(intersections)
+    lines = LineSegs("road-center-dividers")
+    lines.setColor(0.95, 0.72, 0.13, 1)
+    lines.setThickness(2)
+    drew_line = False
+    for road in roads:
+        if not (road.forward_lane_count and road.reverse_lane_count):
+            continue
+        for run in road_divider_runs(road, junctions):
+            if len(run) < 2:
+                continue
+            lines.moveTo(run[0][0], run[0][1], run[0][2] + 0.2)
+            for x, y, height in run[1:]:
+                lines.drawTo(x, y, height + 0.2)
+            drew_line = True
+    root = parent.attachNewNode("road-dividers")
+    if drew_line:
+        root.attachNewNode(lines.create())
+    return root
+
+
 def draw_intersection(junction: Intersection, parent: NodePath) -> NodePath:
     """Draw a roundabout's drivable ring and raised landscaped center."""
     root = parent.attachNewNode(f"intersection:{junction.id}")
     if junction.kind is not IntersectionKind.ROUNDABOUT:
         return root
-    road_quads, island_quads = roundabout_deck_quads(junction)
+    road_quads, outer_band_quads, island_quads = roundabout_deck_quads(junction)
     deck = root.attachNewNode(quad_geom(road_quads, "roundabout-road"))
     deck.setColor(0.28, 0.32, 0.36, 1)
     deck.setTwoSided(True)
+    band = root.attachNewNode(quad_geom(outer_band_quads, "roundabout-outer-band"))
+    band.setColor(0.776, 0.663, 0.420, 1)
+    band.setTwoSided(True)
     center = root.attachNewNode(quad_geom(island_quads, "roundabout-island"))
     center.setColor(0.30, 0.48, 0.24, 1)
     center.setTwoSided(True)

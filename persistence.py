@@ -427,8 +427,8 @@ def world_from_dict(data: object) -> LoadedWorld:
         if len(raw_target) != 3:
             raise WorldFormatError("view.camera_3d.target must contain three coordinates.")
         pitch = _number(raw_camera_3d.get("pitch"), "view.camera_3d.pitch")
-        if not 10 <= pitch <= 85:
-            raise WorldFormatError("view.camera_3d.pitch must be between 10 and 85 degrees.")
+        if not 10 <= pitch <= 90:
+            raise WorldFormatError("view.camera_3d.pitch must be between 10 and 90 degrees.")
         camera_3d = {
             "target": [
                 _number(value, f"view.camera_3d.target[{index}]")
