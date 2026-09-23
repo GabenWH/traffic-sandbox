@@ -34,12 +34,14 @@ from pathfinding import Path
 
 
 GEOMETRY_TOLERANCE = 1e-6
+ROAD_ELEVATION_TOLERANCE = 1.0
 INTERSECTION_SNAP_DISTANCE = 12.0
 MINIMUM_INTERSECTION_RADIUS = 24.0
 INTERSECTION_CLEARANCE = 12.0
 MINIMUM_CUL_DE_SAC_RADIUS = 20.0
 CUL_DE_SAC_CLEARANCE = 8.0
 TREE_CANOPY_RADIUS = 11.0
+DEFAULT_ENDPOINT_OVERRUN_TOLERANCE = 10.0
 
 
 class ZoneType(StrEnum):
@@ -152,6 +154,7 @@ class CityMap:
         self,
         centerline: list[tuple[float, float]],
         *,
+        elevations: list[float] | None = None,
         name: str | None = None,
         road_id: str | None = None,
         lane_width: float = 12.0,
@@ -160,12 +163,22 @@ class CityMap:
         buildable_id: str | None = None,
         lane_metadata: list[dict[str, object]] | None = None,
         create_intersections: bool = True,
+        endpoint_overrun_tolerance: float = DEFAULT_ENDPOINT_OVERRUN_TOLERANCE,
     ) -> Road:
-        """Create a road, splitting it and existing roads at crossings."""
+        """Create a road, splitting at crossings.
+
+        ``endpoint_overrun_tolerance`` trims short tails beyond a crossing;
+        set it to zero to keep every crossing stub.
+        """
+        if endpoint_overrun_tolerance < 0:
+            raise ValueError("Endpoint overrun tolerance cannot be negative")
+        if elevations is not None and len(elevations) != len(centerline):
+            raise ValueError("Road elevations must match centerline points")
         road = Road(
             id=road_id or str(uuid4()),
             name=name or f"Road {len(self.roads) + 1}",
             centerline=[(float(x), float(y)) for x, y in centerline],
+            elevations=[] if elevations is None else [float(value) for value in elevations],
             lane_width=float(lane_width),
             forward_lane_count=int(forward_lane_count),
             reverse_lane_count=int(reverse_lane_count),
@@ -177,6 +190,16 @@ class CityMap:
             self.rebuild_mobility_network()
             return road
 
+        self._trim_existing_cul_de_sac_overruns(road, endpoint_overrun_tolerance)
+        short_crossings_by_road = {
+            existing.id: [
+                point for point in _road_crossings(road, existing)
+                if _crossing_has_short_endpoint_overrun(
+                    road, point, endpoint_overrun_tolerance,
+                )
+            ]
+            for existing in self.roads
+        }
         crossings_by_road: dict[str, list[Point]] = {}
         crossing_points: list[Point] = []
         prospective_junction_radius = max(
@@ -184,17 +207,28 @@ class CityMap:
             road.width / 2 + INTERSECTION_CLEARANCE,
         )
         for intersection in self.intersections:
+            if (intersection.kind is IntersectionKind.CUL_DE_SAC
+                and any(
+                    existing in intersection.connected_roads
+                    and any(dist(point, intersection.position) > GEOMETRY_TOLERANCE
+                            for point in short_crossings_by_road[existing.id])
+                    for existing in self.roads
+                )):
+                continue
             collision_radius = intersection.radius + (
                 road.width / 2
                 if intersection.kind is IntersectionKind.CUL_DE_SAC
                 else prospective_junction_radius
             )
-            if road.distance_to(intersection.position) > collision_radius:
+            if (road.distance_to(intersection.position) > collision_radius
+                or abs(road.elevation_at(intersection.position) - intersection.elevation)
+                > ROAD_ELEVATION_TOLERANCE):
                 continue
             _snap_road_centerline_to_point(
                 road,
                 intersection.position,
                 collision_radius,
+                intersection.elevation,
             )
             _append_unique(crossing_points, intersection.position)
         if crossing_points:
@@ -213,6 +247,16 @@ class CityMap:
                             if intersection.kind is IntersectionKind.CUL_DE_SAC
                             else prospective_junction_radius
                         )
+                        and abs(intersection.elevation - road.elevation_at(point))
+                        <= ROAD_ELEVATION_TOLERANCE
+                        and not (
+                            intersection.kind is IntersectionKind.CUL_DE_SAC
+                            and any(
+                                dist(point, crossing) <= GEOMETRY_TOLERANCE
+                                for crossing in short_crossings_by_road[existing.id]
+                            )
+                            and dist(point, intersection.position) > GEOMETRY_TOLERANCE
+                        )
                     ),
                     None,
                 )
@@ -230,6 +274,9 @@ class CityMap:
         for points in snapped_groups.values():
             average_progress = sum(_road_progress(road, point) for point in points) / len(points)
             _append_unique(crossing_points, _point_at_progress(road, average_progress))
+
+        if _trim_short_crossing_overruns(road, crossing_points, endpoint_overrun_tolerance):
+            road.rebuild_lanes(lane_metadata)
 
         for existing in list(self.roads):
             points = crossings_by_road.get(existing.id, [])
@@ -252,13 +299,54 @@ class CityMap:
                         else prospective_junction_radius
                     ),
                 )
+                and abs(candidate.elevation - road.elevation_at(point))
+                <= ROAD_ELEVATION_TOLERANCE
+                and not (
+                    candidate.kind is IntersectionKind.CUL_DE_SAC
+                    and dist(candidate.position, point) > GEOMETRY_TOLERANCE
+                    and any(
+                        dist(point, crossing) <= GEOMETRY_TOLERANCE
+                        for crossings in short_crossings_by_road.values()
+                        for crossing in crossings
+                    )
+                )
                 for candidate in self.intersections
             ):
-                self.intersections.append(Intersection(str(uuid4()), point))
+                self.intersections.append(Intersection(
+                    str(uuid4()), point, elevation=road.elevation_at(point),
+                ))
 
         self.rebuild_mobility_network()
         self._remove_trees_overlapping(road)
         return new_pieces[0]
+
+    def _trim_existing_cul_de_sac_overruns(
+        self, new_road: Road, tolerance: float,
+    ) -> None:
+        """Remove an old short tail before its cul-de-sac attracts the new road."""
+        if tolerance <= 0:
+            return
+        for existing in self.roads:
+            free_ends = [
+                junction for junction in self.cul_de_sacs
+                if len(junction.connected_roads) == 1
+                and junction.connected_roads[0] is existing
+                and junction.position in (existing.centerline[0], existing.centerline[-1])
+            ]
+            if not free_ends:
+                continue
+            crossings = [
+                point for point in _road_crossings(new_road, existing)
+                if any(dist(point, end.position) <= tolerance + GEOMETRY_TOLERANCE
+                       for end in free_ends)
+            ]
+            if not _trim_short_crossing_overruns(existing, crossings, tolerance):
+                continue
+            self.intersections = [
+                junction for junction in self.intersections
+                if all(junction is not free_end for free_end in free_ends)
+                or junction.position in (existing.centerline[0], existing.centerline[-1])
+            ]
 
     def _remove_trees_overlapping(self, road: Road) -> None:
         """Remove trees touched by the paved footprint of an authored road."""
@@ -299,7 +387,11 @@ class CityMap:
                 road for road in self.roads
                 if any(
                     dist(intersection.position, endpoint) <= INTERSECTION_SNAP_DISTANCE
-                    for endpoint in (road.centerline[0], road.centerline[-1])
+                    and abs(intersection.elevation - height) <= ROAD_ELEVATION_TOLERANCE
+                    for endpoint, height in (
+                        (road.centerline[0], road.elevations[0]),
+                        (road.centerline[-1], road.elevations[-1]),
+                    )
                 )
             ]
             intersection.radius = max(
@@ -327,6 +419,9 @@ class CityMap:
                         for intersection in standard_intersections
                         if road in intersection.connected_roads
                         and dist(intersection.position, endpoint) <= INTERSECTION_SNAP_DISTANCE
+                        and abs(intersection.elevation - (
+                            road.elevations[0] if at_start else road.elevations[-1]
+                        )) <= ROAD_ELEVATION_TOLERANCE
                     ),
                     key=lambda intersection: dist(intersection.position, endpoint),
                     default=None,
@@ -344,6 +439,9 @@ class CityMap:
                 continue
             if any(
                 dist(cul_de_sac.position, endpoint) <= INTERSECTION_SNAP_DISTANCE
+                and abs(cul_de_sac.elevation - (
+                    road.elevations[0] if at_start else road.elevations[-1]
+                )) <= ROAD_ELEVATION_TOLERANCE
                 for cul_de_sac in cul_de_sacs
             ):
                 continue
@@ -351,6 +449,7 @@ class CityMap:
                 id=f"cul_de_sac:{road.id}:{'start' if at_start else 'end'}",
                 position=endpoint,
                 kind=IntersectionKind.CUL_DE_SAC,
+                elevation=road.elevations[0] if at_start else road.elevations[-1],
             ))
 
         for cul_de_sac in cul_de_sacs:
@@ -360,6 +459,9 @@ class CityMap:
                 (
                     candidate for candidate in cul_de_sacs
                     if dist(candidate.position, endpoint) <= INTERSECTION_SNAP_DISTANCE
+                    and abs(candidate.elevation - (
+                        road.elevations[0] if at_start else road.elevations[-1]
+                    )) <= ROAD_ELEVATION_TOLERANCE
                 ),
                 key=lambda candidate: dist(candidate.position, endpoint),
                 default=None,
@@ -458,9 +560,11 @@ def _snap_road_centerline_to_point(
     road: Road,
     target: Point,
     collision_radius: float,
+    target_elevation: float,
 ) -> None:
     """Route a colliding authored centerline through an existing junction."""
     points = list(road.centerline)
+    elevations = list(road.elevations)
     endpoint_indexes = [
         index for index in (0, len(points) - 1)
         if dist(points[index], target) <= collision_radius
@@ -468,6 +572,7 @@ def _snap_road_centerline_to_point(
     if endpoint_indexes:
         index = min(endpoint_indexes, key=lambda candidate: dist(points[candidate], target))
         points[index] = target
+        elevations[index] = target_elevation
     else:
         closest: tuple[float, int, float] | None = None
         for index, (start, end) in enumerate(zip(points, points[1:])):
@@ -488,16 +593,21 @@ def _snap_road_centerline_to_point(
         _distance, index, fraction = closest
         if fraction <= GEOMETRY_TOLERANCE:
             points[index] = target
+            elevations[index] = target_elevation
         elif fraction >= 1 - GEOMETRY_TOLERANCE:
             points[index + 1] = target
+            elevations[index + 1] = target_elevation
         else:
             points.insert(index + 1, target)
+            elevations.insert(index + 1, target_elevation)
 
-    road.centerline = [
-        point
-        for index, point in enumerate(points)
+    retained = [
+        (point, elevation)
+        for index, (point, elevation) in enumerate(zip(points, elevations))
         if index == 0 or dist(point, points[index - 1]) > GEOMETRY_TOLERANCE
     ]
+    road.centerline = [point for point, _height in retained]
+    road.elevations = [height for _point, height in retained]
     if len(road.centerline) < 2:
         raise ValueError("A road cannot lie entirely inside an intersection")
 
@@ -534,7 +644,8 @@ def _road_crossings(first: Road, second: Road) -> list[Point]:
     for first_segment in zip(first.centerline, first.centerline[1:]):
         for second_segment in zip(second.centerline, second.centerline[1:]):
             point = _segment_intersection(*first_segment, *second_segment)
-            if point is not None:
+            if (point is not None and abs(first.elevation_at(point) - second.elevation_at(point))
+                <= ROAD_ELEVATION_TOLERANCE):
                 _append_unique(points, point)
     return points
 
@@ -567,6 +678,71 @@ def _road_progress(road: Road, point: Point) -> float:
             return travelled + dist(start, point)
         travelled += segment_length
     return travelled
+
+
+def _trim_short_crossing_overruns(
+    road: Road, crossings: list[Point], tolerance: float,
+) -> bool:
+    """End a new road at a crossing when only a short tail extends past it."""
+    if tolerance <= 0 or not crossings:
+        return False
+    original_points = road.centerline
+    progress_at_vertex = [0.0]
+    for start, end in zip(original_points, original_points[1:]):
+        progress_at_vertex.append(progress_at_vertex[-1] + dist(start, end))
+    total = progress_at_vertex[-1]
+    candidates = [
+        (_road_progress(road, point), point)
+        for point in crossings
+        if road.distance_to(point) <= GEOMETRY_TOLERANCE
+    ]
+    start_cut = min(
+        ((progress, point) for progress, point in candidates
+         if GEOMETRY_TOLERANCE < progress <= tolerance + GEOMETRY_TOLERANCE
+         and total - progress > tolerance),
+        default=None,
+    )
+    end_cut = max(
+        ((progress, point) for progress, point in candidates
+         if GEOMETRY_TOLERANCE < total - progress <= tolerance + GEOMETRY_TOLERANCE
+         and progress > tolerance),
+        default=None,
+    )
+    if start_cut is None and end_cut is None:
+        return False
+    first_progress = start_cut[0] if start_cut else 0.0
+    last_progress = end_cut[0] if end_cut else total
+    if last_progress - first_progress <= GEOMETRY_TOLERANCE:
+        return False
+    first = start_cut[1] if start_cut else original_points[0]
+    last = end_cut[1] if end_cut else original_points[-1]
+    interior = [
+        (point, height)
+        for point, height, progress in zip(
+            original_points[1:-1], road.elevations[1:-1], progress_at_vertex[1:-1]
+        )
+        if first_progress + GEOMETRY_TOLERANCE < progress
+        < last_progress - GEOMETRY_TOLERANCE
+    ]
+    road.elevations = [road.elevation_at(first), *(height for _, height in interior),
+                       road.elevation_at(last)]
+    road.centerline = [first, *(point for point, _ in interior), last]
+    return True
+
+
+def _crossing_has_short_endpoint_overrun(
+    road: Road, crossing: Point, tolerance: float,
+) -> bool:
+    """Whether a crossing leaves a short, nonzero piece at either road end."""
+    if tolerance <= 0:
+        return False
+    progress = _road_progress(road, crossing)
+    total = sum(dist(a, b) for a, b in zip(road.centerline, road.centerline[1:]))
+    return (
+        road.distance_to(crossing) <= GEOMETRY_TOLERANCE
+        and GEOMETRY_TOLERANCE < progress < total - GEOMETRY_TOLERANCE
+        and min(progress, total - progress) <= tolerance + GEOMETRY_TOLERANCE
+    )
 
 
 def _point_at_progress(road: Road, progress: float) -> Point:

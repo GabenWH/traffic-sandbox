@@ -41,13 +41,17 @@ class BuildablesPanel:
             self._render_selection()
             return
 
+        docked = bool(getattr(self.host, "view3d_active", False))
         self.panel = tk.Frame(
-            self.host.canvas,
+            self.host.sidebar if docked else self.host.canvas,
             bg="#e8edf2",
             highlightthickness=1,
             highlightbackground="#7b8792",
         )
-        self.panel.place(x=12, rely=1.0, y=-12, anchor="sw", width=480, height=365)
+        if docked:
+            self.panel.pack(fill="both", expand=True, padx=8, pady=8)
+        else:
+            self.panel.place(x=12, rely=1.0, y=-12, anchor="sw", width=480, height=365)
         header = tk.Frame(self.panel, bg="#e8edf2")
         header.pack(fill="x", padx=12, pady=(10, 6))
         tk.Label(

@@ -17,6 +17,69 @@ from models import (
 
 
 class RoadConstructionTests(unittest.TestCase):
+    def test_short_crossing_overrun_ends_at_three_way_junction(self) -> None:
+        city = CityMap(terrain=Terrain(trees=[]))
+        city.add_road([(0, 0), (200, 0)])
+
+        branch = city.add_road([(100, -100), (100, 10)])
+
+        self.assertEqual(branch.centerline[-1], (100.0, 0.0))
+        self.assertEqual(len(city.roads), 3)
+        self.assertEqual(len(city.standard_intersections[0].connected_roads), 3)
+
+    def test_overrun_limit_can_be_changed_per_road(self) -> None:
+        city = CityMap(terrain=Terrain(trees=[]))
+        city.add_road([(0, 0), (200, 0)])
+
+        city.add_road([(100, -100), (100, 11)], endpoint_overrun_tolerance=12)
+
+        self.assertEqual(len(city.roads), 3)
+        self.assertEqual(len(city.standard_intersections[0].connected_roads), 3)
+
+    def test_long_crossing_overrun_keeps_four_way_junction(self) -> None:
+        city = CityMap(terrain=Terrain(trees=[]))
+        city.add_road([(0, 0), (200, 0)])
+
+        city.add_road([(100, -100), (100, 11)])
+
+        self.assertEqual(len(city.roads), 4)
+        self.assertEqual(len(city.standard_intersections[0].connected_roads), 4)
+
+    def test_short_overrun_at_road_start_also_snaps(self) -> None:
+        city = CityMap(terrain=Terrain(trees=[]))
+        city.add_road([(0, 0), (200, 0)])
+
+        branch = city.add_road([(100, 10), (100, -100)])
+
+        self.assertEqual(branch.centerline[0], (100.0, 0.0))
+        self.assertEqual(len(city.roads), 3)
+        self.assertEqual(len(city.standard_intersections[0].connected_roads), 3)
+
+    def test_existing_short_overrun_is_not_kept_as_cul_de_sac(self) -> None:
+        city = CityMap(terrain=Terrain(trees=[]))
+        branch = city.add_road([(100, -100), (100, 10)])
+
+        city.add_road([(0, 0), (200, 0)])
+
+        self.assertEqual(branch.centerline[-1], (100.0, 0.0))
+        self.assertEqual(len(city.standard_intersections), 1)
+        junction = city.standard_intersections[0]
+        self.assertEqual(junction.position, (100.0, 0.0))
+        self.assertEqual(len(junction.connected_roads), 3)
+        self.assertNotIn((100.0, 10.0), [end.position for end in city.cul_de_sacs])
+        self.assertEqual(len(city.roads), 3)
+
+    def test_short_overrun_near_other_road_end_creates_a_standard_junction(self) -> None:
+        city = CityMap(terrain=Terrain(trees=[]))
+        city.add_road([(0, 0), (200, 0)])
+
+        branch = city.add_road([(180, -100), (180, 10)])
+
+        self.assertEqual(branch.centerline[-1], (180.0, 0.0))
+        self.assertEqual(len(city.standard_intersections), 1)
+        self.assertEqual(city.standard_intersections[0].position, (180.0, 0.0))
+        self.assertEqual(len(city.standard_intersections[0].connected_roads), 3)
+
     def test_add_road_builds_forward_and_reverse_lane_children(self) -> None:
         city = CityMap(terrain=Terrain(trees=[]))
 

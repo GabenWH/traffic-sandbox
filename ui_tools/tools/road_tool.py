@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from math import dist
+from types import SimpleNamespace
 from typing import Any
 
 from city import Building, Parcel, ZoneType
@@ -31,10 +32,15 @@ class RoadTool(CanvasTool):
         self.specs = specs or buildables_of_kind("road")
         self.selected_spec = self.specs[0]
         self.points: list[tuple[float, float]] = []
+        self.elevations: list[float] = []
+        self.draft_elevation = 0.0
         self.pointer: tuple[float, float] | None = None
+        self._pointer_screen: tuple[float, float] | None = None
         self.panel: BuildablesPanel | None = None
         self._return_binding: str | None = None
         self._escape_binding: str | None = None
+        self._page_up_binding: str | None = None
+        self._page_down_binding: str | None = None
         self._preview_dirty = True
         self._camera_state: tuple[float, float, float] | None = None
 
@@ -49,9 +55,17 @@ class RoadTool(CanvasTool):
             self._select_spec,
         )
         self.panel.show()
-        self.panel.set_message("Click road vertices · Enter finishes · Esc cancels the draft.")
+        self.panel.set_message(
+            "Click road vertices · Page Up/Down changes height · Enter finishes · Esc cancels."
+        )
         self._return_binding = self.host.root.bind("<Return>", self._finish_event, add="+")
         self._escape_binding = self.host.root.bind("<Escape>", self._cancel_event, add="+")
+        self._page_up_binding = self.host.root.bind(
+            "<Prior>", lambda _event: self.adjust_elevation(1), add="+",
+        )
+        self._page_down_binding = self.host.root.bind(
+            "<Next>", lambda _event: self.adjust_elevation(-1), add="+",
+        )
         self._preview_dirty = True
         self.refresh()
 
@@ -64,16 +78,44 @@ class RoadTool(CanvasTool):
         self._clear_draft()
 
     def on_canvas_click(self, event: Any) -> None:
-        point = self.host.screen_to_world((event.x, event.y))
+        self._pointer_screen = (event.x, event.y)
+        endpoint = None
+        if not self.points and getattr(self.host, "view3d_active", False):
+            endpoint_picker = getattr(self.host, "road_endpoint_from_event", None)
+            if endpoint_picker is not None:
+                endpoint = endpoint_picker(event)
+        if endpoint is None:
+            point = self._point_from_event(event)
+        else:
+            point, self.draft_elevation = endpoint
+        if point is None:
+            return
         if self.points and dist(self.points[-1], point) < MINIMUM_POINT_DISTANCE:
             return
         self.points.append(point)
+        self.elevations.append(self.draft_elevation)
         self.pointer = point
         self._preview_dirty = True
 
     def on_canvas_motion(self, event: Any) -> None:
-        self.pointer = self.host.screen_to_world((event.x, event.y))
+        self._pointer_screen = (event.x, event.y)
+        self.pointer = self._point_from_event(event)
         self._preview_dirty = True
+
+    def _point_from_event(self, event: Any) -> tuple[float, float] | None:
+        if getattr(self.host, "view3d_active", False):
+            return self.host.road_point_from_event(event, self.draft_elevation)
+        return self.host.screen_to_world((event.x, event.y))
+
+    def adjust_elevation(self, direction: int) -> None:
+        """Set the height of the next authored point in ten-foot steps."""
+        self.draft_elevation = max(0.0, self.draft_elevation + 10 * direction)
+        if self._pointer_screen is not None:
+            x, y = self._pointer_screen
+            self.pointer = self._point_from_event(SimpleNamespace(x=x, y=y))
+        self._preview_dirty = True
+        if self.panel is not None:
+            self.panel.set_message(f"Next road point: {self.draft_elevation:g} ft high.")
 
     def refresh(self) -> None:
         camera_state = (self.host.camera_x, self.host.camera_y, self.host.camera_zoom)
@@ -90,6 +132,7 @@ class RoadTool(CanvasTool):
         details = self.selected_spec.specs
         road = self.host.city_map.add_road(
             self.points,
+            elevations=self.elevations or None,
             name=f"{self.selected_spec.name} {len(self.host.city_map.roads) + 1}",
             lane_width=float(details["lane_width"]),
             forward_lane_count=int(details["forward_lane_count"]),
@@ -121,11 +164,22 @@ class RoadTool(CanvasTool):
 
     def _clear_draft(self) -> None:
         self.points.clear()
+        self.elevations.clear()
+        self.draft_elevation = 0.0
         self.pointer = None
+        self._pointer_screen = None
         self.host.canvas.delete("road_preview")
+        if getattr(self.host, "view3d", None) is not None:
+            self.host.view3d.clear_preview()
         self._preview_dirty = True
 
     def _draw_preview(self) -> None:
+        if getattr(self.host, "view3d_active", False):
+            self.host.view3d.show_road_preview(
+                self.points, self.elevations, self.pointer, self.draft_elevation,
+            )
+            self._preview_dirty = False
+            return
         canvas = self.host.canvas
         canvas.delete("road_preview")
         canvas.create_text(
@@ -163,6 +217,12 @@ class RoadTool(CanvasTool):
         if self._escape_binding is not None:
             self.host.root.unbind("<Escape>", self._escape_binding)
             self._escape_binding = None
+        if self._page_up_binding is not None:
+            self.host.root.unbind("<Prior>", self._page_up_binding)
+            self._page_up_binding = None
+        if self._page_down_binding is not None:
+            self.host.root.unbind("<Next>", self._page_down_binding)
+            self._page_down_binding = None
 
 
 class BuildingTool(CanvasTool):
