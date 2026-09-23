@@ -2,6 +2,7 @@
 
 import json
 import unittest
+from math import nan
 
 from city import Building, CityMap, Parcel, Terrain, ZoneType
 from models import ControlDefinition, ControlType, IntersectionKind
@@ -9,6 +10,76 @@ from persistence import WORLD_FORMAT, WorldFormatError, world_from_dict, world_t
 
 
 class WorldPersistenceTests(unittest.TestCase):
+    def _roundabout_save(self) -> tuple[CityMap, dict[str, object]]:
+        city = CityMap(terrain=Terrain(trees=[]))
+        city.add_road([(0, 50), (100, 50)])
+        city.add_road([(50, 0), (50, 100)])
+        intersection = city.standard_intersections[0]
+        intersection.kind = IntersectionKind.ROUNDABOUT
+        city.rebuild_mobility_network()
+        encoded = world_to_dict(
+            city, unit_system="imperial", camera_x=0, camera_y=0, camera_zoom=1,
+        )
+        return city, encoded
+
+    def test_roundabout_custom_traits_round_trip(self) -> None:
+        city, _ = self._roundabout_save()
+        intersection = city.standard_intersections[0]
+        intersection.radius_override = 72.0
+        intersection.roundabout_ring_radius = 48.0
+        intersection.roundabout_island_radius = 35.0
+        intersection.roundabout_outer_band_width = 5.0
+
+        encoded = world_to_dict(
+            city, unit_system="imperial", camera_x=0, camera_y=0, camera_zoom=1,
+        )
+        loaded = world_from_dict(json.loads(json.dumps(encoded)))
+        round_trip = next(
+            item for item in loaded.city_map.intersections if item.id == intersection.id
+        )
+
+        self.assertEqual(round_trip.roundabout_ring_radius, 48.0)
+        self.assertEqual(round_trip.roundabout_island_radius, 35.0)
+        self.assertEqual(round_trip.roundabout_outer_band_width, 5.0)
+        self.assertEqual(round_trip.radius_override, 72.0)
+
+    def test_legacy_versions_without_intersection_traits_load_defaults(self) -> None:
+        for version in (4, 5):
+            with self.subTest(version=version):
+                _, encoded = self._roundabout_save()
+                encoded["version"] = version
+                for trait in (
+                    "radius_override", "roundabout_ring_radius",
+                    "roundabout_island_radius", "roundabout_outer_band_width",
+                ):
+                    encoded["world"]["intersections"][0].pop(trait, None)
+
+                loaded = world_from_dict(encoded).city_map.standard_intersections[0]
+
+                self.assertIsNone(loaded.radius_override)
+                self.assertIsNone(loaded.roundabout_ring_radius)
+                self.assertIsNone(loaded.roundabout_island_radius)
+                self.assertIsNone(loaded.roundabout_outer_band_width)
+
+    def test_invalid_intersection_traits_include_intersection_path(self) -> None:
+        invalid_traits = (
+            ("roundabout_ring_radius", nan),
+            ("roundabout_outer_band_width", -1.0),
+            ("roundabout_island_radius", 48.0),
+        )
+        for trait, value in invalid_traits:
+            with self.subTest(trait=trait, value=value):
+                _, encoded = self._roundabout_save()
+                encoded["world"]["intersections"][0]["roundabout_ring_radius"] = 48.0
+                encoded["world"]["intersections"][0]["roundabout_island_radius"] = 35.0
+                encoded["world"]["intersections"][0]["roundabout_outer_band_width"] = 5.0
+                encoded["world"]["intersections"][0][trait] = value
+
+                with self.assertRaisesRegex(
+                    WorldFormatError, r"world\.intersections\[0\]",
+                ):
+                    world_from_dict(encoded)
+
     def test_world_round_trip_preserves_hierarchy_and_view(self) -> None:
         city = CityMap(width=900, height=700, terrain=Terrain("#123456", [(400, 400)]))
         road = city.add_road([(10, 20), (80, 20), (120, 60)], name="Broadway")
