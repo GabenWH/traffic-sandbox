@@ -8,10 +8,13 @@ from types import SimpleNamespace
 
 from city import CityMap
 from config import DEFAULT_UNIT_SYSTEM, HEIGHT, WIDTH
+from construction import ConstructionSimulation, UnlimitedConstructionProvider
+from resources import load_construction_catalog, validate_resource_references
 from simulation import TrafficSimulation
 from traffic_testbed import TestTrafficSimulation
 from traffic_debugger import TrafficDebugger
 from ui_tools import CanvasTool, CanvasToolDropdown, ToolbarTool, load_toolbar_tools
+from ui_tools.buildables import load_buildables
 from units import validate_unit_system
 
 from .base import SPEED_LIMIT_TAG
@@ -51,6 +54,13 @@ class FreewaySimulator(
         self.unit_system = validate_unit_system(DEFAULT_UNIT_SYSTEM)
         self.simulation = TrafficSimulation()
         self.city_map = CityMap()
+        construction_resources, construction_trucks = load_construction_catalog()
+        validate_resource_references(load_buildables(), construction_resources)
+        self.construction_simulation = ConstructionSimulation(
+            construction_resources,
+            construction_trucks,
+            UnlimitedConstructionProvider(),
+        )
         # Keep a short, bounded history so the debug window can explain what
         # happened during a bad frame without retaining an entire long run.
         self.test_traffic = TestTrafficSimulation(
@@ -304,6 +314,24 @@ class FreewaySimulator(
             return
         ViewportMixin.reset_camera(self)
 
+    def _update_construction(self, elapsed_seconds: float) -> None:
+        """Advance construction demand and refresh its runtime truck markers."""
+        if self.running:
+            phases = {
+                building.id: building.phase
+                for building in self.city_map.buildings
+            }
+            self.construction_simulation.update(
+                self.city_map,
+                elapsed_seconds * self.simulation_speed,
+            )
+            if any(
+                phases.get(building.id) != building.phase
+                for building in self.city_map.buildings
+            ):
+                self.redraw_world()
+        self.draw_construction_trucks()
+
     def tick(self) -> None:
         """Advance traffic, refresh tools/windows, and schedule the next frame."""
         now = time.perf_counter()
@@ -339,6 +367,7 @@ class FreewaySimulator(
                     self.canvas.delete(item)
         for car in self.test_traffic.cars:
             self.draw_test_car(car)
+        self._update_construction(dt)
         if self.view3d_active and self.view3d is not None:
             self.view3d.update_cars(self.test_traffic.cars, self.test_traffic.elapsed_time)
             self.view3d.step()

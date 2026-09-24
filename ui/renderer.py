@@ -28,8 +28,9 @@ from config import (
     ROAD_TOP,
     WIDTH,
 )
-from models import Car, IntersectionKind
+from models import BuildablePhase, Car, IntersectionKind
 from car_brain import SignalIntent
+from construction import ConstructionTrip, CrewPayload, MaterialPayload
 from traffic_testbed import RoutedTestCar
 from units import mph_to_display
 
@@ -47,6 +48,7 @@ HEADLIGHT_HALF_WIDTH_RATIO = 3 / 25
 TEST_TRAFFIC_SOURCE_TAG = "test_traffic_sources"
 TEST_TRAFFIC_CAR_TAG = "test_traffic_cars"
 TEST_TRAFFIC_SIGNAL_TAG = "test_traffic_signals"
+CONSTRUCTION_TRUCK_TAG = "construction_trucks"
 STOP_LINE_TAG = "stop_lines"
 CITY_LOW_DETAIL_ZOOM = 0.55
 
@@ -112,14 +114,23 @@ class RendererMixin:
         """Draw persistent building footprints above the authored road layer."""
         for building in self.city_map.buildings:
             parcel = building.parcel
+            under_construction = building.phase is BuildablePhase.UNDER_CONSTRUCTION
             left, top = self.world_to_screen((parcel.x, parcel.y))
             right, bottom = self.world_to_screen((parcel.x + parcel.width, parcel.y + parcel.height))
             if right < 0 or bottom < 0 or left > self.canvas.winfo_width() or top > self.canvas.winfo_height():
                 continue
             if self.camera_zoom < CITY_LOW_DETAIL_ZOOM:
+                options = {
+                    "fill": building.color,
+                    "outline": "#ffb000" if under_construction else "",
+                    "width": max(1, round(self.camera_zoom)),
+                    "tags": STATIC_TAG,
+                }
+                if under_construction:
+                    options["dash"] = (4, 3)
                 self.canvas.create_rectangle(
                     left, top, right, bottom,
-                    fill=building.color, outline="", tags=STATIC_TAG,
+                    **options,
                 )
                 continue
             inset = max(1, 3 * self.camera_zoom)
@@ -132,16 +143,17 @@ class RendererMixin:
                 outline="",
                 tags=STATIC_TAG,
             )
-            self.canvas.create_rectangle(
-                left,
-                top,
-                right,
-                bottom,
-                fill=building.color,
-                outline="#eee4d5",
-                width=max(1, round(self.camera_zoom)),
-                tags=STATIC_TAG,
-            )
+            options = {
+                "fill": building.color,
+                "outline": (
+                    "#ffb000" if under_construction else "#eee4d5"
+                ),
+                "width": max(1, round(self.camera_zoom)),
+                "tags": STATIC_TAG,
+            }
+            if under_construction:
+                options["dash"] = (7, 4)
+            self.canvas.create_rectangle(left, top, right, bottom, **options)
             if self.camera_zoom >= 0.7:
                 self.canvas.create_text(
                     (left + right) / 2,
@@ -152,6 +164,53 @@ class RendererMixin:
                     width=max(20, right - left - 6),
                     tags=STATIC_TAG,
                 )
+
+    def draw_construction_trucks(self) -> None:
+        """Replace runtime delivery markers using catalog dimensions and keys."""
+        self.canvas.delete(CONSTRUCTION_TRUCK_TAG)
+        simulation = getattr(self, "construction_simulation", None)
+        if simulation is None:
+            return
+        for trip in simulation.trips:
+            self.draw_construction_truck(trip)
+
+    def draw_construction_truck(self, trip: ConstructionTrip) -> None:
+        """Draw a fallback truck rectangle that an art adapter can replace."""
+        simulation = self.construction_simulation
+        truck = simulation.trucks.get(trip.truck_id)
+        if truck is None:
+            return
+        x, y = self.world_to_screen(trip.position)
+        half_length = max(2.0, truck.length * self.camera_zoom / 2)
+        half_width = max(2.0, truck.width * self.camera_zoom / 2)
+        if isinstance(trip.payload, CrewPayload):
+            fill = "#ffb000"
+            payload_key = "crew"
+        elif isinstance(trip.payload, MaterialPayload):
+            fill = "#37e6ff"
+            resource = simulation.resources.get(trip.payload.resource_id)
+            payload_key = (
+                resource.visual_key or resource.id
+                if resource is not None
+                else trip.payload.resource_id
+            )
+        else:
+            return
+        truck_key = truck.visual_key or truck.id
+        self.canvas.create_rectangle(
+            x - half_length,
+            y - half_width,
+            x + half_length,
+            y + half_width,
+            fill=fill,
+            outline="#ffffff",
+            width=max(1, round(self.camera_zoom)),
+            tags=(
+                CONSTRUCTION_TRUCK_TAG,
+                f"truck-visual:{truck_key}",
+                f"payload-visual:{payload_key}",
+            ),
+        )
 
     def draw_city_roads(self) -> None:
         """Render authored road centrelines as layered road surfaces."""

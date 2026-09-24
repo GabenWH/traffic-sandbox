@@ -92,6 +92,7 @@ class FileActionsMixin:
         ):
             return
         self.clear_cars()
+        self.construction_simulation.clear_trips()
         self.simulation = TrafficSimulation()
         self.city_map = CityMap()
         self.restore_3d_camera(None)
@@ -118,6 +119,7 @@ class FileActionsMixin:
             for tool in toolbar_tool.iter_canvas_tools():
                 tool.reset()
         self.clear_cars()
+        self.construction_simulation.clear_trips()
         self.simulation = TrafficSimulation()
         self.city_map = loaded.city_map
         self.blank_map = True

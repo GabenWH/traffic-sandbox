@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from city import Building
 from config import MAX_SPEED_PREFERENCE_MPH, MIN_SPEED_PREFERENCE_MPH
-from models import Car, CityObject, Intersection, IntersectionKind, Lane, Road, SpeedLimit
+from models import Car, CityObject, Intersection, IntersectionKind, Lane, Road, SpeedLimit, WorkType
 from roundabouts import island_radius, outer_band_width, ring_radius, validate_roundabout_dimensions
 from traffic_testbed import RoutedTestCar
 from units import (
@@ -128,7 +128,7 @@ def deliver_building_resource(building: Building, value: str) -> None:
         raise ValueError(f"{resource!r} is not needed for this building.")
     if not isfinite(amount) or amount <= 0:
         raise ValueError("Delivery amount must be a positive number.")
-    building.add_resource(resource, amount)
+    building.record_construction_delivery(resource, amount)
 
 
 def clear_routed_test_cars(host: Any) -> None:
@@ -305,13 +305,34 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
                     f"{distance_unit(unit_system)}"
                 )
             rows.append(InspectionRow(item.label, str(value), target=item.target))
-        if isinstance(selected, Building) and selected.construction_needs:
-            rows.append(InspectionRow("Construction needs", ", ".join(
-                f"{name}: {amount:g} (on site {selected.inventory.amounts.get(name, 0):g})"
-                for name, amount in selected.construction_needs.items()
-            )))
-            rows.append(InspectionRow("Deliver resource", "lumber 10", "text",
-                lambda value: deliver_building_resource(selected, value)))
+        if isinstance(selected, Building):
+            resources = getattr(
+                getattr(host, "construction_simulation", None), "resources", {},
+            )
+            for resource_id, required in selected.construction_needs.items():
+                resource = resources.get(resource_id)
+                resource_name = resource.name if resource is not None else resource_id
+                unit = f" {resource.unit}" if resource is not None else ""
+                delivered = selected.construction_delivered.get(resource_id, 0.0)
+                remaining = max(0.0, required - delivered)
+                rows.append(InspectionRow(
+                    f"{resource_name} (required / delivered / remaining)",
+                    f"{required:g} / {delivered:g} / {remaining:g}{unit}",
+                ))
+            rows.append(InspectionRow(
+                "Construction workers",
+                f"{selected.assigned_workers} / {selected.construction_workers} assigned",
+            ))
+            work = (
+                selected.active_work.completed_work
+                if selected.active_work is not None
+                and selected.active_work.kind is WorkType.CONSTRUCTION
+                else 0.0
+            )
+            rows.append(InspectionRow(
+                "Construction work",
+                f"{work:g} / {selected.construction_work:g} worker-seconds",
+            ))
         return selected.inspection_title, rows
 
     simulation = host.simulation
