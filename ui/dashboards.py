@@ -246,7 +246,11 @@ class DashboardMixin:
         trace_summary = self.test_traffic.debugger.latest_summary()
         if trace_summary is not None:
             lines.extend(("", trace_summary))
-        routed_lines = routed_car_debug_lines(self.test_traffic.cars)
+        road_vehicles = getattr(self, "road_vehicles", self.test_traffic)
+        routed_lines = routed_car_debug_lines(
+            road_vehicles.vehicles if hasattr(road_vehicles, "vehicles")
+            else road_vehicles.cars
+        )
         if routed_lines:
             lines.extend(("", "ROUTED CAR BRAINS:", *routed_lines[:8]))
         if self.recent_errors:

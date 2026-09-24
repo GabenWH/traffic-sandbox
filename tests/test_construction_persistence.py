@@ -85,15 +85,22 @@ class ConstructionPersistenceTests(unittest.TestCase):
         simulation.update(loaded, 0.5)
 
         partial, active = loaded.buildings
-        partial_trips = [trip for trip in simulation.trips if trip.building_id == partial.id]
-        active_trips = [trip for trip in simulation.trips if trip.building_id == active.id]
+        partial_trips = [
+            trip for trip in (*simulation.trips, *simulation.pending_trips)
+            if trip.building_id == partial.id
+        ]
+        active_trips = [
+            trip for trip in (*simulation.trips, *simulation.pending_trips)
+            if trip.building_id == active.id
+        ]
         self.assertEqual(
-            sum(
+            partial.construction_delivered["lumber"] - 5.0 + sum(
                 trip.payload.amount for trip in partial_trips
                 if isinstance(trip.payload, MaterialPayload)
             ),
             5.0,
         )
+        self.assertEqual(partial.assigned_workers, 1)
         self.assertEqual(
             sum(
                 trip.payload.workers for trip in partial_trips
@@ -102,7 +109,7 @@ class ConstructionPersistenceTests(unittest.TestCase):
             2,
         )
         self.assertEqual(active_trips, [])
-        self.assertEqual(active.active_work.completed_work, 31.0)
+        self.assertAlmostEqual(active.active_work.completed_work, 31.0)
 
     def test_versions_four_through_six_default_missing_construction_fields(self) -> None:
         city, _partial, _active = self._partial_and_active_city()
@@ -187,16 +194,20 @@ class ConstructionPersistenceTests(unittest.TestCase):
         simulation = ConstructionSimulation(
             resources, trucks, UnlimitedConstructionProvider(), truck_speed=1000,
         )
+        initial_delivered = dict(loaded_partial.construction_delivered)
         simulation.update(loaded, 0.5)
 
         partial_trips = [
-            trip for trip in simulation.trips if trip.building_id == loaded_partial.id
+            trip for trip in (*simulation.trips, *simulation.pending_trips)
+            if trip.building_id == loaded_partial.id
         ]
         active_trips = [
-            trip for trip in simulation.trips if trip.building_id == loaded_active.id
+            trip for trip in (*simulation.trips, *simulation.pending_trips)
+            if trip.building_id == loaded_active.id
         ]
         self.assertEqual(
-            sum(
+            loaded_partial.construction_delivered.get("lumber", 0)
+            - initial_delivered.get("lumber", 0) + sum(
                 trip.payload.amount for trip in partial_trips
                 if isinstance(trip.payload, MaterialPayload)
                 and trip.payload.resource_id == "lumber"
@@ -204,7 +215,8 @@ class ConstructionPersistenceTests(unittest.TestCase):
             13,
         )
         self.assertEqual(
-            sum(
+            loaded_partial.construction_delivered.get("stone", 0)
+            - initial_delivered.get("stone", 0) + sum(
                 trip.payload.amount for trip in partial_trips
                 if isinstance(trip.payload, MaterialPayload)
                 and trip.payload.resource_id == "stone"
@@ -212,14 +224,14 @@ class ConstructionPersistenceTests(unittest.TestCase):
             10,
         )
         self.assertEqual(
-            sum(
+            loaded_partial.assigned_workers - 0 + sum(
                 trip.payload.workers for trip in partial_trips
                 if isinstance(trip.payload, CrewPayload)
             ),
             2,
         )
         self.assertEqual(active_trips, [])
-        self.assertEqual(loaded_active.active_work.completed_work, 31)
+        self.assertAlmostEqual(loaded_active.active_work.completed_work, 31)
 
     def test_invalid_saved_construction_worker_and_delivery_values_are_rejected(self) -> None:
         city, _partial, _active = self._partial_and_active_city()

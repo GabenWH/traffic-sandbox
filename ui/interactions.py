@@ -30,7 +30,7 @@ class InteractionMixin:
             return
         car = self.simulation.add_car(start_random)
         car.item = self.create_car_details(car)
-        self.draw_car(car)
+        self.draw_road_vehicle(car)
 
     def clear_cars(self) -> None:
         """Delete every car visual, empty the fleet, and record the action."""
@@ -39,11 +39,20 @@ class InteractionMixin:
             for item in car.detail_items:
                 self.canvas.delete(item)
         self.simulation.cars.clear()
-        for car in self.test_traffic.clear_cars():
-            if car.item is not None:
-                self.canvas.delete(car.item)
-            for item in car.signal_items:
+        construction = getattr(self, "construction_simulation", None)
+        if construction is not None:
+            construction.clear_trips()
+        road_vehicles = getattr(self, "road_vehicles", self.test_traffic)
+        clear_vehicles = getattr(road_vehicles, "clear_vehicles", road_vehicles.clear_cars)
+        for vehicle in clear_vehicles():
+            if vehicle.item is not None:
+                self.canvas.delete(vehicle.item)
+            for item in vehicle.signal_items:
                 self.canvas.delete(item)
+        if construction is not None:
+            draw_road_vehicles = getattr(self, "draw_road_vehicles", None)
+            if callable(draw_road_vehicles):
+                draw_road_vehicles()
         self.simulation.record_event("cleared traffic")
 
     def toggle_running(self) -> None:
@@ -122,12 +131,22 @@ class InteractionMixin:
             None,
         )
 
+    def road_vehicle_at(self, position: Point) -> object | None:
+        """Return the topmost city road vehicle near a world point."""
+        for vehicle in reversed(self.road_vehicles.vehicles):
+            radius = max(vehicle.length, vehicle.width) / 2 + 3 / self.camera_zoom
+            if dist(position, vehicle.position) <= radius:
+                return vehicle
+        return None
+
     def routed_test_car_at(self, position: Point) -> object | None:
-        """Return the topmost constructed-road test car near a world point."""
-        for car in reversed(self.test_traffic.cars):
-            radius = max(car.length, car.width) / 2 + 3 / self.camera_zoom
-            if dist(position, car.position) <= radius:
-                return car
+        """Compatibility name for city road vehicle picking."""
+        if hasattr(self, "road_vehicles"):
+            return self.road_vehicle_at(position)
+        for vehicle in reversed(self.test_traffic.cars):
+            radius = max(vehicle.length, vehicle.width) / 2 + 3 / self.camera_zoom
+            if dist(position, vehicle.position) <= radius:
+                return vehicle
         return None
 
     def show_lane_menu(self, event: tk.Event[tk.Misc]) -> None:

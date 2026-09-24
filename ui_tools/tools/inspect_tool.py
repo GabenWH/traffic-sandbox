@@ -22,7 +22,8 @@ from models import (
     WorkType,
 )
 from roundabouts import island_radius, outer_band_width, ring_radius, validate_roundabout_dimensions
-from traffic_testbed import RoutedTestCar
+from traffic_testbed import RoutedRoadVehicle
+from vehicle import Vehicle
 from units import (
     acceleration_unit,
     display_distance_to_pixels,
@@ -142,11 +143,15 @@ def deliver_building_resource(building: Building, value: str) -> None:
 
 
 def clear_routed_test_cars(host: Any) -> None:
-    """Remove temporary cars and their canvas items before routes change."""
-    traffic = getattr(host, "test_traffic", None)
+    """Remove road actors and delivery trips before lane routes change."""
+    construction = getattr(host, "construction_simulation", None)
+    if construction is not None:
+        construction.clear_trips()
+    traffic = getattr(host, "road_vehicles", None) or getattr(host, "test_traffic", None)
     if traffic is None:
         return
-    for car in traffic.clear_cars():
+    clear_vehicles = getattr(traffic, "clear_vehicles", traffic.clear_cars)
+    for car in clear_vehicles():
         canvas = getattr(host, "canvas", None)
         if canvas is not None:
             for item in [car.item, *car.signal_items]:
@@ -225,6 +230,31 @@ def set_merge_style(car, value):
     car.brain.phantom_target = ""
 
 
+def vehicle_inspection_rows(vehicle: Vehicle, unit_system: str) -> list[InspectionRow]:
+    """Fields that every vehicle exposes through the same app interface."""
+    x, y = vehicle.position
+    distance_label = distance_unit(unit_system)
+    speed_label = speed_unit(unit_system)
+    return [
+        InspectionRow("ID", vehicle.id),
+        InspectionRow("Kind", vehicle.appearance.kind.replace("_", " ")),
+        InspectionRow(
+            "Position",
+            f"{pixels_to_display_distance(x, unit_system):.1f}, "
+            f"{pixels_to_display_distance(y, unit_system):.1f} {distance_label}",
+        ),
+        InspectionRow(
+            "Size",
+            f"{pixels_to_display_distance(vehicle.length, unit_system):.1f} × "
+            f"{pixels_to_display_distance(vehicle.width, unit_system):.1f} {distance_label}",
+        ),
+        InspectionRow(
+            "Speed",
+            f"{mph_to_display(pixels_per_second_to_mph(vehicle.speed), unit_system):.1f} {speed_label}",
+        ),
+    ]
+
+
 def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[InspectionRow]]:
     """Return a title and field descriptions for one selected model object.
 
@@ -233,11 +263,21 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
     makes field behavior easy to test and extend.
     """
     unit_system = host.unit_system
-    if isinstance(selected, RoutedTestCar):
+    if isinstance(selected, RoutedRoadVehicle):
         speed_label = speed_unit(unit_system)
         claim = selected.claimed_movement
-        return "Routed test car", [
-            InspectionRow("ID", selected.id),
+        appearance = selected.appearance
+        title = {
+            "car": "Road car",
+            "material_truck": "Material truck",
+            "crew_truck": "Crew truck",
+        }[appearance.shape]
+        rows = vehicle_inspection_rows(selected, unit_system)
+        if appearance.shape == "crew_truck":
+            rows.append(InspectionRow("Workers", str(appearance.workers)))
+        elif appearance.shape == "material_truck":
+            rows.append(InspectionRow("Cargo", appearance.cargo_key or "—"))
+        rows.extend([
             InspectionRow("Brain state", selected.brain.state.value),
             InspectionRow("Merge style", selected.brain.merge_style, "text",
                           lambda value: set_merge_style(selected, value)),
@@ -245,16 +285,13 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
             InspectionRow("Turn signal", selected.brain.signal_intent.value),
             InspectionRow("Wait reason", selected.brain.wait_reason or "—"),
             InspectionRow(
-                "Speed",
-                f"{mph_to_display(pixels_per_second_to_mph(selected.speed), unit_system):.1f} {speed_label}",
-            ),
-            InspectionRow(
                 "Desired speed",
                 f"{mph_to_display(pixels_per_second_to_mph(selected.brain.desired_speed), unit_system):.1f} {speed_label}",
             ),
             InspectionRow("Route progress", f"{selected.distance:.1f} / {selected.total_length:.1f}"),
             InspectionRow("Claimed movement", claim.id if claim is not None else "—"),
-        ]
+        ])
+        return title, rows
 
     if isinstance(selected, Intersection):
         rows = []
@@ -356,8 +393,8 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
 
     if isinstance(selected, Car):
         return "Car", [
+            *vehicle_inspection_rows(selected, unit_system),
             InspectionRow("Lane", selected.lane.name, target=selected.lane),
-            InspectionRow("Speed", f"{mph_to_display(pixels_per_second_to_mph(selected.speed), unit_system):.1f} {speed_label}"),
             InspectionRow("Cruise speed", f"{mph_to_display(pixels_per_second_to_mph(selected.cruise_speed), unit_system):.1f} {speed_label}"),
             InspectionRow(
                 "Acceleration",
@@ -371,7 +408,6 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
                 1.0,
             ),
             InspectionRow("Posted limit", f"{mph_to_display(simulation.speed_limit_for(selected), unit_system):.0f} {speed_label}"),
-            InspectionRow("Position", f"{pixels_to_display_distance(selected.x, unit_system):.1f}, {pixels_to_display_distance(selected.y, unit_system):.1f} {distance_label}"),
             InspectionRow("Next path point", str(selected.next_point)),
         ]
 
@@ -565,7 +601,10 @@ class InspectTool(CanvasTool):
             self.refresh()
             return
 
-        routed_car = self.host.routed_test_car_at((world_x, world_y))
+        pick_vehicle = getattr(self.host, "road_vehicle_at", None)
+        if pick_vehicle is None:
+            pick_vehicle = self.host.routed_test_car_at
+        routed_car = pick_vehicle((world_x, world_y))
         if routed_car is not None:
             self.selected = routed_car
             self.refresh()
@@ -734,8 +773,8 @@ class InspectTool(CanvasTool):
         if isinstance(self.selected, Car) and self.selected not in self.host.simulation.cars:
             self.selected = None
         elif (
-            isinstance(self.selected, RoutedTestCar)
-            and self.selected not in self.host.test_traffic.cars
+            isinstance(self.selected, RoutedRoadVehicle)
+            and self.selected not in self.host.test_traffic.vehicles
         ):
             self.selected = None
         elif isinstance(self.selected, SpeedLimit) and self.selected not in self.host.simulation.speed_limits:

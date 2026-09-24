@@ -9,9 +9,10 @@ from types import SimpleNamespace
 from city import CityMap
 from config import DEFAULT_UNIT_SYSTEM, HEIGHT, WIDTH
 from construction import ConstructionSimulation, UnlimitedConstructionProvider
+from land_ports import ensure_western_land_port, land_port_focus_point
 from resources import load_construction_catalog, validate_resource_references
 from simulation import TrafficSimulation
-from traffic_testbed import TestTrafficSimulation
+from traffic_testbed import RoadVehicleSimulation
 from traffic_debugger import TrafficDebugger
 from ui_tools import CanvasTool, CanvasToolDropdown, ToolbarTool, load_toolbar_tools
 from ui_tools.buildables import load_buildables
@@ -23,10 +24,10 @@ from .files import FileActionsMixin
 from .interactions import InteractionMixin
 from .renderer import (
     RendererMixin,
-    TEST_TRAFFIC_CAR_TAG,
+    ROAD_VEHICLE_CAR_TAG,
     TEST_TRAFFIC_SOURCE_TAG,
 )
-from .viewport import Viewport, ViewportMixin
+from .viewport import Viewport, ViewportMixin, city_builder_viewport_origin
 from .camera3d import OrbitCamera
 
 
@@ -54,24 +55,23 @@ class FreewaySimulator(
         self.unit_system = validate_unit_system(DEFAULT_UNIT_SYSTEM)
         self.simulation = TrafficSimulation()
         self.city_map = CityMap()
+        ensure_western_land_port(self.city_map)
+        # All constructed-road actors share this occupancy and priority model.
+        self.road_vehicles = RoadVehicleSimulation(
+            update_mode="data_first",
+            debugger=TrafficDebugger(),
+        )
+        self.test_traffic = self.road_vehicles
         construction_resources, construction_trucks = load_construction_catalog()
         validate_resource_references(load_buildables(), construction_resources)
         self.construction_simulation = ConstructionSimulation(
             construction_resources,
             construction_trucks,
             UnlimitedConstructionProvider(),
-        )
-        # Keep a short, bounded history so the debug window can explain what
-        # happened during a bad frame without retaining an entire long run.
-        self.test_traffic = TestTrafficSimulation(
-            update_mode="data_first",
-            debugger=TrafficDebugger(),
+            road_vehicles=self.road_vehicles,
         )
         self.blank_map = True
-        self.viewport = Viewport(
-            (self.city_map.width - WIDTH) / 2,
-            (self.city_map.height - HEIGHT) / 2,
-        )
+        self.viewport = Viewport(*city_builder_viewport_origin(self.city_map.height))
         self._pan_anchor: tuple[int, int] | None = None
         self.view3d_active = False
         self.view3d = None
@@ -252,7 +252,7 @@ class FreewaySimulator(
         self._saved_3d_camera_state = None
         if state is None:
             self.view3d.orbit = OrbitCamera(
-                (self.city_map.width / 2, self.city_map.height / 2, 0),
+                (*land_port_focus_point(self.city_map), 0),
             )
         else:
             target = state["target"]
@@ -301,6 +301,7 @@ class FreewaySimulator(
         self.active_tool.refresh()
 
     def redraw_world(self) -> None:
+        FreewaySimulator._sync_road_network(self)
         RendererMixin.redraw_world(self)
         if self.view3d_active and self.view3d is not None:
             self.view3d.show_city(self.city_map)
@@ -314,8 +315,19 @@ class FreewaySimulator(
             return
         ViewportMixin.reset_camera(self)
 
+    def _sync_road_network(self) -> None:
+        """Remove canvas items for actors invalidated by a lane-graph rebuild."""
+        sync_network = getattr(self.construction_simulation, "sync_network", None)
+        if callable(sync_network):
+            for car in sync_network(self.city_map):
+                if car.item is not None:
+                    self.canvas.delete(car.item)
+                for item in car.signal_items:
+                    self.canvas.delete(item)
+
     def _update_construction(self, elapsed_seconds: float) -> None:
         """Advance construction demand and refresh its runtime truck markers."""
+        FreewaySimulator._sync_road_network(self)
         if self.running:
             phases = {
                 building.id: building.phase
@@ -330,7 +342,7 @@ class FreewaySimulator(
                 for building in self.city_map.buildings
             ):
                 self.redraw_world()
-        self.draw_construction_trucks()
+        self.draw_road_vehicles()
 
     def tick(self) -> None:
         """Advance traffic, refresh tools/windows, and schedule the next frame."""
@@ -354,24 +366,19 @@ class FreewaySimulator(
             for car in self.simulation.cars:
                 if car.item is None:
                     car.item = self.create_car_details(car)
-                self.draw_car(car)
+                self.draw_road_vehicle(car)
                 self.canvas.tag_raise(SPEED_LIMIT_TAG)
+        self._update_construction(dt)
         if self.running:
-            for car in self.test_traffic.update(
-                self.city_map,
-                dt * self.simulation_speed,
-            ):
+            for car in self.construction_simulation.completed_road_vehicles:
                 if car.item is not None:
                     self.canvas.delete(car.item)
                 for item in car.signal_items:
                     self.canvas.delete(item)
-        for car in self.test_traffic.cars:
-            self.draw_test_car(car)
-        self._update_construction(dt)
         if self.view3d_active and self.view3d is not None:
-            self.view3d.update_cars(self.test_traffic.cars, self.test_traffic.elapsed_time)
+            self.view3d.update_road_vehicles(self.road_vehicles)
             self.view3d.step()
-        self.canvas.tag_raise(TEST_TRAFFIC_CAR_TAG)
+        self.canvas.tag_raise(ROAD_VEHICLE_CAR_TAG)
         self.canvas.tag_raise(TEST_TRAFFIC_SOURCE_TAG)
         self.canvas.tag_raise(SPEED_LIMIT_TAG)
         if self.active_tool is not None:

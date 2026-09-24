@@ -12,13 +12,17 @@ from panda3d.core import (
     loadPrcFileData,
 )
 
-from city import CityMap
+from city import Building, CityMap
+from color_palette import Palette, panda_rgba
+from land_ports import land_port_focus_point, land_port_positions
 from models import Road
 from models import Intersection
 from .camera3d import OrbitCamera, map_to_panda, panda_to_map, ray_to_height
 from .scene3d import (
-    SceneRegistry, TerrainFeature, TreeFeature, attach_map_root, draw_intersection,
-    draw_road, draw_road_dividers, draw_terrain, draw_tree, update_car_layer,
+    RegionalLandPortFeature, SceneRegistry, TerrainFeature, TreeFeature,
+    attach_map_root, draw_building, draw_intersection, draw_regional_land_port,
+    draw_road, draw_road_dividers, draw_terrain, draw_tree,
+    update_road_vehicle_layer,
 )
 
 
@@ -26,11 +30,11 @@ class PandaWorldView:
     """Own the native 3D viewport while Tk keeps the application loop."""
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = tk.Frame(parent, bg="#202a33")
+        self.frame = tk.Frame(parent, bg=Palette.ROAD_SURFACE)
         loadPrcFileData("", "audio-library-name null")
         self.base = ShowBase(windowType="none")
         self.base.disableMouse()
-        self.base.setBackgroundColor(0.55, 0.7, 0.85)
+        self.base.setBackgroundColor(*panda_rgba(Palette.TERRAIN_GRASS))
         self.orbit = OrbitCamera((2500, 1750, 0))
         self.city: CityMap | None = None
         self.scene = SceneRegistry(attach_map_root(self.base.render, "city"))
@@ -40,6 +44,8 @@ class PandaWorldView:
         self.scene.register(TerrainFeature, draw_terrain)
         self.scene.register(Road, draw_road)
         self.scene.register(Intersection, draw_intersection)
+        self.scene.register(Building, draw_building)
+        self.scene.register(RegionalLandPortFeature, draw_regional_land_port)
         self.scene.register(TreeFeature, draw_tree)
         self.on_click: Callable[[int, int], None] | None = None
         self.on_motion: Callable[[int, int], None] | None = None
@@ -160,12 +166,18 @@ class PandaWorldView:
     def show_city(self, city: CityMap) -> None:
         """Refresh terrain, roads, and trees without resetting the camera."""
         if self.city is not city:
-            self.orbit.target = (city.width / 2, city.height / 2, 0)
+            self.orbit.target = (*land_port_focus_point(city), 0)
         self.city = city
+        self.base.setBackgroundColor(*panda_rgba(city.terrain.grass_color))
         self.scene.replace([
             TerrainFeature(city.width, city.height, city.terrain.grass_color),
             *city.roads,
             *city.intersections,
+            *city.buildings,
+            *(
+                RegionalLandPortFeature(index, *position)
+                for index, position in enumerate(land_port_positions(city))
+            ),
             *(
                 TreeFeature(
                     "redwood" if index % 4 == 0 else "pine",
@@ -178,9 +190,17 @@ class PandaWorldView:
         draw_road_dividers(city.roads, city.intersections, self.scene.root)
         self._apply_camera()
 
-    def update_cars(self, cars, elapsed_seconds: float) -> None:
-        """Refresh the 3D vehicle layer while preserving static geometry."""
-        update_car_layer(cars, self.vehicle_root, self.vehicle_nodes, elapsed_seconds)
+    def update_road_vehicles(self, simulation) -> None:
+        """Render all active city road users from the shared simulation."""
+        if self.city is None:
+            return
+        update_road_vehicle_layer(
+            simulation.vehicles,
+            self.city,
+            self.vehicle_root,
+            self.vehicle_nodes,
+            simulation.elapsed_time,
+        )
 
     def _apply_camera(self) -> None:
         if self.base.camera is None or self.base.camera.isEmpty():
@@ -272,7 +292,7 @@ class PandaWorldView:
         if len(path) < 2:
             return
         segments = LineSegs("road-preview-line")
-        segments.setColor(0.2, 0.9, 1.0, 1)
+        segments.setColor(*panda_rgba(Palette.ROUTE_HIGHLIGHT))
         segments.setThickness(4)
         segments.moveTo(*path[0])
         for point in path[1:]:

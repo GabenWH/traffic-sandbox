@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import dist, hypot, inf, isfinite, isnan, ulp
 from typing import Protocol
 from uuid import uuid4
@@ -30,6 +30,9 @@ from resources import (
     ResourceSpec,
     TruckSpec,
 )
+from traffic_testbed import RoadVehicleSimulation, RoutedRoadVehicle
+from units import pixels_per_second_to_mph
+from vehicle import VehicleAppearance
 
 
 WEST_EDGE_TOLERANCE = 1e-6
@@ -132,6 +135,8 @@ def distance_from_parcel(parcel: Parcel, point: Point) -> float:
 
 
 CONSTRUCTION_TRUCK_SPEED = 90.0
+CONSTRUCTION_TRUCK_DEPARTURE_INTERVAL = 20.0
+DEPARTURE_TIME_TOLERANCE = 1e-9
 
 
 @dataclass(frozen=True)
@@ -155,12 +160,35 @@ class ConstructionTrip:
     route_points: tuple[Point, ...]
     speed: float
     distance_travelled: float = 0.0
+    route: Path[MobilityNode, MobilityLink] | None = field(default=None, repr=False)
+    road_vehicle: RoutedRoadVehicle | None = field(default=None, repr=False)
 
     @property
     def position(self) -> Point:
+        if self.road_vehicle is not None:
+            return self.road_vehicle.position
         return point_at_polyline_distance(
             list(self.route_points), self.distance_travelled,
         )
+
+    @property
+    def heading(self) -> Point:
+        """Return the unit direction of the route segment under the truck."""
+        if self.road_vehicle is not None:
+            return self.road_vehicle.heading
+        distance_remaining = max(0.0, self.distance_travelled)
+        final_direction: Point | None = None
+        for start, end in zip(self.route_points, self.route_points[1:]):
+            dx, dy = end[0] - start[0], end[1] - start[1]
+            segment_length = hypot(dx, dy)
+            if segment_length == 0:
+                continue
+            direction = (dx / segment_length, dy / segment_length)
+            final_direction = direction
+            if distance_remaining < segment_length:
+                return direction
+            distance_remaining -= segment_length
+        return final_direction or (0.0, 1.0)
 
 
 class ConstructionSimulation:
@@ -172,6 +200,7 @@ class ConstructionSimulation:
         trucks: Mapping[str, TruckSpec],
         provider: ConstructionProvider,
         truck_speed: float = CONSTRUCTION_TRUCK_SPEED,
+        road_vehicles: RoadVehicleSimulation | None = None,
     ) -> None:
         if not isfinite(truck_speed) or truck_speed <= 0:
             raise ValueError("Construction truck speed must be positive and finite")
@@ -179,8 +208,17 @@ class ConstructionSimulation:
         self.trucks = dict(trucks)
         self.provider = provider
         self.truck_speed = float(truck_speed)
+        self.road_vehicles = road_vehicles if road_vehicles is not None else RoadVehicleSimulation(
+            spawn_interval=1000.0,
+            speed_mph=pixels_per_second_to_mph(truck_speed),
+            update_mode="data_first",
+        )
         self.trips: list[ConstructionTrip] = []
+        self.pending_trips: list[ConstructionTrip] = []
+        self.completed_road_vehicles: list[RoutedRoadVehicle] = []
+        self._seconds_until_next_departure = 0.0
         self._city_map: CityMap | None = None
+        self._network_token: tuple[int, int] | None = None
         self._material_delivery_counts: dict[tuple[str, str], int] = {}
 
     def update(
@@ -188,10 +226,54 @@ class ConstructionSimulation:
         city_map: CityMap,
         elapsed_seconds: float,
     ) -> tuple[ConstructionTrip, ...]:
-        """Advance existing work and trips, then dispatch outstanding demand."""
+        """Advance work, trips, and the shared regional-port departure queue."""
         if not isfinite(elapsed_seconds) or elapsed_seconds < 0:
             raise ValueError("Construction elapsed time must be finite and nonnegative")
         self._city_map = city_map
+        self.completed_road_vehicles = []
+        self.sync_network(city_map)
+        completed: list[ConstructionTrip] = []
+        self._start_ready_work(city_map)
+        self._queue_outstanding_demand(city_map)
+        self._depart_next_trip_if_ready()
+
+        remaining = elapsed_seconds
+        while remaining > 1e-9:
+            self._depart_next_trip_if_ready()
+            step = min(remaining, 0.05)
+            if self.pending_trips and self._seconds_until_next_departure > 0:
+                step = min(step, self._seconds_until_next_departure)
+            self._advance_work(city_map, step)
+            arrived_vehicles = self.road_vehicles.update(city_map, step)
+            self.completed_road_vehicles.extend(arrived_vehicles)
+            for trip in tuple(self.trips):
+                if trip.road_vehicle is not None:
+                    trip.distance_travelled = trip.road_vehicle.distance
+                if trip.road_vehicle in arrived_vehicles:
+                    self._apply_delivery(trip)
+                    self.trips.remove(trip)
+                    completed.append(trip)
+            remaining = max(0.0, remaining - step)
+            self._seconds_until_next_departure = max(
+                0.0, self._seconds_until_next_departure - step,
+            )
+            if self._seconds_until_next_departure <= DEPARTURE_TIME_TOLERANCE:
+                self._seconds_until_next_departure = 0.0
+            self._start_ready_work(city_map)
+            self._queue_outstanding_demand(city_map)
+            self._depart_next_trip_if_ready()
+        return tuple(completed)
+
+    def sync_network(self, city_map: CityMap) -> list[RoutedRoadVehicle]:
+        """Cancel deliveries whose saved routes use a replaced lane graph."""
+        token = (id(city_map), city_map.mobility_revision)
+        if self._network_token is not None and token != self._network_token:
+            self.clear_trips()
+        self._network_token = token
+        _changed, removed = self.road_vehicles.sync_network(city_map)
+        return removed
+
+    def _advance_work(self, city_map: CityMap, elapsed_seconds: float) -> None:
         for building in city_map.buildings:
             if (
                 elapsed_seconds > 0
@@ -202,18 +284,7 @@ class ConstructionSimulation:
                 if building.perform_work(building.assigned_workers * elapsed_seconds):
                     building.assigned_workers = 0
 
-        completed: list[ConstructionTrip] = []
-        for trip in tuple(self.trips):
-            route_length = polyline_length(list(trip.route_points))
-            trip.distance_travelled = min(
-                route_length,
-                trip.distance_travelled + elapsed_seconds * trip.speed,
-            )
-            if trip.distance_travelled >= route_length:
-                self._apply_delivery(trip)
-                self.trips.remove(trip)
-                completed.append(trip)
-
+    def _start_ready_work(self, city_map: CityMap) -> None:
         for building in city_map.buildings:
             if (
                 building.phase is BuildablePhase.UNDER_CONSTRUCTION
@@ -225,14 +296,67 @@ class ConstructionSimulation:
             ):
                 building.begin_work(WorkType.CONSTRUCTION, building.construction_work)
 
+    def _queue_outstanding_demand(self, city_map: CityMap) -> None:
         self._dispatch_materials(city_map)
         self._dispatch_workers(city_map)
-        return tuple(completed)
+
+    def _depart_next_trip_if_ready(self) -> None:
+        if (
+            not self.pending_trips
+            or self._seconds_until_next_departure > DEPARTURE_TIME_TOLERANCE
+        ):
+            return
+        trip = self.pending_trips[0]
+        if trip.route is None:
+            raise ValueError("Construction trip has no mobility route")
+        truck = self.trucks[trip.truck_id]
+        vehicle = self.road_vehicles.admit_route(
+            trip.route,
+            vehicle_id=trip.id,
+            source_id=trip.provider_id,
+            destination_id=trip.building_id,
+            appearance=self._appearance_for_trip(trip, truck),
+            length=truck.length,
+            width=truck.width,
+            speed_cap_mph=pixels_per_second_to_mph(trip.speed),
+            color="#d88c32",
+        )
+        if vehicle is None:
+            return
+        trip.road_vehicle = vehicle
+        self.trips.append(self.pending_trips.pop(0))
+        self._seconds_until_next_departure = CONSTRUCTION_TRUCK_DEPARTURE_INTERVAL
+
+    def _appearance_for_trip(
+        self, trip: ConstructionTrip, truck: TruckSpec,
+    ) -> VehicleAppearance:
+        if isinstance(trip.payload, CrewPayload):
+            return VehicleAppearance(
+                kind="construction_truck",
+                shape="crew_truck",
+                visual_key=truck.visual_key or truck.id,
+                workers=trip.payload.workers,
+            )
+        resource = self.resources.get(trip.payload.resource_id)
+        max_load = (
+            min(
+                truck.payload_kg / resource.mass_kg_per_unit,
+                truck.cargo_m3 / resource.volume_m3_per_unit,
+            )
+            if resource is not None else 0.0
+        )
+        return VehicleAppearance(
+            kind="construction_truck",
+            shape="material_truck",
+            visual_key=truck.visual_key or truck.id,
+            cargo_key=(resource.visual_key or resource.id) if resource else trip.payload.resource_id,
+            load_fraction=min(1.0, trip.payload.amount / max_load) if max_load > 0 else 0.0,
+        )
 
     def _in_transit_material(self, building_id: str, resource_id: str) -> float:
         return sum(
             trip.payload.amount
-            for trip in self.trips
+            for trip in (*self.trips, *self.pending_trips)
             if trip.building_id == building_id
             and isinstance(trip.payload, MaterialPayload)
             and trip.payload.resource_id == resource_id
@@ -241,7 +365,7 @@ class ConstructionSimulation:
     def _in_transit_workers(self, building_id: str) -> int:
         return sum(
             trip.payload.workers
-            for trip in self.trips
+            for trip in (*self.trips, *self.pending_trips)
             if trip.building_id == building_id
             and isinstance(trip.payload, CrewPayload)
         )
@@ -279,8 +403,9 @@ class ConstructionSimulation:
             payload=payload,
             route_points=points,
             speed=self.truck_speed,
+            route=route,
         )
-        self.trips.append(trip)
+        self.pending_trips.append(trip)
         return trip
 
     def _apply_delivery(self, trip: ConstructionTrip) -> None:
@@ -333,7 +458,7 @@ class ConstructionSimulation:
             trip.building_id == building_id
             and isinstance(trip.payload, MaterialPayload)
             and trip.payload.resource_id == resource_id
-            for trip in self.trips
+            for trip in (*self.trips, *self.pending_trips)
         )
         delivery_count = self._material_delivery_counts.get(
             (building_id, resource_id), 0,
@@ -342,7 +467,12 @@ class ConstructionSimulation:
 
     def clear_trips(self) -> None:
         """Discard runtime trips when the current city is replaced."""
+        for trip in self.trips:
+            self.road_vehicles.remove_vehicle(trip.id)
         self.trips.clear()
+        self.pending_trips.clear()
+        self.completed_road_vehicles.clear()
+        self._seconds_until_next_departure = 0.0
         self._material_delivery_counts.clear()
 
     def _dispatch_materials(self, city_map: CityMap) -> None:

@@ -8,6 +8,7 @@ from city import CityMap, Terrain
 from traffic_testbed import TestTrafficSimulation as TrafficTestbed
 from ui.renderer import RendererMixin
 from ui_tools.tools.test_traffic_tool import TestTrafficTool as TrafficTool
+from vehicle import VehicleAppearance
 
 
 class TrafficTestbedTests(unittest.TestCase):
@@ -54,6 +55,29 @@ class TrafficTestbedTests(unittest.TestCase):
         self.assertIsNotNone(first)
         self.assertIsNone(blocked)
         self.assertEqual(len(traffic.cars), 1)
+
+    def test_external_road_user_survives_clearing_generated_test_cars(self) -> None:
+        traffic = TrafficTestbed(spawn_interval=1000.0, rng=random.Random(20))
+        generated = traffic.spawn_car(self.city, self.west, self.east)
+        assert generated is not None
+        for _ in range(35):
+            traffic.update(self.city, 0.05)
+        route = self.city.find_vehicle_route_between(self.west, self.east)
+        assert route is not None
+        service = traffic.admit_route(
+            route,
+            vehicle_id="service-1",
+            source_id=self.west.id,
+            destination_id=self.east.id,
+            appearance=VehicleAppearance(kind="service", shape="car"),
+        )
+        assert service is not None
+
+        removed = traffic.clear_test_traffic()
+
+        self.assertEqual(removed, [generated])
+        self.assertEqual(traffic.vehicles, [service])
+        self.assertEqual(service.appearance.kind, "service")
 
     def test_cars_with_different_turns_queue_on_their_shared_approach(self) -> None:
         junction = self.city.standard_intersections[0]

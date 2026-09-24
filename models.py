@@ -7,6 +7,8 @@ from enum import StrEnum
 from math import atan2, dist, hypot, isfinite, pi, sqrt
 from uuid import uuid4
 
+from vehicle import VehicleAppearance
+
 
 Point = tuple[float, float]
 
@@ -1016,6 +1018,29 @@ class Car:
     detail_items: list[int] = field(default_factory=list)
     merge_realness: float = 0.0
     speed_preference_mph: float = 0.0
+    id: str = field(default_factory=lambda: f"freeway-car:{uuid4()}")
+
+    @property
+    def position(self) -> Point:
+        return self.x, self.y
+
+    @property
+    def heading(self) -> Point:
+        if not self.lane.points:
+            return 1.0, 0.0
+        target_index = min(self.next_point, len(self.lane.points) - 1)
+        target = self.lane.points[target_index]
+        dx, dy = target[0] - self.x, target[1] - self.y
+        magnitude = hypot(dx, dy)
+        if magnitude <= 1e-9 and target_index > 0:
+            previous = self.lane.points[target_index - 1]
+            dx, dy = target[0] - previous[0], target[1] - previous[1]
+            magnitude = hypot(dx, dy)
+        return (dx / magnitude, dy / magnitude) if magnitude > 0 else (1.0, 0.0)
+
+    @property
+    def appearance(self) -> VehicleAppearance:
+        return VehicleAppearance()
 
 
 @dataclass(frozen=True)

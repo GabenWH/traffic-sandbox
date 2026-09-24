@@ -30,10 +30,24 @@ inventory as a new shortage and dispatch duplicate loads.
 
 ## Abstract source and shipments
 
-There is one non-placeable, unlimited source for construction resources and
-workers. It has no stock, production, finite fleet, or separate economy state.
-The source is used only to generate deliveries in response to building demand.
-Factories, mines, quarries, and production chains remain future work.
+The logistics system requests deliveries through a provider boundary. For this
+slice, one non-placeable, unlimited virtual provider supplies construction
+resources and workers from an access point at the west map edge. It has no stock,
+production, finite fleet, or separate economy state.
+
+Resource identity and physical properties are independent of supply: buildings
+request resource IDs, while providers decide which requested resources they can
+supply. Trips retain the provider ID and supplied resource ID. Later, mines,
+quarries, and factories can provide those same resource IDs from their own map
+access points and finite stock or production, without changing building demand
+or shipment payloads. Provider stock reservation, extraction, and production
+are future work; the initial virtual provider reports unlimited availability.
+
+The regional port emits at most one truck every 20 simulation seconds across
+all material and crew trips. It sends the first queued truck immediately when
+ready, then keeps that minimum spacing even if the queue temporarily empties.
+Queued trips reserve their material or worker demand so later updates do not
+create duplicate shipments.
 
 Each material shipment carries exactly one material. Resource definitions
 are supplied to the logistics system rather than hard-coded into the
@@ -60,18 +74,31 @@ remain assigned at the building while the work order runs, then are released
 when it finishes.
 
 Material and worker trucks route over the existing road mobility graph from a
-single virtual source access at the west map edge to the nearest reachable
-roadside position for the building. If no route exists, the corresponding
-demand remains outstanding and is retried when the road network changes.
+virtual provider gate on the west map edge. The gate must attach to the road
+network at a lane position or junction; a two-way road ending at the boundary
+already receives a cul-de-sac junction and can serve as that gate. A road
+endpoint must still connect into the network for routes to continue beyond it.
+
+Each building uses a virtual delivery access at its nearest road lane alongside
+the parcel. Route candidates are checked across lane directions, since a
+position on a one-way lane is only reachable in its travel direction. A
+cul-de-sac is not required for a roadside building. Buildings with no road
+access remain unserved until a road is built nearby. The final curb-to-building
+movement is abstracted for this slice; deliveries apply when the truck reaches
+the lane access. If no route exists, demand remains outstanding and is retried
+when the road network changes.
 
 ## Runtime and presentation
 
 A construction logistics system schedules trips from material shortages and
-worker deficits after subtracting in-transit commitments, advances truck
-routes, applies deliveries on arrival, and advances active construction work.
-Truck and trip state is runtime-only. Delivered material, construction work
-progress, and assigned worker count are saved; after loading, outstanding
-trips are regenerated from the saved building state.
+worker deficits after subtracting active and queued commitments, advances
+truck routes, applies deliveries on arrival, and advances active construction
+work. Runtime trucks use a native, flat-shaded cab-over model in 2D and 3D:
+material trucks show an open flatbed with resource-specific cargo, and crew
+trucks show an enclosed passenger compartment. Both face their current route
+direction. Truck and trip state is runtime-only. Delivered material,
+construction work progress, and assigned worker count are saved; after
+loading, outstanding trips are regenerated from the saved building state.
 
 The building Inspector shows required, delivered, and remaining material,
 required and assigned workers, and work progress. The world view distinguishes

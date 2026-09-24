@@ -8,21 +8,68 @@ from unittest.mock import patch
 
 from city import Building, CityMap, Parcel, Terrain
 from construction import (
-    ConstructionTrip,
-    CrewPayload,
-    MaterialPayload,
     UnlimitedConstructionProvider,
 )
 from models import BuildablePhase, WorkType
-from resources import ResourceSpec, TruckSpec
+from land_ports import LAND_PORT_CONNECTOR_NAME
+from resources import ResourceSpec
 from ui.app import FreewaySimulator
 from ui.files import FileActionsMixin
 from ui.renderer import RendererMixin
-from ui.viewport import Viewport
+from ui.viewport import Viewport, city_builder_viewport_origin
 from ui_tools.tools.inspect_tool import inspection_rows
+from vehicle import VehicleAppearance
 
 
 class ConstructionPresentationTests(unittest.TestCase):
+    def test_empty_world_start_view_shows_the_western_connector(self) -> None:
+        city = CityMap(width=5000, height=3500, terrain=Terrain(trees=[]))
+        from land_ports import ensure_western_land_port
+        ensure_western_land_port(city)
+        connector = next(
+            road for road in city.roads if road.name == LAND_PORT_CONNECTOR_NAME
+        )
+        camera_x, camera_y = city_builder_viewport_origin(city.height)
+        viewport = Viewport(camera_x, camera_y)
+
+        port_screen = viewport.world_to_screen(connector.centerline[0])
+        road_end_screen = viewport.world_to_screen(connector.centerline[-1])
+
+        self.assertGreaterEqual(port_screen[0], 0)
+        self.assertLess(road_end_screen[0], 1000)
+        self.assertAlmostEqual(port_screen[1], 320)
+
+    def test_regional_land_port_is_drawn_as_a_boundary_marker(self) -> None:
+        city = CityMap(width=500, height=300, terrain=Terrain(trees=[]))
+        city.add_road([(0, 100), (300, 100)])
+
+        class Canvas:
+            def __init__(self) -> None:
+                self.items = []
+
+            def create_line(self, *args, **kwargs):
+                self.items.append(("line", args, kwargs))
+
+            def create_oval(self, *args, **kwargs):
+                self.items.append(("oval", args, kwargs))
+
+            def create_text(self, *args, **kwargs):
+                self.items.append(("text", args, kwargs))
+
+        host = SimpleNamespace(
+            city_map=city,
+            canvas=Canvas(),
+            camera_zoom=1.0,
+            world_to_screen=lambda point: point,
+        )
+
+        RendererMixin._draw_regional_land_ports(host)
+
+        self.assertTrue(any(
+            kind == "text" and kwargs.get("text") == "REGIONAL LAND PORT"
+            for kind, _args, kwargs in host.canvas.items
+        ))
+
     def test_inspector_shows_cumulative_construction_status(self) -> None:
         building = Building(
             "House",
@@ -114,37 +161,35 @@ class ConstructionPresentationTests(unittest.TestCase):
         self.assertNotEqual(footprint["outline"], "#eee4d5")
         self.assertIn("dash", footprint)
 
-    def test_construction_truck_markers_follow_active_trips_and_clear(self) -> None:
+    def test_shared_vehicle_renderer_draws_and_clears_crew_trucks(self) -> None:
         class Canvas:
             def __init__(self) -> None:
                 self.deleted = []
-                self.rectangles = []
+                self.polygons = []
 
             def delete(self, tag):
                 self.deleted.append(tag)
 
-            def create_rectangle(self, *args, **kwargs):
-                self.rectangles.append((args, kwargs))
+            def create_polygon(self, *args, **kwargs):
+                self.polygons.append((args, kwargs))
 
-        truck = TruckSpec("crew_truck", 0, 0, 3, 20, 8, "crew_truck")
-        trip = ConstructionTrip(
-            "trip-1",
-            "virtual",
-            "building-1",
-            "crew_truck",
-            CrewPayload(2),
-            ((10, 20), (110, 20)),
-            10,
-            25,
+        vehicle = SimpleNamespace(
+            id="trip-1",
+            position=(35, 20),
+            heading=(1, 0),
+            speed=10,
+            length=20,
+            width=8,
+            color="#ffb000",
+            appearance=VehicleAppearance(
+                kind="construction_truck", shape="crew_truck",
+                visual_key="crew_truck", workers=2,
+            ),
         )
 
         class Host(RendererMixin):
             canvas = Canvas()
-            construction_simulation = SimpleNamespace(
-                trips=[trip],
-                trucks={"crew_truck": truck},
-                resources={"lumber": ResourceSpec("lumber", "Lumber", "m³", 500, 1, "lumber")},
-            )
+            road_vehicles = SimpleNamespace(vehicles=[vehicle])
             camera_zoom = 2.0
 
             @staticmethod
@@ -153,14 +198,24 @@ class ConstructionPresentationTests(unittest.TestCase):
 
         host = Host()
 
-        host.draw_construction_trucks()
+        host.draw_road_vehicles()
 
-        self.assertEqual(host.canvas.rectangles[0][0], (15.0, 12.0, 55.0, 28.0))
-        self.assertIn("construction_trucks", host.canvas.rectangles[0][1]["tags"])
-        host.construction_simulation.trips.clear()
-        host.draw_construction_trucks()
+        parts = {
+            next(tag.split(":", 1)[1] for tag in options["tags"]
+                 if tag.startswith("construction-truck-part:")): coords
+            for coords, options in host.canvas.polygons
+        }
+        self.assertGreater(sum(parts["cab"][::2]) / 4,
+                           sum(parts["crew-compartment"][::2]) / 4)
+        self.assertIn("crew-roof-marker-1", parts)
+        self.assertTrue(all(
+            "construction_trucks" in options["tags"]
+            for _coords, options in host.canvas.polygons
+        ))
+        host.road_vehicles.vehicles.clear()
+        host.draw_road_vehicles()
         self.assertEqual(host.canvas.deleted, ["construction_trucks", "construction_trucks"])
-        self.assertEqual(len(host.canvas.rectangles), 1)
+        self.assertGreater(len(host.canvas.polygons), 1)
 
     def test_app_construction_tick_uses_speed_and_redraws_phase_changes(self) -> None:
         building = Building(
@@ -187,13 +242,13 @@ class ConstructionPresentationTests(unittest.TestCase):
 
             def __init__(self):
                 self.redraws = 0
-                self.truck_draws = 0
+                self.vehicle_draws = 0
 
             def redraw_world(self):
                 self.redraws += 1
 
-            def draw_construction_trucks(self):
-                self.truck_draws += 1
+            def draw_road_vehicles(self):
+                self.vehicle_draws += 1
 
         host = Host()
 
@@ -201,7 +256,7 @@ class ConstructionPresentationTests(unittest.TestCase):
 
         self.assertEqual(host.construction_simulation.elapsed, [1.0])
         self.assertEqual(host.redraws, 1)
-        self.assertEqual(host.truck_draws, 1)
+        self.assertEqual(host.vehicle_draws, 1)
 
     def test_new_world_clears_runtime_construction_trips(self) -> None:
         class ConstructionSimulation:
@@ -232,6 +287,9 @@ class ConstructionPresentationTests(unittest.TestCase):
             FileActionsMixin.new_world(host)
 
         self.assertEqual(host.construction_simulation.cleared, 1)
+        self.assertTrue(any(
+            road.name == LAND_PORT_CONNECTOR_NAME for road in host.city_map.roads
+        ))
 
     def test_successful_load_clears_runtime_construction_trips(self) -> None:
         loaded_city = CityMap(terrain=Terrain(trees=[]))
@@ -281,6 +339,9 @@ class ConstructionPresentationTests(unittest.TestCase):
 
         self.assertEqual(host.construction_simulation.cleared, 1)
         self.assertIs(host.city_map, loaded_city)
+        self.assertTrue(any(
+            road.name == LAND_PORT_CONNECTOR_NAME for road in loaded_city.roads
+        ))
 
 
 if __name__ == "__main__":

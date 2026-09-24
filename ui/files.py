@@ -8,6 +8,7 @@ from tkinter import filedialog, messagebox
 
 from city import CityMap
 from config import DEFAULT_SPEED_LIMIT_MPH
+from land_ports import ensure_western_land_port
 from persistence import WorldFormatError, world_from_dict, world_to_dict
 from simulation import TrafficSimulation
 from units import mph_to_display, speed_unit
@@ -95,6 +96,7 @@ class FileActionsMixin:
         self.construction_simulation.clear_trips()
         self.simulation = TrafficSimulation()
         self.city_map = CityMap()
+        ensure_western_land_port(self.city_map)
         self.restore_3d_camera(None)
         self.blank_map = True
         self.select_lane(self.simulation.lanes[0])
@@ -122,6 +124,7 @@ class FileActionsMixin:
         self.construction_simulation.clear_trips()
         self.simulation = TrafficSimulation()
         self.city_map = loaded.city_map
+        ensure_western_land_port(self.city_map)
         self.blank_map = True
         self.unit_system = loaded.unit_system
         self.camera_x = loaded.camera_x

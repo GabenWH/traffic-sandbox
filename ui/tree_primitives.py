@@ -8,6 +8,8 @@ from panda3d.core import (
     GeomVertexWriter, NodePath, Vec3,
 )
 
+from color_palette import Palette, panda_rgba
+
 
 @dataclass
 class TreeFeature:
@@ -77,17 +79,17 @@ def draw_tree(tree: TreeFeature, parent: NodePath) -> NodePath:
         node = root.attachNewNode(
             _tapered_cylinder(name, radius, top_radius, bottom, top)
         )
-        node.setColor(*color, 1)
+        node.setColor(*panda_rgba(color))
 
     if tree.species == "pine":
-        part("trunk", 0.045, 0.045, 0, 0.7, (0.38, 0.23, 0.12))
-        part("foliage", 0.30, 0, 0.22, 1, (0.16, 0.39, 0.19))
+        part("trunk", 0.045, 0.045, 0, 0.7, Palette.ROUNDABOUT_APRON)
+        part("foliage", 0.30, 0, 0.22, 1, Palette.TREE_CANOPY)
     else:
-        part("trunk", 0.065, 0.018, 0, 0.96, (0.48, 0.22, 0.14))
+        part("trunk", 0.065, 0.018, 0, 0.96, Palette.ROUNDABOUT_APRON)
         for tier in range(9):
             bottom = 0.32 + tier * 0.065
             top = min(1.0, bottom + 0.22)
             radius = 0.19 * (1 - tier / 11)
             part(f"foliage-{tier}", radius, 0, bottom, top,
-                 (0.12, 0.30 + tier * 0.008, 0.17))
+                 Palette.TREE_CANOPY if tier % 2 else Palette.TREE_OUTLINE)
     return root

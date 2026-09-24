@@ -1,4 +1,4 @@
-"""Temporary routed traffic generated between selected city junctions."""
+"""Shared city road vehicles and optional junction-generated traffic."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ from pathfinding import Path
 from traffic_occupancy import TrafficOccupancyIndex
 from traffic_debugger import TrafficDebugger
 from units import mph_to_pixels_per_second
+from vehicle import VehicleAppearance
 
 
 TEST_CAR_SPEED_MPH = 25.0
@@ -43,7 +44,7 @@ _car_ids = count(1)
 class TrafficIntent:
     """One car's decision from the immutable start-of-tick traffic snapshot."""
 
-    car: "RoutedTestCar"
+    car: "RoutedRoadVehicle"
     distance_before: float
     speed_before: float
     route_movement: tuple[float, float, LaneConnection] | None
@@ -53,14 +54,14 @@ class TrafficIntent:
     merge_observation: object | None
     priority: bool
     distance_to_stop: float | None
-    lead_car: "RoutedTestCar" | None
+    lead_car: "RoutedRoadVehicle" | None
     lead_distance: float | None
     decision: CarDecision
 
 
 @dataclass
-class RoutedTestCar:
-    """Compact progress state for a car following one immutable route polyline."""
+class RoutedRoadVehicle:
+    """Progress and behavior state for one routed city road vehicle."""
 
     source_id: str
     destination_id: str
@@ -68,6 +69,9 @@ class RoutedTestCar:
     points: tuple[Point, ...]
     speed: float
     color: str
+    appearance: VehicleAppearance = field(default_factory=VehicleAppearance)
+    source_type: str = "external"
+    speed_cap_mph: float | None = None
     distance: float = 0.0
     position: Point = field(init=False)
     heading: Point = field(init=False)
@@ -93,9 +97,11 @@ class RoutedTestCar:
     def __post_init__(self) -> None:
         self.total_length = polyline_length(list(self.points))
         if len(self.points) < 2 or self.total_length <= 0:
-            raise ValueError("A routed test car needs a non-degenerate path")
+            raise ValueError("A road vehicle needs a non-degenerate path")
         if not isfinite(self.speed) or self.speed <= 0:
-            raise ValueError("A routed test car needs a positive speed")
+            raise ValueError("A road vehicle needs a positive speed")
+        if any(not isfinite(size) or size <= 0 for size in (self.length, self.width)):
+            raise ValueError("A road vehicle needs positive finite dimensions")
         self.controlled_movements = _controlled_movement_ranges(self.route)
         self.route_segments = _route_occupancy_segments(self.route)
         self.position, self.heading = _position_and_heading(self.points, 0.0)
@@ -124,21 +130,22 @@ class RoutedTestCar:
 
 
 @dataclass
-class TestTrafficSimulation:
-    """Spawn routed cars between junctions explicitly enabled by the user."""
+class RoadVehicleSimulation:
+    """Advance all city road vehicles and generate optional test traffic."""
 
     spawn_interval: float = TEST_SPAWN_INTERVAL
     max_cars: int = TEST_TRAFFIC_LIMIT
     speed_mph: float = TEST_CAR_SPEED_MPH
     rng: random.Random = field(default_factory=random.Random, repr=False)
     active_junction_ids: list[str] = field(default_factory=list)
-    cars: list[RoutedTestCar] = field(default_factory=list)
+    cars: list[RoutedRoadVehicle] = field(default_factory=list)
     _spawn_elapsed: dict[str, float] = field(default_factory=dict, repr=False)
     stop_coordinator: AllWayStopCoordinator = field(
         default_factory=AllWayStopCoordinator, repr=False,
     )
     elapsed_time: float = 0.0
     _spawned_count: int = field(default=0, init=False, repr=False)
+    _network_token: tuple[int, int] | None = field(default=None, init=False, repr=False)
     occupancy: TrafficOccupancyIndex = field(
         default_factory=TrafficOccupancyIndex, repr=False,
     )
@@ -151,6 +158,11 @@ class TestTrafficSimulation:
     update_mode: str = "legacy"
 
     colors = ("#ff5b72", "#37e6ff", "#f7d154", "#7fea8c", "#c98cff")
+
+    @property
+    def vehicles(self) -> list[RoutedRoadVehicle]:
+        """All active city road users, regardless of their purpose."""
+        return self.cars
 
     def __post_init__(self) -> None:
         if not isfinite(self.spawn_interval) or self.spawn_interval <= 0:
@@ -167,6 +179,17 @@ class TestTrafficSimulation:
     def _validate_update_mode(self) -> None:
         if self.update_mode not in ("legacy", "data_first"):
             raise ValueError("Traffic update mode must be legacy or data_first")
+
+    def sync_network(self, city_map: CityMap) -> tuple[bool, list[RoutedRoadVehicle]]:
+        """Discard routes made for an older version of the city lane graph."""
+        token = (id(city_map), city_map.mobility_revision)
+        if self._network_token is None:
+            self._network_token = token
+            return False, []
+        if token == self._network_token:
+            return False, []
+        self._network_token = token
+        return True, self.clear_vehicles()
 
     def toggle_junction(self, junction: Intersection) -> bool:
         """Toggle a junction as a combined source/sink; return its new state."""
@@ -190,47 +213,86 @@ class TestTrafficSimulation:
         city_map: CityMap,
         source: Intersection,
         destination: Intersection,
-    ) -> RoutedTestCar | None:
+    ) -> RoutedRoadVehicle | None:
         """Spawn one car when a directed route exists between two junctions."""
-        if source is destination or len(self.cars) >= self.max_cars:
+        if source is destination or sum(
+            car.source_type == "test_traffic" for car in self.cars
+        ) >= self.max_cars:
             return None
         route = city_map.find_vehicle_route_between(source, destination)
         if route is None:
-            return None
-        points = vehicle_route_points(route)
-        if len(points) < 2 or polyline_length(list(points)) <= 0:
             return None
         existing_ids = {car.id for car in self.cars}
         next_spawn_id = self._spawned_count + 1
         while f"test-car-{next_spawn_id:06d}" in existing_ids:
             next_spawn_id += 1
-        car = RoutedTestCar(
+        car = self.admit_route(
+            route,
             source_id=source.id,
             destination_id=destination.id,
+            vehicle_id=f"test-car-{next_spawn_id:06d}",
+            color=self.rng.choice(self.colors),
+            source_type="test_traffic",
+        )
+        if car is None:
+            return None
+        self._spawned_count = next_spawn_id
+        car.brain.merge_style = "cautious" if self._spawned_count % 5 == 0 else "rolling"
+        return car
+
+    def admit_route(
+        self,
+        route: Path[MobilityNode, MobilityLink],
+        *,
+        vehicle_id: str,
+        source_id: str,
+        destination_id: str,
+        appearance: VehicleAppearance | None = None,
+        source_type: str = "external",
+        length: float = 14.0,
+        width: float = 6.0,
+        speed_cap_mph: float | None = None,
+        color: str | None = None,
+    ) -> RoutedRoadVehicle | None:
+        """Enter any routed vehicle if its first lane has room."""
+        if any(car.id == vehicle_id for car in self.cars):
+            return None
+        points = vehicle_route_points(route)
+        if len(points) < 2 or polyline_length(list(points)) <= 0:
+            return None
+        initial_speed_mph = min(
+            self.speed_mph,
+            speed_cap_mph if speed_cap_mph is not None else self.speed_mph,
+        )
+        if appearance is None:
+            appearance = VehicleAppearance()
+        car = RoutedRoadVehicle(
+            source_id=source_id,
+            destination_id=destination_id,
             route=route,
             points=points,
-            speed=mph_to_pixels_per_second(self.speed_mph),
-            color=self.rng.choice(self.colors),
-            # Simulation-local, zero-padded IDs make every stable tie-break
-            # reproducible and preserve spawn order across digit boundaries.
-            id=f"test-car-{next_spawn_id:06d}",
+            speed=mph_to_pixels_per_second(initial_speed_mph),
+            color=color or self.rng.choice(self.colors),
+            appearance=appearance,
+            source_type=source_type,
+            speed_cap_mph=speed_cap_mph,
+            length=length,
+            width=width,
+            id=vehicle_id,
         )
         self.occupancy.rebuild(self.cars)
         spawn_gap = self.occupancy.lead_gap(car, TEST_CAR_FOLLOWING_GAP + car.length)
         if spawn_gap is not None and spawn_gap < TEST_CAR_FOLLOWING_GAP:
             return None
-        # Mix driver decisions on the same road. No global road mode decides
-        # that every driver must use the same merging behavior.
-        self._spawned_count = next_spawn_id
-        car.brain.merge_style = "cautious" if self._spawned_count % 5 == 0 else "rolling"
         self.cars.append(car)
         return car
 
-    def update(self, city_map: CityMap, elapsed_seconds: float) -> list[RoutedTestCar]:
+    def update(self, city_map: CityMap, elapsed_seconds: float) -> list[RoutedRoadVehicle]:
         """Spawn and advance test cars, returning cars that reached a sink."""
         self._validate_update_mode()
         if not isfinite(elapsed_seconds) or elapsed_seconds < 0:
             raise ValueError("Elapsed time must be finite and nonnegative")
+        self.sync_network(city_map)
         # Keep observations frequent even when the UI fast-forwards or a test
         # advances several seconds at once. Otherwise a car can skip a whole
         # entrance between two decisions.
@@ -328,7 +390,7 @@ class TestTrafficSimulation:
         # This is the number that was actually considered this frame.  A car
         # finishing later in the frame is still present in its trace record.
         frame_car_count = len(self.cars)
-        completed: list[RoutedTestCar] = []
+        completed: list[RoutedRoadVehicle] = []
         temporary_winner_entered = False
         decision_seconds = 0.0
         resolution_seconds = 0.0
@@ -555,7 +617,7 @@ class TestTrafficSimulation:
         *,
         frame_started: float,
         spawned_at: float,
-    ) -> list[RoutedTestCar]:
+    ) -> list[RoutedRoadVehicle]:
         """Advance one frame as snapshot -> intents -> resolve -> batch apply."""
         occupancy_started = perf_counter() if self.debugger is not None else 0.0
         self.occupancy.rebuild(self.cars)
@@ -821,7 +883,7 @@ class TestTrafficSimulation:
             if not changed:
                 break
 
-        completed: list[RoutedTestCar] = []
+        completed: list[RoutedRoadVehicle] = []
         temporary_winner_entered = False
         for intent in resolved:
             car = intent.car
@@ -905,17 +967,44 @@ class TestTrafficSimulation:
             )
         return completed
 
-    def clear_cars(self) -> list[RoutedTestCar]:
+    def clear_vehicles(self) -> list[RoutedRoadVehicle]:
+        """Remove every active city road vehicle and release its claims."""
         removed = list(self.cars)
         for car in removed:
             self.stop_coordinator.forget_car(car.id)
             car._claimed_movement = None
         self.cars.clear()
+        self.occupancy.rebuild(self.cars)
         self.deadlock_resolver.reset()
         return removed
 
-    def clear(self) -> list[RoutedTestCar]:
-        removed = self.clear_cars()
+    def clear_cars(self) -> list[RoutedRoadVehicle]:
+        """Compatibility name for clearing the shared vehicle collection."""
+        return self.clear_vehicles()
+
+    def remove_vehicle(self, vehicle_id: str) -> RoutedRoadVehicle | None:
+        """Remove one routed vehicle and release its intersection claims."""
+        car = next((item for item in self.cars if item.id == vehicle_id), None)
+        if car is None:
+            return None
+        self.cars.remove(car)
+        self.stop_coordinator.forget_car(car.id)
+        car._claimed_movement = None
+        self.occupancy.rebuild(self.cars)
+        self.deadlock_resolver.reset()
+        return car
+
+    def clear_test_traffic(self) -> list[RoutedRoadVehicle]:
+        """Clear source-generated cars without interrupting delivery vehicles."""
+        removed = [car for car in self.cars if car.source_type == "test_traffic"]
+        for car in removed:
+            self.remove_vehicle(car.id)
+        self.active_junction_ids.clear()
+        self._spawn_elapsed.clear()
+        return removed
+
+    def clear(self) -> list[RoutedRoadVehicle]:
+        removed = self.clear_vehicles()
         self.active_junction_ids.clear()
         self._spawn_elapsed.clear()
         return removed
@@ -987,7 +1076,7 @@ def _route_occupancy_segments(
 
 
 def _next_controlled_movement(
-    car: RoutedTestCar, coordinator: AllWayStopCoordinator,
+    car: RoutedRoadVehicle, coordinator: AllWayStopCoordinator,
 ) -> tuple[float, float, LaneConnection] | None:
     """Find the next entrance to obey, separately from junction occupancy.
 
@@ -1008,7 +1097,7 @@ def _next_controlled_movement(
 
 
 def _next_route_movement(
-    car: RoutedTestCar,
+    car: RoutedRoadVehicle,
 ) -> tuple[float, float, LaneConnection] | None:
     return next(
         (movement for movement in car.controlled_movements if car.distance < movement[1]),
@@ -1018,6 +1107,8 @@ def _next_route_movement(
 
 def _route_cruise_speed(car, speed_mph):
     """Brake before the tight circle, and keep a modest speed until the exit."""
+    if car.speed_cap_mph is not None:
+        speed_mph = min(speed_mph, car.speed_cap_mph)
     cruise = mph_to_pixels_per_second(speed_mph)
     curve_speed = mph_to_pixels_per_second(min(speed_mph, 12.0))
     for start, end, movement in car.controlled_movements:
@@ -1029,6 +1120,12 @@ def _route_cruise_speed(car, speed_mph):
                 distance = 0.0
             return min(cruise, sqrt(curve_speed**2 + 2*TEST_CAR_BRAKING*distance))
     return cruise
+
+
+# Compatibility names for code that still presents user-generated city traffic
+# as test cars. Both names refer to the same actor and simulation types.
+RoutedTestCar = RoutedRoadVehicle
+TestTrafficSimulation = RoadVehicleSimulation
 
 
 def _signaled_maneuver(car, movement):

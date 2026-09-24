@@ -32,8 +32,8 @@
       "payload_kg": 7500,
       "cargo_m3": 10,
       "crew_capacity": 0,
-      "length": 18,
-      "width": 8,
+      "length": 16.2,
+      "width": 7.2,
       "visual_key": "material_truck"
     },
     {
@@ -41,8 +41,8 @@
       "payload_kg": 0,
       "cargo_m3": 0,
       "crew_capacity": 3,
-      "length": 20,
-      "width": 8,
+      "length": 18,
+      "width": 7.2,
       "visual_key": "crew_truck"
     }
   ]

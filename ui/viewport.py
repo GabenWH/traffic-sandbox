@@ -14,6 +14,11 @@ MAX_ZOOM = 3.0
 ZOOM_STEP = 1.15
 
 
+def city_builder_viewport_origin(map_height: float) -> Point:
+    """Start the city-builder view at the west edge, with a small margin."""
+    return (-24.0, (map_height - HEIGHT) / 2)
+
+
 @dataclass
 class Viewport:
     x: float
@@ -113,10 +118,11 @@ class ViewportMixin:
         self.redraw_world()
 
     def reset_camera(self) -> None:
-        """Restore the city-builder center or legacy simulation origin."""
+        """Restore the regional-entry view or legacy simulation origin."""
         if self.blank_map:
-            self.camera_x = (self.city_map.width - WIDTH) / 2
-            self.camera_y = (self.city_map.height - HEIGHT) / 2
+            self.camera_x, self.camera_y = city_builder_viewport_origin(
+                self.city_map.height,
+            )
         else:
             self.camera_x = self.camera_y = 0.0
         self.camera_zoom = 1.0

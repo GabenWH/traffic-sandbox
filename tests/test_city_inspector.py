@@ -327,7 +327,7 @@ class CityInspectorTests(unittest.TestCase):
         title, rows = inspection_rows(Host(), car)
         values = {row.label: row.value for row in rows}
 
-        self.assertEqual(title, "Routed test car")
+        self.assertEqual(title, "Road car")
         self.assertEqual(values["Brain state"], "cruising")
         self.assertEqual(values["Turn signal"], "none")
         self.assertIn("Desired speed", values)

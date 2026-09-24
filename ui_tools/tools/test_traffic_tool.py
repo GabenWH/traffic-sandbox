@@ -86,7 +86,7 @@ class TestTrafficTool(CanvasTool):
         self._dirty = False
 
     def reset(self) -> None:
-        for car in self.host.test_traffic.clear():
+        for car in self.host.test_traffic.clear_test_traffic():
             if hasattr(self.host, "canvas") and car.item is not None:
                 self.host.canvas.delete(car.item)
             if hasattr(self.host, "canvas"):

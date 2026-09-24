@@ -66,8 +66,9 @@ class SceneGeometryTests(unittest.TestCase):
         self.assertEqual(len(deck), 32)
         self.assertEqual(len(outer_band), 32)
         self.assertEqual(len(island), 32)
-        self.assertTrue(all(vertex[2] == 5.25 for quad in deck for vertex in quad))
-        self.assertTrue(all((100, 100, 5.25) in quad for quad in deck))
+        # Keep the apron just below connected road ends so approach decks remain visible.
+        self.assertTrue(all(vertex[2] == 4.98 for quad in deck for vertex in quad))
+        self.assertTrue(all((100, 100, 4.98) in quad for quad in deck))
         self.assertTrue(all(
             {round(((vertex[0] - 100) ** 2 + (vertex[1] - 100) ** 2) ** 0.5, 6)
              for vertex in quad} == {24, 27}
@@ -77,7 +78,7 @@ class SceneGeometryTests(unittest.TestCase):
             round(((vertex[0] - 100) ** 2 + (vertex[1] - 100) ** 2) ** 0.5, 6) in {0, 12}
             for quad in island for vertex in quad
         ))
-        self.assertTrue(all(vertex[2] > 5.25 for quad in island for vertex in quad))
+        self.assertTrue(all(vertex[2] > 4.98 for quad in island for vertex in quad))
     def test_ramp_deck_follows_vertex_elevations(self) -> None:
         road = Road("r", "Ramp", [(0, 0), (100, 0)], elevations=[0, 20])
 

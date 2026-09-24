@@ -8,6 +8,7 @@ from math import dist
 from random import Random
 from uuid import uuid4
 
+from color_palette import Palette
 from mobility import (
     VEHICLE_LAYER,
     LanePosition,
@@ -56,7 +57,7 @@ class ZoneType(StrEnum):
 class Terrain:
     """Terrain appearance for the buildable map."""
 
-    grass_color: str = "#78b85a"
+    grass_color: str = Palette.TERRAIN_GRASS
     trees: list[tuple[float, float]] = field(default_factory=list)
 
     @classmethod
@@ -129,6 +130,7 @@ class CityMap:
     parcels: list[Parcel] = field(default_factory=list)
     buildings: list[Building] = field(default_factory=list)
     mobility: MobilityNetwork = field(default_factory=MobilityNetwork, init=False, repr=False)
+    mobility_revision: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.rebuild_mobility_network()
@@ -542,6 +544,7 @@ class CityMap:
         for intersection in self.intersections:
             intersection.rebuild_lane_connections(INTERSECTION_SNAP_DISTANCE)
         self._rebuild_vehicle_layer()
+        self.mobility_revision += 1
 
     def _rebuild_vehicle_layer(self) -> None:
         self.mobility.set_layer(
