@@ -27,7 +27,7 @@ from roundabouts import validate_roundabout_dimensions
 
 
 WORLD_FORMAT = "lanesimulator.world"
-WORLD_VERSION = 6
+WORLD_VERSION = 7
 
 
 class WorldFormatError(ValueError):
@@ -161,7 +161,7 @@ def world_from_dict(data: object) -> LoadedWorld:
     if root.get("format") != WORLD_FORMAT:
         raise WorldFormatError("This is not a city-builder world save.")
     version = root.get("version")
-    if version not in (4, 5, WORLD_VERSION):
+    if version not in (4, 5, 6, WORLD_VERSION):
         raise WorldFormatError(f"Unsupported world-save version: {root.get('version')!r}.")
 
     world = _mapping(root.get("world"), "world")
@@ -496,6 +496,10 @@ def _buildable_state_to_dict(buildable: Buildable) -> dict[str, Any]:
         "condition": buildable.condition,
         "inventory": dict(buildable.inventory.amounts),
         "construction_needs": dict(buildable.construction_needs),
+        "construction_workers": buildable.construction_workers,
+        "construction_work": buildable.construction_work,
+        "assigned_workers": buildable.assigned_workers,
+        "construction_delivered": dict(buildable.construction_delivered),
         "active_work": None if work is None else {
             "kind": work.kind.value,
             "required_work": work.required_work,
@@ -533,6 +537,37 @@ def _buildable_state_from_dict(value: object, path: str) -> dict[str, Any]:
             raise WorldFormatError(f"{path}.construction_needs.{resource} must be positive.")
         needs[resource] = amount
 
+    construction_workers = _nonnegative_int(
+        state.get("construction_workers", 0), f"{path}.construction_workers",
+    )
+    construction_work = _number(
+        state.get("construction_work", 0.0), f"{path}.construction_work",
+    )
+    if construction_work < 0:
+        raise WorldFormatError(f"{path}.construction_work cannot be negative.")
+    assigned_workers = _nonnegative_int(
+        state.get("assigned_workers", 0), f"{path}.assigned_workers",
+    )
+    if assigned_workers > construction_workers:
+        raise WorldFormatError(
+            f"{path}.assigned_workers cannot exceed construction_workers."
+        )
+    raw_delivered = _mapping(
+        state.get("construction_delivered", {}), f"{path}.construction_delivered",
+    )
+    construction_delivered: dict[str, float] = {}
+    for raw_resource, raw_amount in raw_delivered.items():
+        resource = _string(raw_resource, f"{path}.construction_delivered resource")
+        amount = _number(
+            raw_amount, f"{path}.construction_delivered.{resource}",
+        )
+        if amount < 0 or amount > needs.get(resource, 0.0):
+            raise WorldFormatError(
+                f"{path}.construction_delivered.{resource} must fit its construction need."
+            )
+        if amount > 0:
+            construction_delivered[resource] = amount
+
     raw_work = state.get("active_work")
     work: WorkOrder | None = None
     if raw_work is not None:
@@ -564,6 +599,10 @@ def _buildable_state_from_dict(value: object, path: str) -> dict[str, Any]:
         "condition": condition,
         "inventory": ResourceInventory(inventory),
         "construction_needs": needs,
+        "construction_workers": construction_workers,
+        "construction_work": construction_work,
+        "assigned_workers": assigned_workers,
+        "construction_delivered": construction_delivered,
         "active_work": work,
     }
 
@@ -573,6 +612,10 @@ def _apply_buildable_state(buildable: Buildable, state: dict[str, Any]) -> None:
     buildable.condition = state["condition"]
     buildable.inventory = state["inventory"]
     buildable.construction_needs = state["construction_needs"]
+    buildable.construction_workers = state["construction_workers"]
+    buildable.construction_work = state["construction_work"]
+    buildable.assigned_workers = state["assigned_workers"]
+    buildable.construction_delivered = state["construction_delivered"]
     buildable.active_work = state["active_work"]
 
 
