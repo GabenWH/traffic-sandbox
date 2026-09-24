@@ -8,10 +8,15 @@ import unittest
 from city import CityMap, Terrain, ZoneType
 from persistence import world_from_dict, world_to_dict
 from ui.interactions import InteractionMixin
-from ui_tools.buildables import BuildableCatalogError, buildables_of_kind, load_buildables
+from ui_tools.buildables import (
+    BUILDABLES_PATH,
+    BuildableCatalogError,
+    buildables_of_kind,
+    load_buildables,
+)
 from ui_tools.tools.road_tool import BuildingTool
 from ui_tools.tools.inspect_tool import deliver_building_resource
-from models import WorkType
+from models import BuildablePhase, WorkType
 
 
 class BuildablesTests(unittest.TestCase):
@@ -21,6 +26,30 @@ class BuildablesTests(unittest.TestCase):
         self.assertIn("two_lane_street", {spec.id for spec in specs})
         self.assertIn("small_house", {spec.id for spec in specs})
         self.assertTrue(all(spec.description for spec in specs))
+        for spec in buildables_of_kind("building"):
+            self.assertGreater(spec.specs["construction_workers"], 0)
+            self.assertGreater(spec.specs["construction_work"], 0)
+
+    def test_building_requirements_must_have_positive_workers_and_finite_work(self) -> None:
+        for field, value in (
+            ("construction_workers", 0),
+            ("construction_workers", 1.5),
+            ("construction_work", 0),
+            ("construction_work", float("inf")),
+            ("construction_work", float("nan")),
+        ):
+            with self.subTest(field=field, value=value), TemporaryDirectory() as directory:
+                catalog = json.loads(BUILDABLES_PATH.read_text(encoding="utf-8"))
+                building = next(
+                    entry for entry in catalog["buildables"]
+                    if entry["kind"] == "building"
+                )
+                building["specs"][field] = value
+                path = Path(directory) / "buildables.json"
+                path.write_text(json.dumps(catalog), encoding="utf-8")
+
+                with self.assertRaisesRegex(BuildableCatalogError, field):
+                    load_buildables(path)
 
     def test_catalog_rejects_duplicate_ids(self) -> None:
         with TemporaryDirectory() as directory:
@@ -60,6 +89,12 @@ class BuildablesTests(unittest.TestCase):
 
         assert building is not None
         self.assertEqual(building.buildable_id, "corner_shop")
+        self.assertEqual(building.phase, BuildablePhase.UNDER_CONSTRUCTION)
+        self.assertIsNone(building.active_work)
+        self.assertEqual(building.construction_workers, 3)
+        self.assertEqual(building.construction_work, 450)
+        self.assertEqual(building.assigned_workers, 0)
+        self.assertEqual(building.construction_delivered, {})
         self.assertEqual(building.parcel.zone, ZoneType.COMMERCIAL)
         self.assertEqual((building.jobs, building.residents), (8, 0))
         self.assertEqual((building.parcel.width, building.parcel.height), (54.0, 42.0))

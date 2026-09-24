@@ -46,7 +46,9 @@
         "residents": 4,
         "jobs": 0,
         "color": "#d9b38c",
-        "construction_needs": {"lumber": 20, "stone": 10}
+        "construction_needs": {"lumber": 20, "stone": 10},
+        "construction_workers": 2,
+        "construction_work": 180
       }
     },
     {
@@ -61,7 +63,9 @@
         "residents": 24,
         "jobs": 2,
         "color": "#c9936f",
-        "construction_needs": {"lumber": 80, "stone": 50, "steel": 20}
+        "construction_needs": {"lumber": 80, "stone": 50, "steel": 20},
+        "construction_workers": 4,
+        "construction_work": 960
       }
     },
     {
@@ -76,7 +80,9 @@
         "residents": 0,
         "jobs": 8,
         "color": "#70a8c9",
-        "construction_needs": {"lumber": 60, "stone": 40, "steel": 15}
+        "construction_needs": {"lumber": 60, "stone": 40, "steel": 15},
+        "construction_workers": 3,
+        "construction_work": 450
       }
     },
     {
@@ -91,7 +97,9 @@
         "residents": 0,
         "jobs": 60,
         "color": "#658aa8",
-        "construction_needs": {"lumber": 150, "stone": 120, "steel": 100}
+        "construction_needs": {"lumber": 150, "stone": 120, "steel": 100},
+        "construction_workers": 6,
+        "construction_work": 2400
       }
     },
     {
@@ -106,7 +114,9 @@
         "residents": 0,
         "jobs": 45,
         "color": "#8b8580",
-        "construction_needs": {"stone": 180, "steel": 160}
+        "construction_needs": {"stone": 180, "steel": 160},
+        "construction_workers": 6,
+        "construction_work": 3600
       }
     }
   ]

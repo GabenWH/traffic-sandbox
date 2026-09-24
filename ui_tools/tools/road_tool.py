@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from city import Building, Parcel, ZoneType
+from models import BuildablePhase
 from ..buildables import BuildableSpec, buildables_of_kind
 from ..buildables_panel import BuildablesPanel
 from ..base import CanvasTool
@@ -292,6 +293,9 @@ class BuildingTool(CanvasTool):
             buildable_id=self.selected_spec.id,
             color=str(details["color"]),
             construction_needs=dict(details.get("construction_needs", {})),
+            construction_workers=int(details["construction_workers"]),
+            construction_work=float(details["construction_work"]),
+            phase=BuildablePhase.UNDER_CONSTRUCTION,
         )
         self.host.city_map.parcels.append(parcel)
         self.host.city_map.buildings.append(building)

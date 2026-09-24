@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 from typing import Literal
 
@@ -111,6 +112,12 @@ def _validate_road_specs(specs: dict[str, object], path: str) -> None:
 def _validate_building_specs(specs: dict[str, object], path: str) -> None:
     specs["width"] = _positive_number(specs.get("width"), f"{path}.specs.width")
     specs["height"] = _positive_number(specs.get("height"), f"{path}.specs.height")
+    specs["construction_workers"] = _positive_int(
+        specs.get("construction_workers"), f"{path}.specs.construction_workers"
+    )
+    specs["construction_work"] = _positive_finite_number(
+        specs.get("construction_work"), f"{path}.specs.construction_work"
+    )
     specs["residents"] = _nonnegative_int(
         specs.get("residents", 0), f"{path}.specs.residents"
     )
@@ -148,6 +155,23 @@ def _positive_number(value: object, path: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
         raise BuildableCatalogError(f"{path} must be a positive number")
     return float(value)
+
+
+def _positive_finite_number(value: object, path: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not isfinite(value)
+        or value <= 0
+    ):
+        raise BuildableCatalogError(f"{path} must be a positive finite number")
+    return float(value)
+
+
+def _positive_int(value: object, path: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise BuildableCatalogError(f"{path} must be a positive integer")
+    return value
 
 
 def _nonnegative_int(value: object, path: str) -> int:

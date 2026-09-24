@@ -39,6 +39,24 @@ class BuildableLifecycleTests(unittest.TestCase):
         self.assertEqual(inventory.consume("concrete", 1), (ConsumptionState.FAILED, 0.0))
         self.assertNotIn("concrete", inventory.amounts)
 
+    def test_construction_delivery_tracks_cumulative_quantity_without_overdelivery(self) -> None:
+        building = Building(
+            "Test building",
+            Parcel(0, 0, 20, 20),
+            construction_needs={"lumber": 10},
+        )
+
+        building.record_construction_delivery("lumber", 5)
+
+        self.assertEqual(building.inventory.amounts, {"lumber": 5.0})
+        self.assertEqual(building.construction_delivered, {"lumber": 5.0})
+        with self.assertRaisesRegex(ValueError, "outstanding need"):
+            building.record_construction_delivery("steel", 1)
+        with self.assertRaisesRegex(ValueError, "outstanding need"):
+            building.record_construction_delivery("lumber", 5.01)
+        self.assertEqual(building.inventory.amounts, {"lumber": 5.0})
+        self.assertEqual(building.construction_delivered, {"lumber": 5.0})
+
     def test_work_orders_drive_lifecycle_without_conflating_maintenance(self) -> None:
         building = Building("Test building", Parcel(0, 0, 20, 20))
         building.begin_work(WorkType.CONSTRUCTION, 10)

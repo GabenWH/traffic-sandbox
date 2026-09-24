@@ -149,12 +149,29 @@ class Buildable(CityObject):
     phase: BuildablePhase = BuildablePhase.PLANNING
     inventory: ResourceInventory = field(default_factory=ResourceInventory)
     construction_needs: dict[str, float] = field(default_factory=dict)
+    construction_workers: int = 0
+    construction_work: float = 0.0
+    assigned_workers: int = 0
+    construction_delivered: dict[str, float] = field(default_factory=dict)
     condition: float = 1.0
     active_work: WorkOrder | None = None
 
     def add_resource(self, resource: str, amount: float) -> None:
         """Add a delivered resource to this buildable's local inventory."""
         self.inventory.add(resource, amount)
+
+    def record_construction_delivery(self, resource_id: str, amount: float) -> None:
+        """Record a material shipment in both inventory and cumulative demand."""
+        remaining = (
+            self.construction_needs.get(resource_id, 0.0)
+            - self.construction_delivered.get(resource_id, 0.0)
+        )
+        if amount <= 0 or amount > remaining:
+            raise ValueError("Construction delivery must fit the outstanding need")
+        self.add_resource(resource_id, amount)
+        self.construction_delivered[resource_id] = (
+            self.construction_delivered.get(resource_id, 0.0) + amount
+        )
 
     def consume_resource(self, resource: str, amount: float) -> tuple[ConsumptionState, float]:
         """Consume as much of a requested resource as is locally available."""
