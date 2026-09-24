@@ -10,7 +10,17 @@ from typing import Any, Literal
 
 from city import Building
 from config import MAX_SPEED_PREFERENCE_MPH, MIN_SPEED_PREFERENCE_MPH
-from models import Car, CityObject, Intersection, IntersectionKind, Lane, Road, SpeedLimit, WorkType
+from models import (
+    BuildablePhase,
+    Car,
+    CityObject,
+    Intersection,
+    IntersectionKind,
+    Lane,
+    Road,
+    SpeedLimit,
+    WorkType,
+)
 from roundabouts import island_radius, outer_band_width, ring_radius, validate_roundabout_dimensions
 from traffic_testbed import RoutedTestCar
 from units import (
@@ -323,12 +333,14 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
                 "Construction workers",
                 f"{selected.assigned_workers} / {selected.construction_workers} assigned",
             ))
-            work = (
-                selected.active_work.completed_work
-                if selected.active_work is not None
+            work = 0.0
+            if (
+                selected.active_work is not None
                 and selected.active_work.kind is WorkType.CONSTRUCTION
-                else 0.0
-            )
+            ):
+                work = selected.active_work.completed_work
+            elif selected.phase is BuildablePhase.OPERATIONAL:
+                work = selected.construction_work
             rows.append(InspectionRow(
                 "Construction work",
                 f"{work:g} / {selected.construction_work:g} worker-seconds",

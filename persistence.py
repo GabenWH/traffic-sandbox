@@ -428,6 +428,7 @@ def world_from_dict(data: object) -> LoadedWorld:
         parcel_by_id[parcel_id] = parcel
 
     building_ids: set[str] = set()
+    legacy_templates: dict[str, Any] | None = None
     for building_index, raw_building in enumerate(_list(world.get("buildings"), "world.buildings")):
         path = f"world.buildings[{building_index}]"
         building_data = _mapping(raw_building, path)
@@ -440,21 +441,35 @@ def world_from_dict(data: object) -> LoadedWorld:
             parcel = parcel_by_id[parcel_id]
         except KeyError as error:
             raise WorldFormatError(f"{path} refers to unknown parcel {parcel_id!r}.") from error
+        buildable_id = (
+            None
+            if building_data.get("buildable_id") is None
+            else _string(building_data.get("buildable_id"), f"{path}.buildable_id")
+        )
+        buildable_state = _buildable_state_from_dict(
+            building_data.get("buildable_state"), f"{path}.buildable_state",
+        )
+        if version < WORLD_VERSION and buildable_id is not None:
+            if legacy_templates is None:
+                from ui_tools.buildables import load_buildables
+
+                legacy_templates = {
+                    spec.id: spec for spec in load_buildables()
+                    if spec.kind == "building"
+                }
+            _migrate_legacy_building_state(
+                buildable_state,
+                legacy_templates.get(buildable_id),
+            )
         city_map.buildings.append(Building(
             name=_string(building_data.get("name"), f"{path}.name"),
             parcel=parcel,
             residents=_nonnegative_int(building_data.get("residents"), f"{path}.residents"),
             jobs=_nonnegative_int(building_data.get("jobs"), f"{path}.jobs"),
-            buildable_id=(
-                None
-                if building_data.get("buildable_id") is None
-                else _string(building_data.get("buildable_id"), f"{path}.buildable_id")
-            ),
+            buildable_id=buildable_id,
             color=_string(building_data.get("color", "#8b8580"), f"{path}.color"),
             id=building_id,
-            **_buildable_state_from_dict(
-                building_data.get("buildable_state"), f"{path}.buildable_state"
-            ),
+            **buildable_state,
         ))
 
     view = _mapping(root.get("view", {}), "view")
@@ -617,6 +632,51 @@ def _apply_buildable_state(buildable: Buildable, state: dict[str, Any]) -> None:
     buildable.assigned_workers = state["assigned_workers"]
     buildable.construction_delivered = state["construction_delivered"]
     buildable.active_work = state["active_work"]
+
+
+def _migrate_legacy_building_state(
+    state: dict[str, Any],
+    template: Any | None,
+) -> None:
+    """Restore pre-v7 construction requirements from the saved building template."""
+    if template is None:
+        return
+    work = state["active_work"]
+    active_construction = (
+        work is not None and work.kind is WorkType.CONSTRUCTION
+    )
+    phase = state["phase"]
+    needs = state["construction_needs"]
+    if (
+        phase is not BuildablePhase.UNDER_CONSTRUCTION
+        and not active_construction
+        and not (phase is BuildablePhase.OPERATIONAL and needs)
+    ):
+        return
+
+    if not needs and (phase is BuildablePhase.UNDER_CONSTRUCTION or active_construction):
+        needs = dict(template.specs.get("construction_needs", {}))
+        state["construction_needs"] = needs
+    state["construction_workers"] = int(template.specs["construction_workers"])
+    state["construction_work"] = (
+        work.required_work if active_construction
+        else float(template.specs["construction_work"])
+    )
+
+    if phase is BuildablePhase.OPERATIONAL or active_construction:
+        state["construction_delivered"] = dict(needs)
+        state["assigned_workers"] = (
+            state["construction_workers"] if active_construction else 0
+        )
+        return
+
+    inventory = state["inventory"].amounts
+    state["construction_delivered"] = {
+        resource_id: delivered
+        for resource_id, required in needs.items()
+        if (delivered := min(required, inventory.get(resource_id, 0.0))) > 0
+    }
+    state["assigned_workers"] = 0
 
 
 def _port_reference(

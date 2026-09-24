@@ -133,6 +133,94 @@ class ConstructionPersistenceTests(unittest.TestCase):
                 self.assertEqual(loaded.buildings[0].assigned_workers, 0)
                 self.assertEqual(loaded.buildings[0].construction_delivered, {})
 
+    def test_legacy_small_house_save_recovers_template_needs_and_delivery_state(self) -> None:
+        city = CityMap(width=900, height=500, terrain=Terrain(trees=[]))
+        city.add_road([(0, 100), (800, 100)])
+        partial = Building(
+            "Small house",
+            Parcel(150, 112, 40, 30),
+            buildable_id="small_house",
+            phase=BuildablePhase.UNDER_CONSTRUCTION,
+            construction_needs={"lumber": 20, "stone": 10},
+        )
+        partial.add_resource("lumber", 7)
+        active = Building(
+            "Small house",
+            Parcel(300, 112, 40, 30),
+            buildable_id="small_house",
+            phase=BuildablePhase.UNDER_CONSTRUCTION,
+            construction_needs={"lumber": 20, "stone": 10},
+        )
+        active.record_construction_delivery("lumber", 20)
+        active.record_construction_delivery("stone", 10)
+        active.assigned_workers = 2
+        active.begin_work(WorkType.CONSTRUCTION, 180)
+        active.perform_work(30)
+        city.parcels.extend([partial.parcel, active.parcel])
+        city.buildings.extend([partial, active])
+        encoded = world_to_dict(
+            city, unit_system="imperial", camera_x=0, camera_y=0, camera_zoom=1,
+        )
+        encoded["version"] = 6
+        for building_data in encoded["world"]["buildings"]:
+            state = building_data["buildable_state"]
+            for key in (
+                "construction_workers",
+                "construction_work",
+                "assigned_workers",
+                "construction_delivered",
+            ):
+                state.pop(key, None)
+
+        loaded = world_from_dict(encoded).city_map
+        loaded_partial, loaded_active = loaded.buildings
+
+        self.assertEqual(loaded_partial.construction_workers, 2)
+        self.assertEqual(loaded_partial.construction_work, 180)
+        self.assertEqual(loaded_partial.construction_delivered, {"lumber": 7.0})
+        self.assertEqual(loaded_partial.assigned_workers, 0)
+        self.assertEqual(loaded_active.construction_delivered, {"lumber": 20.0, "stone": 10.0})
+        self.assertEqual(loaded_active.assigned_workers, 2)
+        self.assertEqual(loaded_active.construction_work, 180)
+
+        resources, trucks = load_construction_catalog()
+        simulation = ConstructionSimulation(
+            resources, trucks, UnlimitedConstructionProvider(), truck_speed=1000,
+        )
+        simulation.update(loaded, 0.5)
+
+        partial_trips = [
+            trip for trip in simulation.trips if trip.building_id == loaded_partial.id
+        ]
+        active_trips = [
+            trip for trip in simulation.trips if trip.building_id == loaded_active.id
+        ]
+        self.assertEqual(
+            sum(
+                trip.payload.amount for trip in partial_trips
+                if isinstance(trip.payload, MaterialPayload)
+                and trip.payload.resource_id == "lumber"
+            ),
+            13,
+        )
+        self.assertEqual(
+            sum(
+                trip.payload.amount for trip in partial_trips
+                if isinstance(trip.payload, MaterialPayload)
+                and trip.payload.resource_id == "stone"
+            ),
+            10,
+        )
+        self.assertEqual(
+            sum(
+                trip.payload.workers for trip in partial_trips
+                if isinstance(trip.payload, CrewPayload)
+            ),
+            2,
+        )
+        self.assertEqual(active_trips, [])
+        self.assertEqual(loaded_active.active_work.completed_work, 31)
+
     def test_invalid_saved_construction_worker_and_delivery_values_are_rejected(self) -> None:
         city, _partial, _active = self._partial_and_active_city()
         encoded = world_to_dict(

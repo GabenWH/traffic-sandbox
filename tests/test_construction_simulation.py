@@ -135,6 +135,35 @@ class ConstructionSimulationTests(unittest.TestCase):
         self.assertEqual(building.construction_delivered["stone"], required)
         self.assertEqual(building.active_work.kind, WorkType.CONSTRUCTION)
 
+    def test_ulp_scale_delivery_remainder_is_reconciled_before_work_starts(self) -> None:
+        required = 976.2551293378144
+        max_load = 45.4766762331217
+        building = Building(
+            "Project",
+            Parcel(120, 112, 50, 30),
+            phase=BuildablePhase.UNDER_CONSTRUCTION,
+            construction_needs={"stone": required},
+            construction_workers=1,
+            construction_work=1,
+        )
+        self.city.buildings.append(building)
+        simulation = ConstructionSimulation(
+            {"stone": ResourceSpec("stone", "Stone", "t", 1, 1)},
+            {
+                "material": TruckSpec("material", max_load, max_load, 0, 18, 8),
+                "crew": TruckSpec("crew", 0, 0, 1, 20, 8),
+            },
+            UnlimitedConstructionProvider(),
+            truck_speed=1000,
+        )
+
+        simulation.update(self.city, 0)
+        simulation.update(self.city, 1)
+
+        self.assertEqual(building.construction_delivered, {"stone": required})
+        self.assertEqual(building.phase, BuildablePhase.UNDER_CONSTRUCTION)
+        self.assertEqual(building.active_work.kind, WorkType.CONSTRUCTION)
+
     def test_demand_retries_after_west_gate_connects_to_building_road(self) -> None:
         city = CityMap(width=600, height=300, terrain=Terrain(trees=[]))
         disconnected = city.add_road([(250, 100), (400, 100)])

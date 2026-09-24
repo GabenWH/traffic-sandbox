@@ -181,6 +181,7 @@ class ConstructionSimulation:
         self.truck_speed = float(truck_speed)
         self.trips: list[ConstructionTrip] = []
         self._city_map: CityMap | None = None
+        self._material_delivery_counts: dict[tuple[str, str], int] = {}
 
     def update(
         self,
@@ -296,18 +297,53 @@ class ConstructionSimulation:
                 trip.payload.resource_id,
                 trip.payload.amount,
             )
+            key = (building.id, trip.payload.resource_id)
+            self._material_delivery_counts[key] = (
+                self._material_delivery_counts.get(key, 0) + 1
+            )
         else:
             building.assigned_workers += trip.payload.workers
 
     def _materials_complete(self, building: Building) -> bool:
-        return all(
-            building.construction_delivered.get(resource_id, 0.0) >= required
-            for resource_id, required in building.construction_needs.items()
+        for resource_id, required in building.construction_needs.items():
+            delivered = building.construction_delivered.get(resource_id, 0.0)
+            if delivered >= required:
+                continue
+            remaining = required - delivered
+            if (
+                remaining > self._material_rounding_tolerance(
+                    building.id, resource_id, required,
+                )
+                or self._in_transit_material(building.id, resource_id) > 0
+            ):
+                return False
+            inventory = building.inventory.amounts.get(resource_id, 0.0)
+            if inventory < required:
+                building.inventory.add(resource_id, required - inventory)
+            building.construction_delivered[resource_id] = required
+        return True
+
+    def _material_rounding_tolerance(
+        self,
+        building_id: str,
+        resource_id: str,
+        required: float,
+    ) -> float:
+        transit_count = sum(
+            trip.building_id == building_id
+            and isinstance(trip.payload, MaterialPayload)
+            and trip.payload.resource_id == resource_id
+            for trip in self.trips
         )
+        delivery_count = self._material_delivery_counts.get(
+            (building_id, resource_id), 0,
+        )
+        return ulp(required) * max(4, transit_count + delivery_count + 2)
 
     def clear_trips(self) -> None:
         """Discard runtime trips when the current city is replaced."""
         self.trips.clear()
+        self._material_delivery_counts.clear()
 
     def _dispatch_materials(self, city_map: CityMap) -> None:
         material_trucks = [
@@ -350,7 +386,9 @@ class ConstructionSimulation:
                         - building.construction_delivered.get(resource_id, 0.0)
                         - self._in_transit_material(building.id, resource_id)
                     )
-                    rounding_tolerance = ulp(required) * max(4, len(self.trips) + 2)
+                    rounding_tolerance = self._material_rounding_tolerance(
+                        building.id, resource_id, required,
+                    )
                     if remaining <= rounding_tolerance:
                         break
                     available = self.provider.available_material(resource_id)

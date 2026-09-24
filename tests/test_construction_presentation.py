@@ -67,6 +67,11 @@ class ConstructionPresentationTests(unittest.TestCase):
         )
         self.assertEqual(rows_by_label["Construction workers"].value, "2 / 2 assigned")
         self.assertEqual(rows_by_label["Construction work"].value, "25 / 100 worker-seconds")
+        building.perform_work(75)
+        building.assigned_workers = 0
+        _title, rows = inspection_rows(host, building)
+        rows_by_label = {row.label: row for row in rows}
+        self.assertEqual(rows_by_label["Construction work"].value, "100 / 100 worker-seconds")
 
     def test_under_construction_building_has_a_distinct_outline(self) -> None:
         class Canvas:
