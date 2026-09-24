@@ -3,6 +3,7 @@
 import importlib.util
 import unittest
 from math import hypot
+from types import SimpleNamespace
 
 from models import Road
 
@@ -94,6 +95,7 @@ class Scene3DTests(unittest.TestCase):
         from ui.view3d import PandaWorldView
 
         view = PandaWorldView.__new__(PandaWorldView)
+        view.base = SimpleNamespace(setBackgroundColor=lambda *_color: None)
         view.city = None
         view.orbit = type("Orbit", (), {"target": (0, 0, 0)})()
         view.scene = SceneRegistry(NodePath("city"))

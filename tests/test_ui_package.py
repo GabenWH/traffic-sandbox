@@ -259,6 +259,7 @@ class UIPackageTests(unittest.TestCase):
         junction.kind = IntersectionKind.ROUNDABOUT
         host.city_map.rebuild_mobility_network()
 
+        host._draw_ground_work()
         host._draw_junction_surfaces()
 
         circles = {
@@ -276,6 +277,7 @@ class UIPackageTests(unittest.TestCase):
         host.city_map.rebuild_mobility_network()
 
         host.canvas.ovals.clear()
+        host._draw_ground_work()
         host._draw_junction_surfaces()
 
         circles = {

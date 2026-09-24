@@ -48,6 +48,7 @@ class CrossViewOrientationTests(unittest.TestCase):
         view = PandaWorldView.__new__(PandaWorldView)
         view.base = SimpleNamespace(
             win=object(), render=render, camera=camera, camLens=lens,
+            setBackgroundColor=lambda *_color: None,
         )
         view.orbit = OrbitCamera(
             (width / 2, height / 2, 0), yaw=90, pitch=90, distance=1000,
