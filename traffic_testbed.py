@@ -690,12 +690,34 @@ class RoadVehicleSimulation:
                     self.elapsed_time + distance / max(car.speed, 1.0),
                 )
 
+        intent_phase_seconds = {
+            "intent_route_lookup": 0.0,
+            "intent_control_state": 0.0,
+            "intent_merge_observation": 0.0,
+            "intent_priority_query": 0.0,
+            "intent_exit_gap": 0.0,
+            "intent_chain_check": 0.0,
+            "intent_leader_lookup": 0.0,
+            "intent_speed_target": 0.0,
+            "intent_brain_decision": 0.0,
+            "intent_packaging": 0.0,
+        }
+
+        # Start the timed per-car pass. It collects decisions but does not
+        # apply any car's movement; that happens after all intents are built.
         observed_at = perf_counter()
         frame_car_count = len(cars)
         intents: list[TrafficIntent] = []
         for car in cars:
+            # Find this car's next route step and next controlled crossing or merge.
+            phase_started = perf_counter()
             route_movement = _next_route_movement(car)
             movement = _next_controlled_movement(car, self.stop_coordinator)
+            intent_phase_seconds["intent_route_lookup"] += perf_counter() - phase_started
+
+            # Capture existing coordinator state and whether the car is already
+            # inside one of the crossings it controls.
+            phase_started = perf_counter()
             has_claim = (
                 movement is not None
                 and self.stop_coordinator.has_claim(car.id, movement[2])
@@ -706,27 +728,47 @@ class RoadVehicleSimulation:
                 and car.distance - car.length / 2 < end
                 for start, end, connection in car.controlled_movements
             )
+
+            # Measure the remaining distance to the stop line only when the car
+            # still needs permission to enter.
             distance_to_stop = (
                 max(0.0, movement[0] - car.length / 2 - car.distance)
                 if movement is not None and not has_claim
                 else None
             )
+            intent_phase_seconds["intent_control_state"] += perf_counter() - phase_started
+
+            # Observe merge traffic and ask the shared coordinator whether this
+            # car may claim the crossing or enter the merge.
+            phase_started = perf_counter()
             is_merge = movement is not None and movement[2].merge_target is not None
             merge_observation = observe_merge(car, movement, cars) if is_merge else None
+            intent_phase_seconds["intent_merge_observation"] += perf_counter() - phase_started
+
+            phase_started = perf_counter()
             priority = movement is not None and (
                 self.stop_coordinator.can_enter_merge(car.id, movement[2])
                 if is_merge
                 else self.stop_coordinator.can_claim(car.id, movement[2])
             )
             priority_reason = "waiting for intersection priority"
+            intent_phase_seconds["intent_priority_query"] += perf_counter() - phase_started
+
             if movement is not None and not has_claim and not is_merge:
+                # A clear junction is not enough if the exit is queued. Also
+                # check a closely spaced next movement so the car does not enter
+                # a short link it cannot clear safely.
+                phase_started = perf_counter()
                 exit_gap = self.occupancy.gap_from(
                     car, movement[1], TEST_CAR_LOOKAHEAD,
                 )
+                intent_phase_seconds["intent_exit_gap"] += perf_counter() - phase_started
                 if (exit_gap is not None
                         and exit_gap < TEST_CAR_FOLLOWING_GAP + car.length / 2):
                     priority = False
                     priority_reason = "waiting for room beyond the junction"
+
+                phase_started = perf_counter()
                 chain_end = movement[1]
                 for following in car.controlled_movements:
                     if following[0] < movement[1]:
@@ -749,9 +791,17 @@ class RoadVehicleSimulation:
                             )
                             break
                     chain_end = following[1]
+                intent_phase_seconds["intent_chain_check"] += perf_counter() - phase_started
+
+            # Observe the immediate leader and calculate the speed target. A car
+            # already in a merge keeps the speed cap chosen at merge entry.
+            phase_started = perf_counter()
             lead = self.occupancy.lead_car_gap(car, TEST_CAR_LOOKAHEAD)
             lead_car = lead[0] if lead is not None else None
             lead_distance = lead[1] if lead is not None else None
+            intent_phase_seconds["intent_leader_lookup"] += perf_counter() - phase_started
+
+            phase_started = perf_counter()
             cruise_speed = _route_cruise_speed(car, self.speed_mph)
             for active in car.controlled_movements:
                 if (active[2].merge_target is not None
@@ -760,6 +810,11 @@ class RoadVehicleSimulation:
                         and car.distance - car.length / 2 < active[1]
                         and car._merge_entry_speed is not None):
                     cruise_speed = min(cruise_speed, car._merge_entry_speed)
+            intent_phase_seconds["intent_speed_target"] += perf_counter() - phase_started
+
+            # Give the brain a snapshot of traffic, controls, route position,
+            # priority, and deadlock status; it returns a proposed decision.
+            phase_started = perf_counter()
             decision = car.brain.decide(
                 CarObservation(
                     cruise_speed=cruise_speed,
@@ -796,6 +851,12 @@ class RoadVehicleSimulation:
                 ),
                 elapsed_seconds,
             )
+            intent_phase_seconds["intent_brain_decision"] += perf_counter() - phase_started
+
+            # Keep the car's starting state and proposed decision together.
+            # Conflict resolution consumes this complete set after every car
+            # has produced an intent.
+            phase_started = perf_counter()
             intents.append(TrafficIntent(
                 car=car,
                 distance_before=car.distance,
@@ -811,7 +872,13 @@ class RoadVehicleSimulation:
                 lead_distance=lead_distance,
                 decision=decision,
             ))
+            intent_phase_seconds["intent_packaging"] += perf_counter() - phase_started
+        # End of intent_generation; coordinator arbitration starts below.
         intents_at = perf_counter()
+        intent_phase_timings_ms = {
+            name: seconds * 1000.0
+            for name, seconds in intent_phase_seconds.items()
+        }
 
         # Resolve every request against the same collected intent set. Stable
         # priority order makes arbitration independent of the mutable car list.
@@ -948,6 +1015,7 @@ class RoadVehicleSimulation:
             "snapshot": (snapshot_at - occupancy_started) * 1000,
             "observe": (observed_at - snapshot_at) * 1000,
             "intent_generation": (intents_at - observed_at) * 1000,
+            **intent_phase_timings_ms,
             "conflict_resolution": (resolved_at - intents_at) * 1000,
             "movement_apply": (applied_at - resolved_at) * 1000,
             "occupancy_rebuild": (occupancy_at - applied_at) * 1000,
