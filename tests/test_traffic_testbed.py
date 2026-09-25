@@ -132,12 +132,39 @@ class TrafficTestbedTests(unittest.TestCase):
             "snapshot",
             "observe",
             "intent_generation",
+            "intent_route_lookup",
+            "intent_control_state",
+            "intent_merge_observation",
+            "intent_priority_query",
+            "intent_exit_gap",
+            "intent_chain_check",
+            "intent_leader_lookup",
+            "intent_speed_target",
+            "intent_brain_decision",
+            "intent_packaging",
             "conflict_resolution",
             "movement_apply",
             "occupancy_rebuild",
             "post_update",
             "total",
         }.issubset(sample.timings_ms))
+        intent_subphases = (
+            "intent_route_lookup",
+            "intent_control_state",
+            "intent_merge_observation",
+            "intent_priority_query",
+            "intent_exit_gap",
+            "intent_chain_check",
+            "intent_leader_lookup",
+            "intent_speed_target",
+            "intent_brain_decision",
+            "intent_packaging",
+        )
+        self.assertTrue(all(sample.timings_ms[name] >= 0 for name in intent_subphases))
+        self.assertLessEqual(
+            sum(sample.timings_ms[name] for name in intent_subphases),
+            sample.timings_ms["intent_generation"] + 0.01,
+        )
         self.assertNotIn("decision", sample.timings_ms)
 
     def test_canvas_tool_click_toggles_the_clicked_junction(self) -> None:
