@@ -13,6 +13,7 @@ from car_brain import CarBrain, CarDecision, CarObservation
 from intersection_controls import AllWayStopCoordinator
 from merge_behavior import observe_merge, MERGE_STRATEGIES
 from soft_deadlock import DeadlockCandidate, SoftDeadlockResolver, merge_space_clear
+from simulation_profiler import SimulationProfiler
 from mobility import (
     LaneTraversal,
     MobilityLink,
@@ -152,6 +153,9 @@ class RoadVehicleSimulation:
     # Optional recorder.  It observes completed decisions; it never feeds a
     # decision back into the traffic model.
     debugger: TrafficDebugger | None = field(default=None, repr=False)
+    profiler: SimulationProfiler = field(
+        default_factory=SimulationProfiler, repr=False,
+    )
     deadlock_resolver: SoftDeadlockResolver = field(
         default_factory=SoftDeadlockResolver, repr=False,
     )
@@ -304,7 +308,7 @@ class RoadVehicleSimulation:
                 completed.extend(self.update(city_map, step))
                 remaining -= step
             return completed
-        frame_started = perf_counter() if self.debugger is not None else 0.0
+        frame_started = perf_counter()
         if self.debugger is not None:
             self.debugger.begin_frame()
         self.elapsed_time += elapsed_seconds
@@ -329,7 +333,7 @@ class RoadVehicleSimulation:
                 for destination in destinations:
                     if self.spawn_car(city_map, source, destination) is not None:
                         break
-        spawned_at = perf_counter() if self.debugger is not None else 0.0
+        spawned_at = perf_counter()
 
         if self.update_mode == "data_first":
             return self._update_data_first(
@@ -386,7 +390,7 @@ class RoadVehicleSimulation:
             elif movement[2].merge_target is None and distance <= TEST_CAR_LOOKAHEAD:
                 self.stop_coordinator.observe_approach(
                     car.id, movement[2], self.elapsed_time + distance / max(car.speed, 1.0))
-        observed_at = perf_counter() if self.debugger is not None else 0.0
+        observed_at = perf_counter()
         # This is the number that was actually considered this frame.  A car
         # finishing later in the frame is still present in its trace record.
         frame_car_count = len(self.cars)
@@ -586,8 +590,20 @@ class RoadVehicleSimulation:
                 or any(car.id == self.deadlock_resolver.winner_id for car in completed)
             ),
         )
+        finished_at = perf_counter()
+        self.profiler.record_tick(
+            system="routed_traffic",
+            simulated_time=self.elapsed_time,
+            elapsed_seconds=elapsed_seconds,
+            entity_counts={"cars": frame_car_count},
+            timings_ms={
+                "spawn": (spawned_at - frame_started) * 1000,
+                "observe": (observed_at - spawned_at) * 1000,
+                "legacy_update": (finished_at - observed_at) * 1000,
+                "total": (finished_at - frame_started) * 1000,
+            },
+        )
         if self.debugger is not None:
-            finished_at = perf_counter()
             self.debugger.end_frame(
                 simulated_time=self.elapsed_time,
                 elapsed_seconds=elapsed_seconds,
@@ -619,13 +635,13 @@ class RoadVehicleSimulation:
         spawned_at: float,
     ) -> list[RoutedRoadVehicle]:
         """Advance one frame as snapshot -> intents -> resolve -> batch apply."""
-        occupancy_started = perf_counter() if self.debugger is not None else 0.0
+        occupancy_started = perf_counter()
         self.occupancy.rebuild(self.cars)
-        snapshot_at = perf_counter() if self.debugger is not None else 0.0
         cars = tuple(sorted(self.cars, key=lambda car: car.id))
 
         for car in cars:
             car.cruise_speed_bound = _route_cruise_speed(car, self.speed_mph)
+        snapshot_at = perf_counter()
 
         deadlock_candidates = []
         for car in cars:
@@ -674,7 +690,7 @@ class RoadVehicleSimulation:
                     self.elapsed_time + distance / max(car.speed, 1.0),
                 )
 
-        observed_at = perf_counter() if self.debugger is not None else 0.0
+        observed_at = perf_counter()
         frame_car_count = len(cars)
         intents: list[TrafficIntent] = []
         for car in cars:
@@ -795,7 +811,7 @@ class RoadVehicleSimulation:
                 lead_distance=lead_distance,
                 decision=decision,
             ))
-        intents_at = perf_counter() if self.debugger is not None else 0.0
+        intents_at = perf_counter()
 
         # Resolve every request against the same collected intent set. Stable
         # priority order makes arbitration independent of the mutable car list.
@@ -845,7 +861,7 @@ class RoadVehicleSimulation:
                 intent, has_claim=has_claim, decision=decision,
             )
         resolved = [by_id[intent.car.id] for intent in intents]
-        resolved_at = perf_counter() if self.debugger is not None else 0.0
+        resolved_at = perf_counter()
 
         next_speeds: dict[str, float] = {}
         planned_travel: dict[str, float] = {}
@@ -896,7 +912,7 @@ class RoadVehicleSimulation:
                 temporary_winner_entered = True
             if not alive:
                 completed.append(car)
-        applied_at = perf_counter() if self.debugger is not None else 0.0
+        applied_at = perf_counter()
 
         # Claims and occupancy change only after the full position batch lands.
         for intent in resolved:
@@ -913,7 +929,7 @@ class RoadVehicleSimulation:
             self.stop_coordinator.forget_car(car.id)
             self.cars.remove(car)
         self.occupancy.rebuild(self.cars)
-        occupancy_at = perf_counter() if self.debugger is not None else 0.0
+        occupancy_at = perf_counter()
 
         stopped_count = sum(car.speed <= 0.1 for car in self.cars)
         traffic_is_flowing = bool(self.cars) and stopped_count < 0.8 * len(self.cars)
@@ -925,6 +941,25 @@ class RoadVehicleSimulation:
                 temporary_winner_entered
                 or any(car.id == self.deadlock_resolver.winner_id for car in completed)
             ),
+        )
+        finished_at = perf_counter()
+        profiler_timings = {
+            "spawn": (spawned_at - frame_started) * 1000,
+            "snapshot": (snapshot_at - occupancy_started) * 1000,
+            "observe": (observed_at - snapshot_at) * 1000,
+            "intent_generation": (intents_at - observed_at) * 1000,
+            "conflict_resolution": (resolved_at - intents_at) * 1000,
+            "movement_apply": (applied_at - resolved_at) * 1000,
+            "occupancy_rebuild": (occupancy_at - applied_at) * 1000,
+            "post_update": (finished_at - occupancy_at) * 1000,
+            "total": (finished_at - frame_started) * 1000,
+        }
+        self.profiler.record_tick(
+            system="routed_traffic",
+            simulated_time=self.elapsed_time,
+            elapsed_seconds=elapsed_seconds,
+            entity_counts={"cars": frame_car_count},
+            timings_ms=profiler_timings,
         )
         if self.debugger is not None:
             for intent in resolved:
@@ -943,7 +978,6 @@ class RoadVehicleSimulation:
                     ),
                     merge_observation=intent.merge_observation,
                 )
-            finished_at = perf_counter()
             self.debugger.end_frame(
                 simulated_time=self.elapsed_time,
                 elapsed_seconds=elapsed_seconds,

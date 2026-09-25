@@ -63,6 +63,45 @@ class FileActionsMixin:
                 f'<text x="60" y="355">Average {speed_unit(self.unit_system)}</text></svg>'
             )
 
+    def export_simulation_profile_json(self) -> None:
+        path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json")],
+            title="Export simulation profile as JSON",
+            parent=self.simulation_performance_window or self.root,
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as output:
+                json.dump(self.test_traffic.profiler.as_dict(), output, indent=2)
+                output.write("\n")
+        except OSError as error:
+            messagebox.showerror(
+                "Export simulation profile",
+                f"Could not write the JSON profile:\n{error}",
+                parent=self.simulation_performance_window or self.root,
+            )
+
+    def export_simulation_profile_csv(self) -> None:
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV", "*.csv")],
+            title="Export simulation profile as CSV",
+            parent=self.simulation_performance_window or self.root,
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as output:
+                output.write(self.test_traffic.profiler.to_csv())
+        except OSError as error:
+            messagebox.showerror(
+                "Export simulation profile",
+                f"Could not write the CSV profile:\n{error}",
+                parent=self.simulation_performance_window or self.root,
+            )
+
     def save_state(self) -> None:
         path = filedialog.asksaveasfilename(
             initialdir="saves",
