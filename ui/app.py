@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from city import CityMap
 from config import DEFAULT_UNIT_SYSTEM, HEIGHT, WIDTH
 from simulation import TrafficSimulation
+from simulation_profiler import SimulationTickSample
 from traffic_testbed import TestTrafficSimulation
 from traffic_debugger import TrafficDebugger
 from ui_tools import CanvasTool, CanvasToolDropdown, ToolbarTool, load_toolbar_tools
@@ -71,6 +72,21 @@ class FreewaySimulator(
         self.analytics_canvas: tk.Canvas | None = None
         self.performance_window: tk.Toplevel | None = None
         self.performance_canvas: tk.Canvas | None = None
+        self.simulation_performance_window: tk.Toplevel | None = None
+        self.simulation_performance_system_var: tk.StringVar | None = None
+        self.simulation_performance_system_menu: tk.OptionMenu | None = None
+        self.simulation_performance_block_list: tk.Listbox | None = None
+        self.simulation_performance_canvas: tk.Canvas | None = None
+        self.simulation_performance_summary: tk.Label | None = None
+        self.simulation_performance_tick_details: tk.Label | None = None
+        self.simulation_performance_block_names: tuple[str, ...] = ()
+        self.simulation_performance_selected_tick: int | None = None
+        self.simulation_performance_selected_sample: SimulationTickSample | None = None
+        self.simulation_performance_visible_samples: tuple[SimulationTickSample, ...] = ()
+        self.simulation_performance_visible_bounds: tuple[
+            float, float, float, float,
+        ] | None = None
+        self.simulation_performance_system = ""
         self.recent_window: tk.Toplevel | None = None
         self.recent_canvas: tk.Canvas | None = None
         self.debug_window: tk.Toplevel | None = None
@@ -356,5 +372,6 @@ class FreewaySimulator(
             self.last_dashboard_refresh = now
         if now - self.last_performance_refresh >= PERFORMANCE_REFRESH_SECONDS:
             self.draw_performance_graph()
+            self.draw_simulation_performance_graph()
             self.last_performance_refresh = now
         self.root.after(16, self.tick)

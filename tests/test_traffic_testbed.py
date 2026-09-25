@@ -111,6 +111,35 @@ class TrafficTestbedTests(unittest.TestCase):
         self.assertEqual(traffic.cars, [])
         self.assertEqual(car.position, car.points[-1])
 
+    def test_data_first_profiler_records_each_internal_tick_without_debugger(self) -> None:
+        traffic = TrafficTestbed(
+            spawn_interval=1000.0,
+            rng=random.Random(41),
+            debugger=None,
+            update_mode="data_first",
+        )
+        self.assertIsNotNone(traffic.spawn_car(self.city, self.west, self.east))
+
+        traffic.update(self.city, 0.12)
+
+        self.assertEqual(len(traffic.profiler.samples), 3)
+        sample = traffic.profiler.samples[-1]
+        self.assertEqual(sample.system, "routed_traffic")
+        self.assertEqual(sample.entity_counts["cars"], 1)
+        self.assertAlmostEqual(sample.elapsed_seconds, 0.02)
+        self.assertTrue({
+            "spawn",
+            "snapshot",
+            "observe",
+            "intent_generation",
+            "conflict_resolution",
+            "movement_apply",
+            "occupancy_rebuild",
+            "post_update",
+            "total",
+        }.issubset(sample.timings_ms))
+        self.assertNotIn("decision", sample.timings_ms)
+
     def test_canvas_tool_click_toggles_the_clicked_junction(self) -> None:
         traffic = TrafficTestbed(rng=random.Random(5))
 
