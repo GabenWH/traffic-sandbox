@@ -628,12 +628,18 @@ class TestTrafficSimulation:
                     self.elapsed_time + distance / max(car.speed, 1.0),
                 )
 
+        # Start the timed per-car pass. It collects decisions but does not
+        # apply any car's movement; that happens after all intents are built.
         observed_at = perf_counter()
         frame_car_count = len(cars)
         intents: list[TrafficIntent] = []
         for car in cars:
+            # Find this car's next route step and next controlled crossing or merge.
             route_movement = _next_route_movement(car)
             movement = _next_controlled_movement(car, self.stop_coordinator)
+
+            # Capture existing coordinator state and whether the car is already
+            # inside one of the crossings it controls.
             has_claim = (
                 movement is not None
                 and self.stop_coordinator.has_claim(car.id, movement[2])
@@ -644,11 +650,17 @@ class TestTrafficSimulation:
                 and car.distance - car.length / 2 < end
                 for start, end, connection in car.controlled_movements
             )
+
+            # Measure the remaining distance to the stop line only when the car
+            # still needs permission to enter.
             distance_to_stop = (
                 max(0.0, movement[0] - car.length / 2 - car.distance)
                 if movement is not None and not has_claim
                 else None
             )
+
+            # Observe merge traffic and ask the shared coordinator whether this
+            # car may claim the crossing or enter the merge.
             is_merge = movement is not None and movement[2].merge_target is not None
             merge_observation = observe_merge(car, movement, cars) if is_merge else None
             priority = movement is not None and (
@@ -658,6 +670,9 @@ class TestTrafficSimulation:
             )
             priority_reason = "waiting for intersection priority"
             if movement is not None and not has_claim and not is_merge:
+                # A clear junction is not enough if the exit is queued. Also
+                # check a closely spaced next movement so the car does not enter
+                # a short link it cannot clear safely.
                 exit_gap = self.occupancy.gap_from(
                     car, movement[1], TEST_CAR_LOOKAHEAD,
                 )
@@ -687,6 +702,9 @@ class TestTrafficSimulation:
                             )
                             break
                     chain_end = following[1]
+
+            # Observe the immediate leader and calculate the speed target. A car
+            # already in a merge keeps the speed cap chosen at merge entry.
             lead = self.occupancy.lead_car_gap(car, TEST_CAR_LOOKAHEAD)
             lead_car = lead[0] if lead is not None else None
             lead_distance = lead[1] if lead is not None else None
@@ -698,6 +716,9 @@ class TestTrafficSimulation:
                         and car.distance - car.length / 2 < active[1]
                         and car._merge_entry_speed is not None):
                     cruise_speed = min(cruise_speed, car._merge_entry_speed)
+
+            # Give the brain a snapshot of traffic, controls, route position,
+            # priority, and deadlock status; it returns a proposed decision.
             decision = car.brain.decide(
                 CarObservation(
                     cruise_speed=cruise_speed,
@@ -734,6 +755,10 @@ class TestTrafficSimulation:
                 ),
                 elapsed_seconds,
             )
+
+            # Keep the car's starting state and proposed decision together.
+            # Conflict resolution consumes this complete set after every car
+            # has produced an intent.
             intents.append(TrafficIntent(
                 car=car,
                 distance_before=car.distance,
@@ -749,6 +774,7 @@ class TestTrafficSimulation:
                 lead_distance=lead_distance,
                 decision=decision,
             ))
+        # End of intent_generation; coordinator arbitration starts below.
         intents_at = perf_counter()
 
         # Resolve every request against the same collected intent set. Stable
