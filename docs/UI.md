@@ -108,7 +108,13 @@ in the toolbar.
 **Simulation → Performance graph** shows UI-tick frame time and FPS for the
 most recent 20 seconds. Its samples use the raw interval between ticks, before
 the simulation update clamps large elapsed time for stability, so pauses and
-frame hitches remain visible in the graph.
+frame hitches remain visible in the graph. Click **Simulation profiler…** in
+that window to open a separate simulation-timing view. Choose one or more
+timing blocks to stack by tick, click a tick to inspect its phase timings and
+entity counts, and use Export JSON or Export CSV for the retained timing
+samples. The profiler keeps the latest 600 ticks; its mean, median, p95, p99,
+and maximum values describe that retained window. The UI frame graph and
+simulation phase graph measure different work.
 
 | Input | Handler | Result |
 | --- | --- | --- |
