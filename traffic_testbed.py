@@ -11,7 +11,7 @@ from time import perf_counter
 from city import CityMap
 from car_brain import CarBrain, CarDecision, CarObservation
 from intersection_controls import AllWayStopCoordinator
-from merge_behavior import observe_merge, MERGE_STRATEGIES
+from merge_behavior import observe_merge, MERGE_STRATEGIES, MergeTrafficSnapshot
 from soft_deadlock import DeadlockCandidate, SoftDeadlockResolver, merge_space_clear
 from simulation_profiler import SimulationProfiler
 from mobility import (
@@ -641,6 +641,9 @@ class RoadVehicleSimulation:
 
         for car in cars:
             car.cruise_speed_bound = _route_cruise_speed(car, self.speed_mph)
+        # Route positions stay fixed through observation and intent generation.
+        # Share merge facts across those passes, then discard before batch apply.
+        merge_snapshot = MergeTrafficSnapshot(cars)
         snapshot_at = perf_counter()
 
         deadlock_candidates = []
@@ -660,7 +663,7 @@ class RoadVehicleSimulation:
                 car.brain.wait_reason != "following queued car"
                 and _temporary_winner_path_clear(
                     car, movement, cars, self.occupancy,
-                    self.stop_coordinator,
+                    self.stop_coordinator, merge_snapshot,
                 ),
                 movement_id=movement[2].id,
             ))
@@ -742,7 +745,9 @@ class RoadVehicleSimulation:
             # car may claim the crossing or enter the merge.
             phase_started = perf_counter()
             is_merge = movement is not None and movement[2].merge_target is not None
-            merge_observation = observe_merge(car, movement, cars) if is_merge else None
+            merge_observation = observe_merge(
+                car, movement, cars, snapshot=merge_snapshot,
+            ) if is_merge else None
             intent_phase_seconds["intent_merge_observation"] += perf_counter() - phase_started
 
             phase_started = perf_counter()
@@ -777,7 +782,7 @@ class RoadVehicleSimulation:
                         break
                     if following[2].merge_target is not None:
                         opening = MERGE_STRATEGIES[car.brain.merge_style].decide(
-                            observe_merge(car, following, cars),
+                            observe_merge(car, following, cars, snapshot=merge_snapshot),
                             car.speed,
                             _route_cruise_speed(car, self.speed_mph),
                         )
@@ -1243,7 +1248,9 @@ def _signaled_maneuver(car, movement):
     return connection.maneuver.kind
 
 
-def _temporary_winner_path_clear(car, movement, cars, occupancy, coordinator):
+def _temporary_winner_path_clear(
+    car, movement, cars, occupancy, coordinator, merge_snapshot=None,
+):
     """Check physical space without re-applying conservative social gaps.
 
     A temporary winner may break a right-of-way tie, but it may not drive into
@@ -1260,7 +1267,7 @@ def _temporary_winner_path_clear(car, movement, cars, occupancy, coordinator):
     if exit_gap is not None and exit_gap < 4.0:
         return False
     if movement[2].merge_target is not None:
-        observation = observe_merge(car, movement, cars)
+        observation = observe_merge(car, movement, cars, snapshot=merge_snapshot)
         if observation is None or not merge_space_clear(
                 car.length, observation.vehicles, observation.reservations):
             return False
@@ -1280,7 +1287,7 @@ def _temporary_winner_path_clear(car, movement, cars, occupancy, coordinator):
         if following_exit is not None and following_exit < 4.0:
             return False
         if following[2].merge_target is not None:
-            observation = observe_merge(car, following, cars)
+            observation = observe_merge(car, following, cars, snapshot=merge_snapshot)
             if observation is None or not merge_space_clear(
                     car.length, observation.vehicles, observation.reservations):
                 return False

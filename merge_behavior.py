@@ -93,7 +93,47 @@ class MergeChoice:
     entry_speed: float | None = None
 
 
-def observe_merge(car, movement, cars):
+@dataclass(frozen=True)
+class _MergeRouteFacts:
+    waiting_intersections: frozenset[str]
+    upcoming_positions: dict[tuple[object, ...], float]
+    occupancy: tuple[tuple[object, ...], float] | None
+
+
+class MergeTrafficSnapshot:
+    """Reuse route facts only while the data-first tick's cars remain still.
+
+    Build each car's facts on its first merge query. Ordinary ticks with no
+    merges do not pay to walk every route. Never reuse this cache after movement
+    or in the legacy per-car update, where earlier cars have already moved.
+    """
+
+    def __init__(self, cars):
+        self.max_speed = max((car.speed for car in cars), default=0.0)
+        self._facts: dict[int, _MergeRouteFacts] = {}
+
+    def facts_for(self, car):
+        identity = id(car)
+        if identity not in self._facts:
+            upcoming = {}
+            for start, _, key, _ in car.route_segments:
+                if car.distance <= start:
+                    # Repeated visits to a lane must use the first future one,
+                    # exactly like the original route scan's first match.
+                    upcoming.setdefault(key, car.distance - start)
+            waiting = frozenset(
+                movement.intersection_id
+                for start, _, movement in car.controlled_movements
+                if movement.merge_target is not None
+                and car.distance + car.length / 2 < start
+            )
+            self._facts[identity] = _MergeRouteFacts(
+                waiting, upcoming, car.occupancy_position(),
+            )
+        return self._facts[identity]
+
+
+def observe_merge(car, movement, cars, *, snapshot=None):
     """Translate nearby traffic into distances along the joining lane.
 
     Through traffic approaching on a previous section gets a negative position.
@@ -108,7 +148,9 @@ def observe_merge(car, movement, cars):
     reservations = []
     # A fixed 180-foot window is adequate at roundabout speeds but too short
     # for a fast freeway. Scale the same observation query with traffic speed.
-    look_distance = max(MERGE_LOOKBACK, 8.0*max([car.speed, *(other.speed for other in cars)]))
+    max_speed = (max(car.speed, snapshot.max_speed) if snapshot is not None
+                 else max([car.speed, *(other.speed for other in cars)]))
+    look_distance = max(MERGE_LOOKBACK, 8.0 * max_speed)
     downstream = [(a, b, key, offset) for a, b, key, offset in car.route_segments
                   if a >= end - 1e-8 and a <= end + look_distance]
     for other in cars:
@@ -132,18 +174,23 @@ def observe_merge(car, movement, cars):
                         break
         # Waiting entrants must yield to through traffic, not to each other's
         # imagined future positions. Actual entry claims prevent double entry.
-        if any(m[2].intersection_id == connection.intersection_id
-               and m[2].merge_target is not None
-               and other.distance + other.length/2 < m[0]
-               for m in other.controlled_movements):
+        facts = snapshot.facts_for(other) if snapshot is not None else None
+        waiting = (connection.intersection_id in facts.waiting_intersections
+                   if facts is not None else any(
+                       m[2].intersection_id == connection.intersection_id
+                       and m[2].merge_target is not None
+                       and other.distance + other.length/2 < m[0]
+                       for m in other.controlled_movements))
+        if waiting:
             continue
-        position = None
-        for a, b, key, offset in other.route_segments:
-            if key == target and other.distance <= a:
-                position = other.distance - a
-                break
+        position = facts.upcoming_positions.get(target) if facts is not None else None
+        if facts is None:
+            for a, b, key, offset in other.route_segments:
+                if key == target and other.distance <= a:
+                    position = other.distance - a
+                    break
         if position is None:
-            occupancy = other.occupancy_position()
+            occupancy = facts.occupancy if facts is not None else other.occupancy_position()
             if occupancy is not None:
                 for a, b, key, offset in downstream:
                     if key == occupancy[0]:
