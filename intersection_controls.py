@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from math import atan2, pi
 from functools import lru_cache
@@ -150,6 +151,33 @@ def movements_conflict(a: LaneConnection, b: LaneConnection) -> bool:
     A shared destination is a merge, even when the drawn curves only meet at
     their last point. Eight feet covers two six-foot cars plus a small margin.
     """
+    group = a._conflict_group
+    if group is not None and group is b._conflict_group:
+        return a._conflict_row[b._conflict_index]
+    # Standalone movements and pairs spanning different network generations
+    # have no shared table; preserve the original geometric calculation.
+    return _calculate_movement_conflict(a, b)
+
+
+def cache_movement_conflicts(connections: Sequence[LaneConnection]) -> None:
+    """Compile one intersection's symmetric conflict table after road edits.
+
+    Rows live on the movements, so replacing a network also replaces its
+    cache. A fresh token prevents old routes from indexing a new table.
+    """
+    group = object()
+    rows = [[True] * len(connections) for _ in connections]
+    for i, a in enumerate(connections):
+        for j in range(i + 1, len(connections)):
+            conflict = _calculate_movement_conflict(a, connections[j])
+            rows[i][j] = rows[j][i] = conflict
+    for i, connection in enumerate(connections):
+        connection._conflict_group = group
+        connection._conflict_index = i
+        connection._conflict_row = tuple(rows[i])
+
+
+def _calculate_movement_conflict(a: LaneConnection, b: LaneConnection) -> bool:
     if a.intersection_id != b.intersection_id:
         return False
     if a.source_output == b.source_output or a.destination_input == b.destination_input:

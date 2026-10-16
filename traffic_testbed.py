@@ -28,7 +28,7 @@ from pathfinding import Path
 from traffic_occupancy import TrafficOccupancyIndex
 from traffic_debugger import TrafficDebugger
 from units import mph_to_pixels_per_second
-from vehicle import VehicleAppearance
+from vehicle import VehicleAppearance, vehicle_footprints_overlap
 
 
 TEST_CAR_SPEED_MPH = 25.0
@@ -147,6 +147,9 @@ class RoadVehicleSimulation:
     elapsed_time: float = 0.0
     _spawned_count: int = field(default=0, init=False, repr=False)
     _network_token: tuple[int, int] | None = field(default=None, init=False, repr=False)
+    _spawn_routes: dict[tuple[int, int], Path[MobilityNode, MobilityLink] | None] = field(
+        default_factory=dict, init=False, repr=False,
+    )
     occupancy: TrafficOccupancyIndex = field(
         default_factory=TrafficOccupancyIndex, repr=False,
     )
@@ -193,6 +196,7 @@ class RoadVehicleSimulation:
         if token == self._network_token:
             return False, []
         self._network_token = token
+        self._spawn_routes.clear()
         return True, self.clear_vehicles()
 
     def toggle_junction(self, junction: Intersection) -> bool:
@@ -217,13 +221,21 @@ class RoadVehicleSimulation:
         city_map: CityMap,
         source: Intersection,
         destination: Intersection,
+        *,
+        _occupancy: TrafficOccupancyIndex | None = None,
     ) -> RoutedRoadVehicle | None:
         """Spawn one car when a directed route exists between two junctions."""
+        self.sync_network(city_map)
         if source is destination or sum(
             car.source_type == "test_traffic" for car in self.cars
         ) >= self.max_cars:
             return None
-        route = city_map.find_vehicle_route_between(source, destination)
+        route_key = (id(source), id(destination))
+        if route_key not in self._spawn_routes:
+            self._spawn_routes[route_key] = city_map.find_vehicle_route_between(
+                source, destination,
+            )
+        route = self._spawn_routes[route_key]
         if route is None:
             return None
         existing_ids = {car.id for car in self.cars}
@@ -237,6 +249,7 @@ class RoadVehicleSimulation:
             vehicle_id=f"test-car-{next_spawn_id:06d}",
             color=self.rng.choice(self.colors),
             source_type="test_traffic",
+            _occupancy=_occupancy,
         )
         if car is None:
             return None
@@ -257,8 +270,13 @@ class RoadVehicleSimulation:
         width: float = 6.0,
         speed_cap_mph: float | None = None,
         color: str | None = None,
+        _occupancy: TrafficOccupancyIndex | None = None,
     ) -> RoutedRoadVehicle | None:
-        """Enter any routed vehicle if its first lane has room."""
+        """Enter a vehicle only when its whole body and forward gap are clear.
+
+        The generator supplies a shared, current occupancy index for its batch;
+        external admissions rebuild before checking their route clearance.
+        """
         if any(car.id == vehicle_id for car in self.cars):
             return None
         points = vehicle_route_points(route)
@@ -284,11 +302,23 @@ class RoadVehicleSimulation:
             width=width,
             id=vehicle_id,
         )
-        self.occupancy.rebuild(self.cars)
-        spawn_gap = self.occupancy.lead_gap(car, TEST_CAR_FOLLOWING_GAP + car.length)
+        # Route clearance only sees cars ahead on shared links. A vehicle just
+        # behind the insertion point, or crossing it on another link, can still
+        # intersect the new body. Check the actual rectangles before admission.
+        if any(vehicle_footprints_overlap(car, other) for other in self.cars):
+            return None
+        occupancy = _occupancy
+        if occupancy is None:
+            self.occupancy.rebuild(self.cars)
+            occupancy = self.occupancy
+        spawn_gap = occupancy.lead_gap(car, TEST_CAR_FOLLOWING_GAP + car.length)
         if spawn_gap is not None and spawn_gap < TEST_CAR_FOLLOWING_GAP:
             return None
         self.cars.append(car)
+        if _occupancy is not None:
+            # Include this admission in every remaining decision in the batch.
+            # Rejected candidates never need to rebuild the unchanged index.
+            occupancy.rebuild(self.cars)
         return car
 
     def update(self, city_map: CityMap, elapsed_seconds: float) -> list[RoutedRoadVehicle]:
@@ -323,15 +353,29 @@ class RoadVehicleSimulation:
 
         junctions = self.active_junctions(city_map)
         if len(junctions) >= 2:
+            available_slots = self.max_cars - sum(
+                car.source_type == "test_traffic" for car in self.cars
+            )
+            spawn_occupancy = None
             for source in junctions:
                 self._spawn_elapsed[source.id] += elapsed_seconds
                 if self._spawn_elapsed[source.id] < self.spawn_interval:
                     continue
                 self._spawn_elapsed[source.id] %= self.spawn_interval
+                # Keep seeded destination choices stable while capped, even
+                # though no admissions or route searches are needed.
                 destinations = [item for item in junctions if item is not source]
                 self.rng.shuffle(destinations)
+                if available_slots <= 0:
+                    continue
+                if spawn_occupancy is None:
+                    self.occupancy.rebuild(self.cars)
+                    spawn_occupancy = self.occupancy
                 for destination in destinations:
-                    if self.spawn_car(city_map, source, destination) is not None:
+                    if self.spawn_car(
+                        city_map, source, destination, _occupancy=spawn_occupancy,
+                    ) is not None:
+                        available_slots -= 1
                         break
         spawned_at = perf_counter()
 
