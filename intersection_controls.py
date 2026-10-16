@@ -37,12 +37,16 @@ class AllWayStopCoordinator:
         """
         self.arrivals.setdefault(car_id, StopArrival(car_id, connection, arrival_time))
 
+    def retain_arrivals(self, eligible: dict[str, LaneConnection]) -> None:
+        """Drop queue followers and distant approaches without releasing claims."""
+        for car_id, arrival in tuple(self.arrivals.items()):
+            if eligible.get(car_id) is not arrival.connection:
+                self.arrivals.pop(car_id, None)
+
     def _blocked_by_claim(self, car_id, connection):
         return any(
             owner != car_id and claimed.intersection_id == connection.intersection_id
-            and (connection.control.kind is ControlType.STOP
-                 or claimed.control.kind is ControlType.STOP
-                 or movements_conflict(connection, claimed))
+            and movements_conflict(connection, claimed)
             for (owner, _), claimed in self.claims.items()
         )
 
@@ -55,8 +59,10 @@ class AllWayStopCoordinator:
         waiting = [item for item in self.arrivals.values()
                    if item.connection.intersection_id == connection.intersection_id]
         if connection.control.kind is ControlType.STOP:
-            # Preserve the original, deliberately conservative all-way stop.
-            return min(waiting, key=self._priority_key).car_id == car_id
+            # Independent paths may enter together after completing their stop.
+            conflicting = (item for item in waiting
+                           if movements_conflict(connection, item.connection))
+            return min(conflicting, key=self._priority_key).car_id == car_id
         # Build everyone's "I must yield to this driver" relationships. Looking
         # only at our own conflicts misses a four-way cycle: opposite straight
         # paths are compatible, yet each driver still waits for one on the right.
@@ -77,6 +83,15 @@ class AllWayStopCoordinator:
             # its claim still blocks conflicting traffic until its rear clears.
             return min(waiting, key=self._priority_key).car_id == car_id
         return False
+
+    def can_approach(self, car_id: str, connection: LaneConnection) -> bool:
+        """Keep rolling toward a clear junction without joining its queue."""
+        return not self._blocked_by_claim(car_id, connection) and not any(
+            item.car_id != car_id
+            and item.connection.intersection_id == connection.intersection_id
+            and movements_conflict(connection, item.connection)
+            for item in self.arrivals.values()
+        )
 
     def can_enter_merge(self, car_id, connection):
         """Only protect against another car physically using this entrance.

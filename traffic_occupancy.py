@@ -62,6 +62,27 @@ class TrafficOccupancyIndex:
                 if occupancy is not None:
                     self._sections[occupancy[0]].append(OccupancyEntry(car, occupancy[1]))
 
+            # A committed entrant can protrude into circulating traffic before
+            # its nose reaches the canonical joining lane. Make that real body
+            # visible on the target's ruler; uncommitted yield traffic must not
+            # create an imaginary obstacle on the ring.
+            claimed = getattr(car, "claimed_movement", None)
+            target = getattr(claimed, "merge_target", None)
+            if target is None:
+                continue
+            entry = next(((start, end) for start, end, connection
+                          in getattr(car, "controlled_movements", ())
+                          if connection is claimed), None)
+            front = car.distance + car.length / 2
+            if entry is None or front < entry[0]:
+                continue
+            for start, _, key, offset in segments:
+                if (key == target and abs(start - entry[1]) < 1e-8
+                        and start - SECTION_CLEARANCE <= front < start):
+                    self._sections[key].append(OccupancyEntry(
+                        car, offset + car.distance - start,
+                    ))
+
     def _same_link_gap(self, car: OccupancyCar, lookahead: float) -> float | None:
         """Return nearest forward bumper gap on the car's current link."""
         occupancy = car.occupancy_position()

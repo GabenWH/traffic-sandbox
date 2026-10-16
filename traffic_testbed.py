@@ -393,6 +393,9 @@ class RoadVehicleSimulation:
             # A queued circulating car may accelerate back to its road speed.
             # Its current speed alone is not a safe prediction of future travel.
             car.cruise_speed_bound = _route_cruise_speed(car, self.speed_mph)
+        priority_contenders = _observe_priority_arrivals(
+            self.cars, self.stop_coordinator, self.elapsed_time,
+        )
         deadlock_candidates = []
         for car in self.cars:
             is_waiting = (
@@ -407,7 +410,9 @@ class RoadVehicleSimulation:
                 continue
             deadlock_candidates.append(DeadlockCandidate(
                 car.id,
-                car.brain.wait_reason != "following queued car"
+                (movement[2].merge_target is not None
+                 or car.id in priority_contenders)
+                and car.brain.wait_reason != "following queued car"
                 and _temporary_winner_path_clear(
                     car, movement, self.cars, self.occupancy,
                     self.stop_coordinator,
@@ -416,24 +421,6 @@ class RoadVehicleSimulation:
             ))
         deadlock_candidates = tuple(deadlock_candidates)
         temporary_winner = self.deadlock_resolver.choose_winner(deadlock_candidates)
-        for car in self.cars:
-            movement = _next_controlled_movement(car, self.stop_coordinator)
-            if (movement is not None and movement[2].merge_target is not None
-                    and car.distance + car.length/2 < movement[0]
-                    and self.stop_coordinator.has_claim(car.id, movement[2])):
-                # A reservation made while approaching is not a permanent
-                # ticket. Recheck the gap if we have not physically entered yet.
-                self.stop_coordinator.release(car.id, movement[2])
-                car._claimed_movement = None
-            if movement is None or self.stop_coordinator.has_claim(car.id, movement[2]):
-                continue
-            distance = max(0.0, movement[0] - car.length / 2 - car.distance)
-            if movement[2].control.kind is ControlType.STOP:
-                if distance <= 0.05 and car.speed <= 0.1:
-                    self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
-            elif movement[2].merge_target is None and distance <= TEST_CAR_LOOKAHEAD:
-                self.stop_coordinator.observe_approach(
-                    car.id, movement[2], self.elapsed_time + distance / max(car.speed, 1.0))
         observed_at = perf_counter()
         # This is the number that was actually considered this frame.  A car
         # finishing later in the frame is still present in its trace record.
@@ -461,13 +448,11 @@ class RoadVehicleSimulation:
                 if movement is not None and not has_claim
                 else None
             )
-            if movement is not None and movement[2].control.kind is ControlType.STOP and distance_to_stop is not None and distance_to_stop <= 0.05 and car.speed <= 0.1:
-                self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
             is_merge = movement is not None and movement[2].merge_target is not None
             merge_observation = observe_merge(car, movement, self.cars) if is_merge else None
-            priority = movement is not None and (
-                self.stop_coordinator.can_enter_merge(car.id, movement[2]) if is_merge
-                else self.stop_coordinator.can_claim(car.id, movement[2]))
+            priority = _intersection_priority(
+                car, movement, distance_to_stop, self.stop_coordinator,
+            )
             priority_reason = "waiting for intersection priority"
             if movement is not None and not has_claim and not is_merge:
                 # Reserve enough space for our whole car beyond the movement.
@@ -545,10 +530,11 @@ class RoadVehicleSimulation:
             if self.debugger is not None:
                 decision_seconds += perf_counter() - decision_started
             resolution_started = perf_counter() if self.debugger is not None else 0.0
-            if decision.register_stop and movement is not None:
+            if decision.register_stop and movement is not None and car.id in priority_contenders:
                 self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
             if (decision.request_claim and movement is not None
-                    and (distance_to_stop or 0) <= max(10.0, car.speed * 0.6)):
+                    and (is_merge or car.id in priority_contenders)
+                    and (distance_to_stop or 0) <= _entry_claim_distance(car.speed)):
                 # Claim only near entry; a car far up the road should not reserve
                 # an empty junction for several seconds while it approaches.
                 if car.id == temporary_winner:
@@ -690,6 +676,9 @@ class RoadVehicleSimulation:
         merge_snapshot = MergeTrafficSnapshot(cars)
         snapshot_at = perf_counter()
 
+        priority_contenders = _observe_priority_arrivals(
+            cars, self.stop_coordinator, self.elapsed_time,
+        )
         deadlock_candidates = []
         for car in cars:
             is_waiting = (
@@ -704,7 +693,9 @@ class RoadVehicleSimulation:
                 continue
             deadlock_candidates.append(DeadlockCandidate(
                 car.id,
-                car.brain.wait_reason != "following queued car"
+                (movement[2].merge_target is not None
+                 or car.id in priority_contenders)
+                and car.brain.wait_reason != "following queued car"
                 and _temporary_winner_path_clear(
                     car, movement, cars, self.occupancy,
                     self.stop_coordinator, merge_snapshot,
@@ -713,29 +704,6 @@ class RoadVehicleSimulation:
             ))
         deadlock_candidates = tuple(deadlock_candidates)
         temporary_winner = self.deadlock_resolver.choose_winner(deadlock_candidates)
-
-        # Update shared arrival facts before asking any brain for a decision.
-        for car in cars:
-            movement = _next_controlled_movement(car, self.stop_coordinator)
-            if (movement is not None and movement[2].merge_target is not None
-                    and car.distance + car.length / 2 < movement[0]
-                    and self.stop_coordinator.has_claim(car.id, movement[2])):
-                self.stop_coordinator.release(car.id, movement[2])
-                car._claimed_movement = None
-            if movement is None or self.stop_coordinator.has_claim(car.id, movement[2]):
-                continue
-            distance = max(0.0, movement[0] - car.length / 2 - car.distance)
-            if movement[2].control.kind is ControlType.STOP:
-                if distance <= 0.05 and car.speed <= 0.1:
-                    self.stop_coordinator.observe_stop(
-                        car.id, movement[2], self.elapsed_time,
-                    )
-            elif movement[2].merge_target is None and distance <= TEST_CAR_LOOKAHEAD:
-                self.stop_coordinator.observe_approach(
-                    car.id,
-                    movement[2],
-                    self.elapsed_time + distance / max(car.speed, 1.0),
-                )
 
         intent_phase_seconds = {
             "intent_route_lookup": 0.0,
@@ -795,10 +763,8 @@ class RoadVehicleSimulation:
             intent_phase_seconds["intent_merge_observation"] += perf_counter() - phase_started
 
             phase_started = perf_counter()
-            priority = movement is not None and (
-                self.stop_coordinator.can_enter_merge(car.id, movement[2])
-                if is_merge
-                else self.stop_coordinator.can_claim(car.id, movement[2])
+            priority = _intersection_priority(
+                car, movement, distance_to_stop, self.stop_coordinator,
             )
             priority_reason = "waiting for intersection priority"
             intent_phase_seconds["intent_priority_query"] += perf_counter() - phase_started
@@ -932,7 +898,8 @@ class RoadVehicleSimulation:
         # Resolve every request against the same collected intent set. Stable
         # priority order makes arbitration independent of the mutable car list.
         for intent in intents:
-            if intent.decision.register_stop and intent.movement is not None:
+            if (intent.decision.register_stop and intent.movement is not None
+                    and intent.car.id in priority_contenders):
                 self.stop_coordinator.observe_stop(
                     intent.car.id, intent.movement[2], self.elapsed_time,
                 )
@@ -951,8 +918,9 @@ class RoadVehicleSimulation:
             decision = intent.decision
             has_claim = intent.has_claim
             if (decision.request_claim and movement is not None
+                    and (intent.is_merge or intent.car.id in priority_contenders)
                     and (intent.distance_to_stop or 0.0)
-                    <= max(10.0, intent.speed_before * 0.6)):
+                    <= _entry_claim_distance(intent.speed_before)):
                 if intent.car.id == temporary_winner:
                     has_claim = self.stop_coordinator.claim_temporary_winner(
                         intent.car.id, movement[2],
@@ -1224,6 +1192,83 @@ def _route_occupancy_segments(
         result.append((distance_along, distance_along + length, key, offset))
         distance_along += length
     return tuple(result)
+
+
+def _entry_claim_distance(speed: float) -> float:
+    """Include a rolling lead vehicle before its nose can enter the junction."""
+    return max(10.0, speed * 0.6)
+
+
+def _intersection_priority(car, movement, distance_to_stop, coordinator) -> bool:
+    if movement is None:
+        return False
+    connection = movement[2]
+    if connection.merge_target is not None:
+        return coordinator.can_enter_merge(car.id, connection)
+    if (connection.control.kind is not ControlType.STOP
+            and distance_to_stop is not None
+            and distance_to_stop > _entry_claim_distance(car.speed)):
+        return coordinator.can_approach(car.id, connection)
+    return coordinator.can_claim(car.id, connection)
+
+
+def _observe_priority_arrivals(cars, coordinator, elapsed_time) -> set[str]:
+    """Register only the entry-ready front vehicle of each incoming lane.
+
+    Route distance to the entry compares cars with different route origins.
+    The shared incoming lane key also groups different turn intentions that
+    are physically queued behind one another. Active claims are kept until
+    the existing rear-clearance rule releases them.
+    """
+    heads = {}
+    for car in cars:
+        movement = _next_controlled_movement(car, coordinator)
+        if movement is None:
+            continue
+        start, _, connection = movement
+        if connection.merge_target is not None:
+            if (coordinator.has_claim(car.id, connection)
+                    and car.distance + car.length / 2 < start):
+                coordinator.release(car.id, connection)
+                car._claimed_movement = None
+        connector_start = start - connection.control_offset
+        incoming = next((key for _, end, key, _ in reversed(car.route_segments)
+                         if end <= connector_start + 1e-8
+                         and key[0] in ("lane", "road_port")), None)
+        if incoming is None:
+            incoming = ("road_output", connection.source_output.id)
+        key = (connection.intersection_id, incoming)
+        distance = connector_start - car.length / 2 - car.distance
+        previous = heads.get(key)
+        if previous is None or (distance, car.id) < (previous[2], previous[0].id):
+            heads[key] = (car, movement, distance)
+
+    ready = []
+    for car, movement, _ in heads.values():
+        distance = max(0.0, movement[0] - car.length / 2 - car.distance)
+        connection = movement[2]
+        if connection.merge_target is not None:
+            continue
+        if not coordinator.has_claim(car.id, connection):
+            if distance > _entry_claim_distance(car.speed):
+                continue
+            if (connection.control.kind is ControlType.STOP
+                    and (distance > 0.05 or car.speed > 0.1)):
+                continue
+        ready.append((car, connection, distance))
+    eligible = {car.id: connection for car, connection, _ in ready
+                if not coordinator.has_claim(car.id, connection)}
+    coordinator.retain_arrivals(eligible)
+    for car, connection, distance in ready:
+        if car.id not in eligible:
+            continue
+        if connection.control.kind is ControlType.STOP:
+            coordinator.observe_stop(car.id, connection, elapsed_time)
+        else:
+            coordinator.observe_approach(
+                car.id, connection, elapsed_time + distance / max(car.speed, 1.0),
+            )
+    return {car.id for car, _, _ in ready}
 
 
 def _next_controlled_movement(
