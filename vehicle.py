@@ -60,3 +60,25 @@ class Vehicle(Protocol):
 
     @property
     def appearance(self) -> VehicleAppearance: ...
+
+
+def vehicle_footprints_overlap(first: Vehicle, second: Vehicle) -> bool:
+    """Check oriented vehicle bodies on all four separating rectangle axes."""
+    dx = second.position[0] - first.position[0]
+    dy = second.position[1] - first.position[1]
+    ahx, ahy = first.heading
+    bhx, bhy = second.heading
+    for hx, hy in (first.heading, second.heading):
+        for ax, ay in ((hx, hy), (-hy, hx)):
+            separation = abs(dx * ax + dy * ay)
+            first_radius = (
+                abs(ahx * ax + ahy * ay) * first.length / 2
+                + abs(-ahy * ax + ahx * ay) * first.width / 2
+            )
+            second_radius = (
+                abs(bhx * ax + bhy * ay) * second.length / 2
+                + abs(-bhy * ax + bhx * ay) * second.width / 2
+            )
+            if separation >= first_radius + second_radius - 0.01:
+                return False
+    return True

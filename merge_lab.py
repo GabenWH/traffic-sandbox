@@ -24,6 +24,7 @@ from models import IntersectionKind
 from persistence import world_from_dict
 from traffic_debugger import FrameTrace, TrafficDebugger
 from traffic_testbed import RoutedTestCar, TestTrafficSimulation
+from vehicle import vehicle_footprints_overlap as _cars_overlap
 
 
 ROOT = Path(__file__).resolve().parent
@@ -441,20 +442,6 @@ def _timing_summary(frames: tuple[FrameTrace, ...]) -> dict[str, float]:
         name: round(sum(frame.timings_ms.get(name, 0.0) for frame in frames) / len(frames), 4)
         for name in sorted(names)
     }
-
-
-def _cars_overlap(a: RoutedTestCar, b: RoutedTestCar) -> bool:
-    """Separating-axis rectangle check; nearby lanes alone are not a collision."""
-    for heading in (a.heading, b.heading):
-        for axis in (heading, (-heading[1], heading[0])):
-            separation = abs(sum((b.position[k] - a.position[k]) * axis[k] for k in (0, 1)))
-            def radius(car: RoutedTestCar) -> float:
-                along = abs(sum(car.heading[k] * axis[k] for k in (0, 1)))
-                across = abs(-car.heading[1] * axis[0] + car.heading[0] * axis[1])
-                return along * car.length / 2 + across * car.width / 2
-            if separation >= radius(a) + radius(b) - 0.01:
-                return False
-    return True
 
 
 def _overlapping_pairs(

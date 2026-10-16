@@ -213,6 +213,19 @@ def build_vehicle_layer(
                 connection.length,
                 MobilityLink("lane_connection", connection),
             )
+
+    # Include the actual routing connectors, including generated roundabout
+    # entries/exits, rather than the roundabout's unused direct movements.
+    from intersection_controls import cache_movement_conflicts
+
+    movements: dict[str, list[LaneConnection]] = {}
+    for node in layer.graph.nodes:
+        for transition in layer.graph.transitions_from(node):
+            if transition.edge.kind == "lane_connection":
+                connection = transition.edge.value
+                movements.setdefault(connection.intersection_id, []).append(connection)
+    for connections in movements.values():
+        cache_movement_conflicts(connections)
     return layer
 
 

@@ -11,7 +11,7 @@ from time import perf_counter
 from city import CityMap
 from car_brain import CarBrain, CarDecision, CarObservation
 from intersection_controls import AllWayStopCoordinator
-from merge_behavior import observe_merge, MERGE_STRATEGIES
+from merge_behavior import observe_merge, MERGE_STRATEGIES, MergeTrafficSnapshot
 from soft_deadlock import DeadlockCandidate, SoftDeadlockResolver, merge_space_clear
 from simulation_profiler import SimulationProfiler
 from mobility import (
@@ -28,7 +28,7 @@ from pathfinding import Path
 from traffic_occupancy import TrafficOccupancyIndex
 from traffic_debugger import TrafficDebugger
 from units import mph_to_pixels_per_second
-from vehicle import VehicleAppearance
+from vehicle import VehicleAppearance, vehicle_footprints_overlap
 
 
 TEST_CAR_SPEED_MPH = 25.0
@@ -147,6 +147,9 @@ class RoadVehicleSimulation:
     elapsed_time: float = 0.0
     _spawned_count: int = field(default=0, init=False, repr=False)
     _network_token: tuple[int, int] | None = field(default=None, init=False, repr=False)
+    _spawn_routes: dict[tuple[int, int], Path[MobilityNode, MobilityLink] | None] = field(
+        default_factory=dict, init=False, repr=False,
+    )
     occupancy: TrafficOccupancyIndex = field(
         default_factory=TrafficOccupancyIndex, repr=False,
     )
@@ -193,6 +196,7 @@ class RoadVehicleSimulation:
         if token == self._network_token:
             return False, []
         self._network_token = token
+        self._spawn_routes.clear()
         return True, self.clear_vehicles()
 
     def toggle_junction(self, junction: Intersection) -> bool:
@@ -217,13 +221,21 @@ class RoadVehicleSimulation:
         city_map: CityMap,
         source: Intersection,
         destination: Intersection,
+        *,
+        _occupancy: TrafficOccupancyIndex | None = None,
     ) -> RoutedRoadVehicle | None:
         """Spawn one car when a directed route exists between two junctions."""
+        self.sync_network(city_map)
         if source is destination or sum(
             car.source_type == "test_traffic" for car in self.cars
         ) >= self.max_cars:
             return None
-        route = city_map.find_vehicle_route_between(source, destination)
+        route_key = (id(source), id(destination))
+        if route_key not in self._spawn_routes:
+            self._spawn_routes[route_key] = city_map.find_vehicle_route_between(
+                source, destination,
+            )
+        route = self._spawn_routes[route_key]
         if route is None:
             return None
         existing_ids = {car.id for car in self.cars}
@@ -237,6 +249,7 @@ class RoadVehicleSimulation:
             vehicle_id=f"test-car-{next_spawn_id:06d}",
             color=self.rng.choice(self.colors),
             source_type="test_traffic",
+            _occupancy=_occupancy,
         )
         if car is None:
             return None
@@ -257,8 +270,13 @@ class RoadVehicleSimulation:
         width: float = 6.0,
         speed_cap_mph: float | None = None,
         color: str | None = None,
+        _occupancy: TrafficOccupancyIndex | None = None,
     ) -> RoutedRoadVehicle | None:
-        """Enter any routed vehicle if its first lane has room."""
+        """Enter a vehicle only when its whole body and forward gap are clear.
+
+        The generator supplies a shared, current occupancy index for its batch;
+        external admissions rebuild before checking their route clearance.
+        """
         if any(car.id == vehicle_id for car in self.cars):
             return None
         points = vehicle_route_points(route)
@@ -284,11 +302,23 @@ class RoadVehicleSimulation:
             width=width,
             id=vehicle_id,
         )
-        self.occupancy.rebuild(self.cars)
-        spawn_gap = self.occupancy.lead_gap(car, TEST_CAR_FOLLOWING_GAP + car.length)
+        # Route clearance only sees cars ahead on shared links. A vehicle just
+        # behind the insertion point, or crossing it on another link, can still
+        # intersect the new body. Check the actual rectangles before admission.
+        if any(vehicle_footprints_overlap(car, other) for other in self.cars):
+            return None
+        occupancy = _occupancy
+        if occupancy is None:
+            self.occupancy.rebuild(self.cars)
+            occupancy = self.occupancy
+        spawn_gap = occupancy.lead_gap(car, TEST_CAR_FOLLOWING_GAP + car.length)
         if spawn_gap is not None and spawn_gap < TEST_CAR_FOLLOWING_GAP:
             return None
         self.cars.append(car)
+        if _occupancy is not None:
+            # Include this admission in every remaining decision in the batch.
+            # Rejected candidates never need to rebuild the unchanged index.
+            occupancy.rebuild(self.cars)
         return car
 
     def update(self, city_map: CityMap, elapsed_seconds: float) -> list[RoutedRoadVehicle]:
@@ -323,15 +353,29 @@ class RoadVehicleSimulation:
 
         junctions = self.active_junctions(city_map)
         if len(junctions) >= 2:
+            available_slots = self.max_cars - sum(
+                car.source_type == "test_traffic" for car in self.cars
+            )
+            spawn_occupancy = None
             for source in junctions:
                 self._spawn_elapsed[source.id] += elapsed_seconds
                 if self._spawn_elapsed[source.id] < self.spawn_interval:
                     continue
                 self._spawn_elapsed[source.id] %= self.spawn_interval
+                # Keep seeded destination choices stable while capped, even
+                # though no admissions or route searches are needed.
                 destinations = [item for item in junctions if item is not source]
                 self.rng.shuffle(destinations)
+                if available_slots <= 0:
+                    continue
+                if spawn_occupancy is None:
+                    self.occupancy.rebuild(self.cars)
+                    spawn_occupancy = self.occupancy
                 for destination in destinations:
-                    if self.spawn_car(city_map, source, destination) is not None:
+                    if self.spawn_car(
+                        city_map, source, destination, _occupancy=spawn_occupancy,
+                    ) is not None:
+                        available_slots -= 1
                         break
         spawned_at = perf_counter()
 
@@ -349,6 +393,9 @@ class RoadVehicleSimulation:
             # A queued circulating car may accelerate back to its road speed.
             # Its current speed alone is not a safe prediction of future travel.
             car.cruise_speed_bound = _route_cruise_speed(car, self.speed_mph)
+        priority_contenders = _observe_priority_arrivals(
+            self.cars, self.stop_coordinator, self.elapsed_time,
+        )
         deadlock_candidates = []
         for car in self.cars:
             is_waiting = (
@@ -363,7 +410,9 @@ class RoadVehicleSimulation:
                 continue
             deadlock_candidates.append(DeadlockCandidate(
                 car.id,
-                car.brain.wait_reason != "following queued car"
+                (movement[2].merge_target is not None
+                 or car.id in priority_contenders)
+                and car.brain.wait_reason != "following queued car"
                 and _temporary_winner_path_clear(
                     car, movement, self.cars, self.occupancy,
                     self.stop_coordinator,
@@ -372,24 +421,6 @@ class RoadVehicleSimulation:
             ))
         deadlock_candidates = tuple(deadlock_candidates)
         temporary_winner = self.deadlock_resolver.choose_winner(deadlock_candidates)
-        for car in self.cars:
-            movement = _next_controlled_movement(car, self.stop_coordinator)
-            if (movement is not None and movement[2].merge_target is not None
-                    and car.distance + car.length/2 < movement[0]
-                    and self.stop_coordinator.has_claim(car.id, movement[2])):
-                # A reservation made while approaching is not a permanent
-                # ticket. Recheck the gap if we have not physically entered yet.
-                self.stop_coordinator.release(car.id, movement[2])
-                car._claimed_movement = None
-            if movement is None or self.stop_coordinator.has_claim(car.id, movement[2]):
-                continue
-            distance = max(0.0, movement[0] - car.length / 2 - car.distance)
-            if movement[2].control.kind is ControlType.STOP:
-                if distance <= 0.05 and car.speed <= 0.1:
-                    self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
-            elif movement[2].merge_target is None and distance <= TEST_CAR_LOOKAHEAD:
-                self.stop_coordinator.observe_approach(
-                    car.id, movement[2], self.elapsed_time + distance / max(car.speed, 1.0))
         observed_at = perf_counter()
         # This is the number that was actually considered this frame.  A car
         # finishing later in the frame is still present in its trace record.
@@ -417,13 +448,11 @@ class RoadVehicleSimulation:
                 if movement is not None and not has_claim
                 else None
             )
-            if movement is not None and movement[2].control.kind is ControlType.STOP and distance_to_stop is not None and distance_to_stop <= 0.05 and car.speed <= 0.1:
-                self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
             is_merge = movement is not None and movement[2].merge_target is not None
             merge_observation = observe_merge(car, movement, self.cars) if is_merge else None
-            priority = movement is not None and (
-                self.stop_coordinator.can_enter_merge(car.id, movement[2]) if is_merge
-                else self.stop_coordinator.can_claim(car.id, movement[2]))
+            priority = _intersection_priority(
+                car, movement, distance_to_stop, self.stop_coordinator,
+            )
             priority_reason = "waiting for intersection priority"
             if movement is not None and not has_claim and not is_merge:
                 # Reserve enough space for our whole car beyond the movement.
@@ -501,10 +530,11 @@ class RoadVehicleSimulation:
             if self.debugger is not None:
                 decision_seconds += perf_counter() - decision_started
             resolution_started = perf_counter() if self.debugger is not None else 0.0
-            if decision.register_stop and movement is not None:
+            if decision.register_stop and movement is not None and car.id in priority_contenders:
                 self.stop_coordinator.observe_stop(car.id, movement[2], self.elapsed_time)
             if (decision.request_claim and movement is not None
-                    and (distance_to_stop or 0) <= max(10.0, car.speed * 0.6)):
+                    and (is_merge or car.id in priority_contenders)
+                    and (distance_to_stop or 0) <= _entry_claim_distance(car.speed)):
                 # Claim only near entry; a car far up the road should not reserve
                 # an empty junction for several seconds while it approaches.
                 if car.id == temporary_winner:
@@ -641,8 +671,14 @@ class RoadVehicleSimulation:
 
         for car in cars:
             car.cruise_speed_bound = _route_cruise_speed(car, self.speed_mph)
+        # Route positions stay fixed through observation and intent generation.
+        # Share merge facts across those passes, then discard before batch apply.
+        merge_snapshot = MergeTrafficSnapshot(cars)
         snapshot_at = perf_counter()
 
+        priority_contenders = _observe_priority_arrivals(
+            cars, self.stop_coordinator, self.elapsed_time,
+        )
         deadlock_candidates = []
         for car in cars:
             is_waiting = (
@@ -657,38 +693,17 @@ class RoadVehicleSimulation:
                 continue
             deadlock_candidates.append(DeadlockCandidate(
                 car.id,
-                car.brain.wait_reason != "following queued car"
+                (movement[2].merge_target is not None
+                 or car.id in priority_contenders)
+                and car.brain.wait_reason != "following queued car"
                 and _temporary_winner_path_clear(
                     car, movement, cars, self.occupancy,
-                    self.stop_coordinator,
+                    self.stop_coordinator, merge_snapshot,
                 ),
                 movement_id=movement[2].id,
             ))
         deadlock_candidates = tuple(deadlock_candidates)
         temporary_winner = self.deadlock_resolver.choose_winner(deadlock_candidates)
-
-        # Update shared arrival facts before asking any brain for a decision.
-        for car in cars:
-            movement = _next_controlled_movement(car, self.stop_coordinator)
-            if (movement is not None and movement[2].merge_target is not None
-                    and car.distance + car.length / 2 < movement[0]
-                    and self.stop_coordinator.has_claim(car.id, movement[2])):
-                self.stop_coordinator.release(car.id, movement[2])
-                car._claimed_movement = None
-            if movement is None or self.stop_coordinator.has_claim(car.id, movement[2]):
-                continue
-            distance = max(0.0, movement[0] - car.length / 2 - car.distance)
-            if movement[2].control.kind is ControlType.STOP:
-                if distance <= 0.05 and car.speed <= 0.1:
-                    self.stop_coordinator.observe_stop(
-                        car.id, movement[2], self.elapsed_time,
-                    )
-            elif movement[2].merge_target is None and distance <= TEST_CAR_LOOKAHEAD:
-                self.stop_coordinator.observe_approach(
-                    car.id,
-                    movement[2],
-                    self.elapsed_time + distance / max(car.speed, 1.0),
-                )
 
         intent_phase_seconds = {
             "intent_route_lookup": 0.0,
@@ -742,14 +757,14 @@ class RoadVehicleSimulation:
             # car may claim the crossing or enter the merge.
             phase_started = perf_counter()
             is_merge = movement is not None and movement[2].merge_target is not None
-            merge_observation = observe_merge(car, movement, cars) if is_merge else None
+            merge_observation = observe_merge(
+                car, movement, cars, snapshot=merge_snapshot,
+            ) if is_merge else None
             intent_phase_seconds["intent_merge_observation"] += perf_counter() - phase_started
 
             phase_started = perf_counter()
-            priority = movement is not None and (
-                self.stop_coordinator.can_enter_merge(car.id, movement[2])
-                if is_merge
-                else self.stop_coordinator.can_claim(car.id, movement[2])
+            priority = _intersection_priority(
+                car, movement, distance_to_stop, self.stop_coordinator,
             )
             priority_reason = "waiting for intersection priority"
             intent_phase_seconds["intent_priority_query"] += perf_counter() - phase_started
@@ -777,7 +792,7 @@ class RoadVehicleSimulation:
                         break
                     if following[2].merge_target is not None:
                         opening = MERGE_STRATEGIES[car.brain.merge_style].decide(
-                            observe_merge(car, following, cars),
+                            observe_merge(car, following, cars, snapshot=merge_snapshot),
                             car.speed,
                             _route_cruise_speed(car, self.speed_mph),
                         )
@@ -883,7 +898,8 @@ class RoadVehicleSimulation:
         # Resolve every request against the same collected intent set. Stable
         # priority order makes arbitration independent of the mutable car list.
         for intent in intents:
-            if intent.decision.register_stop and intent.movement is not None:
+            if (intent.decision.register_stop and intent.movement is not None
+                    and intent.car.id in priority_contenders):
                 self.stop_coordinator.observe_stop(
                     intent.car.id, intent.movement[2], self.elapsed_time,
                 )
@@ -902,8 +918,9 @@ class RoadVehicleSimulation:
             decision = intent.decision
             has_claim = intent.has_claim
             if (decision.request_claim and movement is not None
+                    and (intent.is_merge or intent.car.id in priority_contenders)
                     and (intent.distance_to_stop or 0.0)
-                    <= max(10.0, intent.speed_before * 0.6)):
+                    <= _entry_claim_distance(intent.speed_before)):
                 if intent.car.id == temporary_winner:
                     has_claim = self.stop_coordinator.claim_temporary_winner(
                         intent.car.id, movement[2],
@@ -1177,6 +1194,83 @@ def _route_occupancy_segments(
     return tuple(result)
 
 
+def _entry_claim_distance(speed: float) -> float:
+    """Include a rolling lead vehicle before its nose can enter the junction."""
+    return max(10.0, speed * 0.6)
+
+
+def _intersection_priority(car, movement, distance_to_stop, coordinator) -> bool:
+    if movement is None:
+        return False
+    connection = movement[2]
+    if connection.merge_target is not None:
+        return coordinator.can_enter_merge(car.id, connection)
+    if (connection.control.kind is not ControlType.STOP
+            and distance_to_stop is not None
+            and distance_to_stop > _entry_claim_distance(car.speed)):
+        return coordinator.can_approach(car.id, connection)
+    return coordinator.can_claim(car.id, connection)
+
+
+def _observe_priority_arrivals(cars, coordinator, elapsed_time) -> set[str]:
+    """Register only the entry-ready front vehicle of each incoming lane.
+
+    Route distance to the entry compares cars with different route origins.
+    The shared incoming lane key also groups different turn intentions that
+    are physically queued behind one another. Active claims are kept until
+    the existing rear-clearance rule releases them.
+    """
+    heads = {}
+    for car in cars:
+        movement = _next_controlled_movement(car, coordinator)
+        if movement is None:
+            continue
+        start, _, connection = movement
+        if connection.merge_target is not None:
+            if (coordinator.has_claim(car.id, connection)
+                    and car.distance + car.length / 2 < start):
+                coordinator.release(car.id, connection)
+                car._claimed_movement = None
+        connector_start = start - connection.control_offset
+        incoming = next((key for _, end, key, _ in reversed(car.route_segments)
+                         if end <= connector_start + 1e-8
+                         and key[0] in ("lane", "road_port")), None)
+        if incoming is None:
+            incoming = ("road_output", connection.source_output.id)
+        key = (connection.intersection_id, incoming)
+        distance = connector_start - car.length / 2 - car.distance
+        previous = heads.get(key)
+        if previous is None or (distance, car.id) < (previous[2], previous[0].id):
+            heads[key] = (car, movement, distance)
+
+    ready = []
+    for car, movement, _ in heads.values():
+        distance = max(0.0, movement[0] - car.length / 2 - car.distance)
+        connection = movement[2]
+        if connection.merge_target is not None:
+            continue
+        if not coordinator.has_claim(car.id, connection):
+            if distance > _entry_claim_distance(car.speed):
+                continue
+            if (connection.control.kind is ControlType.STOP
+                    and (distance > 0.05 or car.speed > 0.1)):
+                continue
+        ready.append((car, connection, distance))
+    eligible = {car.id: connection for car, connection, _ in ready
+                if not coordinator.has_claim(car.id, connection)}
+    coordinator.retain_arrivals(eligible)
+    for car, connection, distance in ready:
+        if car.id not in eligible:
+            continue
+        if connection.control.kind is ControlType.STOP:
+            coordinator.observe_stop(car.id, connection, elapsed_time)
+        else:
+            coordinator.observe_approach(
+                car.id, connection, elapsed_time + distance / max(car.speed, 1.0),
+            )
+    return {car.id for car, _, _ in ready}
+
+
 def _next_controlled_movement(
     car: RoutedRoadVehicle, coordinator: AllWayStopCoordinator,
 ) -> tuple[float, float, LaneConnection] | None:
@@ -1243,7 +1337,9 @@ def _signaled_maneuver(car, movement):
     return connection.maneuver.kind
 
 
-def _temporary_winner_path_clear(car, movement, cars, occupancy, coordinator):
+def _temporary_winner_path_clear(
+    car, movement, cars, occupancy, coordinator, merge_snapshot=None,
+):
     """Check physical space without re-applying conservative social gaps.
 
     A temporary winner may break a right-of-way tie, but it may not drive into
@@ -1260,7 +1356,7 @@ def _temporary_winner_path_clear(car, movement, cars, occupancy, coordinator):
     if exit_gap is not None and exit_gap < 4.0:
         return False
     if movement[2].merge_target is not None:
-        observation = observe_merge(car, movement, cars)
+        observation = observe_merge(car, movement, cars, snapshot=merge_snapshot)
         if observation is None or not merge_space_clear(
                 car.length, observation.vehicles, observation.reservations):
             return False
@@ -1280,7 +1376,7 @@ def _temporary_winner_path_clear(car, movement, cars, occupancy, coordinator):
         if following_exit is not None and following_exit < 4.0:
             return False
         if following[2].merge_target is not None:
-            observation = observe_merge(car, following, cars)
+            observation = observe_merge(car, following, cars, snapshot=merge_snapshot)
             if observation is None or not merge_space_clear(
                     car.length, observation.vehicles, observation.reservations):
                 return False

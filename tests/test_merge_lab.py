@@ -112,7 +112,7 @@ class MergeLabTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Available scenarios"):
             MergeLab().run("not-a-scenario", seconds=1.0)
 
-    def test_soft_deadlock_resolution_restores_slip_lane_throughput(self):
+    def test_slip_lane_keeps_safe_throughput_with_local_priority(self):
         report = MergeLab(seed=7).run("slip-lane-short-link", seconds=90.0)
         tail_completions = sum(
             len(frame.completed_ids)
@@ -123,9 +123,6 @@ class MergeLabTests(unittest.TestCase):
         self.assertEqual(report.overlap_pair_ticks, 0, report.first_overlap)
         self.assertGreater(report.completed, 13)
         self.assertGreater(tail_completions, 0)
-        self.assertTrue(any(
-            frame.temporary_winner_id is not None for frame in report.frames
-        ))
 
     def test_data_first_slip_lane_has_basic_safe_throughput(self):
         report = MergeLab(seed=7).run(

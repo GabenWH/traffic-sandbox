@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from math import atan2, pi
 from functools import lru_cache
@@ -36,12 +37,16 @@ class AllWayStopCoordinator:
         """
         self.arrivals.setdefault(car_id, StopArrival(car_id, connection, arrival_time))
 
+    def retain_arrivals(self, eligible: dict[str, LaneConnection]) -> None:
+        """Drop queue followers and distant approaches without releasing claims."""
+        for car_id, arrival in tuple(self.arrivals.items()):
+            if eligible.get(car_id) is not arrival.connection:
+                self.arrivals.pop(car_id, None)
+
     def _blocked_by_claim(self, car_id, connection):
         return any(
             owner != car_id and claimed.intersection_id == connection.intersection_id
-            and (connection.control.kind is ControlType.STOP
-                 or claimed.control.kind is ControlType.STOP
-                 or movements_conflict(connection, claimed))
+            and movements_conflict(connection, claimed)
             for (owner, _), claimed in self.claims.items()
         )
 
@@ -54,8 +59,10 @@ class AllWayStopCoordinator:
         waiting = [item for item in self.arrivals.values()
                    if item.connection.intersection_id == connection.intersection_id]
         if connection.control.kind is ControlType.STOP:
-            # Preserve the original, deliberately conservative all-way stop.
-            return min(waiting, key=self._priority_key).car_id == car_id
+            # Independent paths may enter together after completing their stop.
+            conflicting = (item for item in waiting
+                           if movements_conflict(connection, item.connection))
+            return min(conflicting, key=self._priority_key).car_id == car_id
         # Build everyone's "I must yield to this driver" relationships. Looking
         # only at our own conflicts misses a four-way cycle: opposite straight
         # paths are compatible, yet each driver still waits for one on the right.
@@ -76,6 +83,15 @@ class AllWayStopCoordinator:
             # its claim still blocks conflicting traffic until its rear clears.
             return min(waiting, key=self._priority_key).car_id == car_id
         return False
+
+    def can_approach(self, car_id: str, connection: LaneConnection) -> bool:
+        """Keep rolling toward a clear junction without joining its queue."""
+        return not self._blocked_by_claim(car_id, connection) and not any(
+            item.car_id != car_id
+            and item.connection.intersection_id == connection.intersection_id
+            and movements_conflict(connection, item.connection)
+            for item in self.arrivals.values()
+        )
 
     def can_enter_merge(self, car_id, connection):
         """Only protect against another car physically using this entrance.
@@ -150,6 +166,33 @@ def movements_conflict(a: LaneConnection, b: LaneConnection) -> bool:
     A shared destination is a merge, even when the drawn curves only meet at
     their last point. Eight feet covers two six-foot cars plus a small margin.
     """
+    group = a._conflict_group
+    if group is not None and group is b._conflict_group:
+        return a._conflict_row[b._conflict_index]
+    # Standalone movements and pairs spanning different network generations
+    # have no shared table; preserve the original geometric calculation.
+    return _calculate_movement_conflict(a, b)
+
+
+def cache_movement_conflicts(connections: Sequence[LaneConnection]) -> None:
+    """Compile one intersection's symmetric conflict table after road edits.
+
+    Rows live on the movements, so replacing a network also replaces its
+    cache. A fresh token prevents old routes from indexing a new table.
+    """
+    group = object()
+    rows = [[True] * len(connections) for _ in connections]
+    for i, a in enumerate(connections):
+        for j in range(i + 1, len(connections)):
+            conflict = _calculate_movement_conflict(a, connections[j])
+            rows[i][j] = rows[j][i] = conflict
+    for i, connection in enumerate(connections):
+        connection._conflict_group = group
+        connection._conflict_index = i
+        connection._conflict_row = tuple(rows[i])
+
+
+def _calculate_movement_conflict(a: LaneConnection, b: LaneConnection) -> bool:
     if a.intersection_id != b.intersection_id:
         return False
     if a.source_output == b.source_output or a.destination_input == b.destination_input:

@@ -783,6 +783,11 @@ class LaneConnection(CityObject):
     roundabout_role: str = ""
     merge_target: tuple[str, str] | None = None
     control_offset: float = 0.0  # Distance into the connector to its yield line.
+    # Derived when the vehicle layer is compiled. The shared token and index
+    # identify movements from the same intersection/network generation.
+    _conflict_group: object | None = field(default=None, init=False, repr=False, compare=False)
+    _conflict_index: int = field(default=0, init=False, repr=False, compare=False)
+    _conflict_row: tuple[bool, ...] = field(default=(), init=False, repr=False, compare=False)
     inspection_title = "Lane connection"
 
     @property
