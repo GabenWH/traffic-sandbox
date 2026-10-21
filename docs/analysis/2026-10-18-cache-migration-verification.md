@@ -37,15 +37,26 @@ membership explicitly. Full rebuild remains available for recovery and lab reord
 
 ## Guarded final-build comparisons
 
-The final guarded Arcata run matched all 12,000 ticks over ten simulated minutes,
-including a five-minute 200-car-cap stage. Median update time fell about 60%.
-It completed 67 trips and recorded zero overlap pair-ticks, full occupancy
-rebuilds, or full lane sorts. Maximum world-position error was 3.8e-11 feet.
+The final guarded Arcata runs matched all 12,000 ticks over ten simulated
+minutes, including a five-minute 200-car-cap stage. Data-first median tick time
+fell about 60%. The legacy-mode comparison also completed: at a mean population
+of 192 cars in stage two, median tick time fell 92.5% (127.74 to 9.61 ms), and
+median update-only time fell from 120.84 to 7.86 ms. The legacy-mode run
+completed 59 trips and recorded zero overlap pair-ticks, full occupancy
+rebuilds, or full lane sorts. Maximum world-position error was below 4e-11 feet.
 
 | Scenario | Baseline | Simulated seconds | Peak cars | Median tick, before → after | P95 tick, before → after |
 | --- | --- | ---: | ---: | ---: | ---: |
 | Arcata, data-first | `e3e377d` | 600 | 200 | 28.16 → 11.30 ms | 39.55 → 18.24 ms |
+| Arcata, legacy update mode | `e3e377d` | 600 | 200 | 127.74 → 9.61 ms | 139.64 → 11.67 ms |
 | Slip lanes, data-first | `e3e377d` | 300 | 38 | 2.25 → 2.20 ms | 3.81 → 4.00 ms |
+
+The Arcata legacy-mode update-only median was 120.84 → 7.86 ms (P95 131.99 →
+9.17 ms). Stage-two mean population was 192.0 cars. Exact state matched every
+tick; the run spawned 259 cars, completed 59, and ended with 200 active. The
+data-first and legacy-mode runs use the same base, seed, network, and staged
+load; their traffic counts differ because update modes produce distinct valid
+outcomes.
 
 ## Integration decisions
 
@@ -92,6 +103,7 @@ active, and completed IDs/order and resulting roster/coordinator state are check
 ```sh
 python -m unittest discover -s tests -q
 python tools/compare_cache_migrations.py --base e3e377d --network arcata --mode data_first --seconds 300 --output /tmp/cache-arcata.json
+python tools/compare_cache_migrations.py --base e3e377d --network arcata --mode legacy --seconds 600 --output /tmp/cache-arcata-legacy.json
 python tools/compare_cache_migrations.py --base e3e377d --network slip_lanes --mode data_first --seconds 300 --output /tmp/cache-slip.json
 python tools/compare_cache_migrations.py --base 6fe1084 --network slip_lanes --mode legacy --seconds 300 --output /tmp/cache-slip-legacy.json
 python tools/compare_cache_migrations.py --base 6fe1084 --network gauntlet --mode data_first --seconds 300 --output /tmp/cache-gauntlet.json
@@ -104,7 +116,8 @@ isolates the subsystem migrations from the earlier junction-lookup change.
 
 ## Legacy timing scope
 
-The user waived further precision for legacy timing on October 18 at 19:32 PDT.
-The completed sustained legacy gauntlet already establishes a large improvement
-and exact behavior parity; the extra legacy Arcata timing run is not an
-acceptance gate. The data-first measurements above describe the new active path.
+The Arcata legacy-mode comparison is saved as
+`benchmarks/cache-migrations/arcata-legacy-final.json`. It uses the original
+pre-cache revision `e3e377d` and measures the final guarded build with legacy
+update ordering. This complements the data-first measurements above; the two
+update modes are reported separately because their traffic counts differ.

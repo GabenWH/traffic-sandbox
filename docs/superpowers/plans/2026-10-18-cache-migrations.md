@@ -68,6 +68,10 @@ consumer, then full-suite and baseline comparisons.
   12,000 identical logical-state ticks, 200 peak cars, 67 completions, zero
   overlaps/full rebuilds/full lane sorts. Median 28.16 → 11.30ms, P95 39.55 →
   18.24ms. Short slip-lane comparison also matched all 6,000 ticks.
-- User waived precision for additional legacy timing; existing sustained legacy
-  slip/gauntlet comparisons suffice. No further legacy timing is a gate.
+- Follow-up requested by the user: final guarded original-base Arcata/legacy
+  comparison, 600s, 12,000 identical logical-state ticks, 200 peak cars, 59
+  completions, zero overlaps/full rebuilds/full lane sorts. At mean 192 cars in
+  stage two, median total tick time was 127.74 → 9.61ms (P95 139.64 → 11.67ms);
+  median update-only time was 120.84 → 7.86ms. Result saved as
+  `benchmarks/cache-migrations/arcata-legacy-final.json`.
 - Results and limitations: `docs/analysis/2026-10-18-cache-migration-verification.md`.
