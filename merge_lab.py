@@ -118,15 +118,13 @@ def _spawn(
 
 def _before_entry(car: RoutedTestCar, feet: float = 20.0) -> None:
     entry = car.controlled_movements[0]
-    car.distance = max(0.0, entry[0] - car.length / 2 - feet)
-    car.advance(0)
+    car.place(max(0.0, entry[0] - car.length / 2 - feet))
 
 
 def _on_joining_lane(car: RoutedTestCar, joining: RoutedTestCar, feet_before: float) -> None:
     target = joining.controlled_movements[0][2].merge_target
     shared = next(segment for segment in car.route_segments if segment[2] == target)
-    car.distance = max(0.0, shared[0] - feet_before)
-    car.advance(0)
+    car.place(max(0.0, shared[0] - feet_before))
 
 
 def _clear_entry(seed: int) -> tuple[CityMap, TestTrafficSimulation]:

@@ -21,6 +21,32 @@ class CountedJunctions(list):
 
 
 class TrafficNetworkCacheTests(unittest.TestCase):
+    def test_roster_and_source_views_reject_unowned_mutation(self):
+        traffic = RoadVehicleSimulation()
+        with self.assertRaises(AttributeError):
+            traffic.cars.append(None)
+        with self.assertRaises(AttributeError):
+            traffic.cars = []
+        with self.assertRaises(AttributeError):
+            traffic.active_junction_ids.append("unowned")
+        with self.assertRaises(AttributeError):
+            traffic.active_junction_ids = []
+
+    def test_explicit_roster_reordering_invalidates_view_and_occupancy_ties(self):
+        from test_data_first_pipeline import single_lane_pair
+
+        _city, traffic, leader, follower, _index = single_lane_pair()
+        old_view = traffic._cars_snapshot()
+        traffic.place_vehicle(leader.id, 50)
+        traffic.place_vehicle(follower.id, 50)
+        traffic.reorder_vehicles([follower.id, leader.id])
+        self.assertEqual(list(traffic.cars), [follower, leader])
+        self.assertIsNot(traffic._cars_snapshot(), old_view)
+        lane = next(iter(traffic.occupancy._sections.values()))
+        self.assertEqual([entry.car.id for entry in lane], [follower.id, leader.id])
+        with self.assertRaises(ValueError):
+            traffic.reorder_vehicles([leader.id, leader.id])
+
     def test_unchanged_ticks_scan_junctions_only_once_in_each_mode(self):
         for mode in ("legacy", "data_first"):
             with self.subTest(mode=mode):
@@ -94,6 +120,54 @@ class TrafficNetworkCacheTests(unittest.TestCase):
         self.assertEqual(traffic.active_junction_ids, [])
         self.assertEqual(traffic._spawn_elapsed, {})
         self.assertEqual(traffic.active_junctions(empty), [])
+
+    def test_stale_source_selected_after_lookup_warms_is_pruned(self):
+        from types import SimpleNamespace
+
+        for mode in ("legacy", "data_first"):
+            with self.subTest(mode=mode):
+                city = small_city()
+                traffic = RoadVehicleSimulation(update_mode=mode)
+                valid = city.intersections[0]
+                traffic.toggle_junction(valid)
+                traffic.active_junctions(city)
+                traffic.toggle_junction(SimpleNamespace(id="removed-junction"))
+
+                self.assertEqual(traffic.active_junctions(city), [valid])
+                traffic.update(city, 0.05)
+                self.assertEqual(list(traffic.active_junction_ids), [valid.id])
+                self.assertNotIn("removed-junction", traffic._spawn_elapsed)
+
+    def test_source_view_and_spawn_timers_persist_between_unchanged_ticks(self):
+        city = small_city()
+        traffic = RoadVehicleSimulation(update_mode="data_first", spawn_interval=1000)
+        first, second = city.intersections
+        traffic.toggle_junction(first)
+        traffic.toggle_junction(second)
+        traffic.update(city, 0.05)
+        timers = traffic._spawn_elapsed
+        view = traffic._active_junctions_snapshot(city)
+        for _ in range(10):
+            traffic.update(city, 0.05)
+            self.assertIs(traffic._spawn_elapsed, timers)
+            self.assertIs(traffic._active_junctions_snapshot(city), view)
+        traffic.toggle_junction(first)
+        self.assertEqual(traffic._active_junctions_snapshot(city), (second,))
+        self.assertNotIn(first.id, timers)
+
+    def test_roster_snapshot_changes_on_admission_and_removal_not_motion(self):
+        city = small_city()
+        traffic = RoadVehicleSimulation(update_mode="data_first", spawn_interval=1000)
+        first, second = city.intersections
+        empty = traffic._cars_snapshot()
+        car = traffic.spawn_car(city, first, second)
+        self.assertIsNotNone(car)
+        view = traffic._cars_snapshot()
+        self.assertIsNot(view, empty)
+        traffic.update(city, 0.05)
+        self.assertIs(traffic._cars_snapshot(), view)
+        traffic.remove_vehicle(car.id)
+        self.assertEqual(traffic._cars_snapshot(), ())
 
 
 if __name__ == "__main__":

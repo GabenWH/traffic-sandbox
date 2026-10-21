@@ -97,14 +97,75 @@ replacement, network rebuilds, and source-selection order have regression tests.
 ## Applying this to more systems
 
 The [migration design](superpowers/specs/2026-10-18-incremental-simulation-cache-design.md)
-defines the remaining route, roster, claims, and occupancy changes. Route
-metadata can reuse the same cache primitives. Occupancy needs direct add/remove
-and movement-delta updates to its retained index; wrapping a whole-index rebuild
-in a cache would still do that work whenever positions change.
+describes the implemented route, roster, and occupancy boundaries and the
+remaining coordinator work. The cache primitives retain metadata; domain owners
+maintain collection indexes through explicit changes.
+
+## Retained route and roster data
+
+`traffic_route_state.RouteState` retains movement ranges, incoming lane and
+signal boundaries, and separate route/control/roundabout cursors. Claims are
+checked live, including every visit to a repeated merge connection. Replacing
+the immutable movement or section tuple resets the facts and cursors.
+
+Retained route-fact reads still check their source stamp, so composition cannot
+bypass dependency declarations or read a source during mutation. Construction
+and route replacement publish route revisions at the owner boundary; an outer
+cache invalidates before any inner helper needs to run. Replacement checks the
+route write guard before changing live fields or releasing claims. Facts build
+lazily after that publication. Final movement choices also depend on progress
+and claims, so a route-only dependency cannot validate those choices across ticks.
+
+`RouteGeometry` retains polyline rulers and advances a local segment cursor.
+At a rounded corner it uses the original subtraction rule over the retained
+rulers to preserve the vehicle's heading. Rewinds use indexed lookup.
+
+Source selections, spawn timers, the ID-sorted observation roster, vehicle-ID
+lookup, and generated-vehicle count persist between structural changes. Random
+destination shuffles still happen in their original order at scheduled attempts.
+
+The public `cars`, `vehicles`, and `active_junction_ids` sequences are read-only
+live views. Use `admit_route`, `remove_vehicle`, `clear_vehicles`,
+`clear_test_traffic`, and `toggle_junction` to change their contents. For setup:
+
+```python
+traffic.place_vehicle(car.id, 120.0)
+traffic.resize_vehicle(car.id, length=40.0, width=8.0)
+traffic.replace_vehicle_route(car.id, route, distance=0.0)
+traffic.reorder_vehicles(car.id for car in reversed(traffic.cars))
+```
+
+Placement, resizing, and route replacement publish affected occupancy directly.
+`car.place(distance)` or the compatibility `car.advance(0)` queues a placement
+for publication before the next update or admission. An explicit roster reorder
+is a setup/recovery event and rebuilds occupancy to replace equal-position ties.
+Direct field assignments are not a substitute for these owner methods.
+
+## Incremental occupancy publication
+
+`TrafficOccupancyIndex.publish_changes(changed_cars, removed=removed_cars)`
+updates only the supplied vehicles. Ordinary movement retains entry objects and
+updates captured coordinates and lengths. Section/cell boundaries update local
+membership; adjacent inversions are repaired before new entries are inserted by
+binary search. An exceptional large reorder can sort its affected lane.
+
+Data-first mode publishes after the entire movement batch. Legacy mode publishes
+after each accepted vehicle's movement, preserving its sequential decisions.
+Admission inserts each accepted car before checking the next candidate. No
+ordinary tick calls the full-roster `rebuild()` method.
+
+Queries reject partially published or failed snapshots. A failed publication
+requires `rebuild(current_cars)` before another query. Published vehicle lengths
+remain fixed along with positions until publication. The longest-length bound is
+maintained on admission, removal, and resize events rather than scanned each tick.
 
 Dynamic gaps, speeds, and traffic decisions must read current published
 kinematics. A cache for those values needs the appropriate pose/claim inputs or
 a bounded snapshot epoch; a topology revision alone cannot validate them.
+
+The remaining design work is finer intersection-local claim/arrival invalidation;
+this migration retains the existing coordinator rules and epoch-scoped merge
+observations. It does not cache final brain decisions across ticks.
 
 Run the tests with:
 

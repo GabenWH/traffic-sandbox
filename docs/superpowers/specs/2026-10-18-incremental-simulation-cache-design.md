@@ -2,8 +2,9 @@
 
 Date: 2026-10-18
 
-Status: cache foundation and junction lookup implemented; remaining subsystem
-migrations are proposed. See `docs/SIMULATION_CACHES.md` for the usable API.
+Status: cache foundation, junction/source/roster views, route metadata/cursors,
+and delta occupancy publication implemented. Finer coordinator invalidation is
+still proposed. See `docs/SIMULATION_CACHES.md` for the usable API.
 
 Reviewed base: `perf/persistent-lane-occupancy`, commit `e3e377d`.
 
@@ -263,9 +264,8 @@ separate, measured change proves finer reuse is correct.
 
 ## Migration order and proof
 
-These are migration boundaries. The foundation and first junction-lookup
-consumer are implemented; the remaining route, roster, occupancy, and
-coordinator work follows in later changes.
+These are migration boundaries. Steps 1–4 are implemented; step 5 remains
+separate coordinator work.
 
 1. Add and verify `simulation_cache.py`, including mutation/read-phase guards.
 2. Migrate network/source lookups and roster views first. Their inputs change

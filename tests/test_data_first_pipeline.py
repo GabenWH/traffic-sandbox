@@ -2,6 +2,7 @@
 
 import random
 import unittest
+from unittest.mock import patch
 
 from city import CityMap, Terrain
 from traffic_occupancy import TrafficOccupancyIndex
@@ -45,13 +46,58 @@ def single_lane_pair(*, reverse: bool = False):
     leader.speed = follower.speed = 10.0
     leader.advance(0)
     follower.advance(0)
-    traffic.cars[:] = ([follower, leader] if reverse else [leader, follower])
+    traffic.reorder_vehicles(car.id for car in (
+        [follower, leader] if reverse else [leader, follower]))
     occupancy.rebuild(traffic.cars)
     occupancy.rebuild_calls = 0
     return city, traffic, leader, follower, occupancy
 
 
 class DataFirstPipelineTests(unittest.TestCase):
+    def test_new_vehicle_route_supports_a_declared_composed_cache(self):
+        from simulation_cache import CachedValue
+        from traffic_testbed import _next_route_movement
+
+        _city, _traffic, leader, _follower, _occupancy = single_lane_pair()
+        cached = CachedValue("next movement", dependencies=leader._route_cache._facts.dependencies,
+                             build=lambda: _next_route_movement(leader))
+        self.assertIsNone(cached.get())
+
+    def test_route_owner_invalidates_composed_facts_before_an_inner_read(self):
+        from simulation_cache import CachedValue
+        from test_spawn_admission import lane_route
+        from traffic_testbed import _next_route_movement
+
+        _city, traffic, leader, _follower, _occupancy = single_lane_pair()
+        _next_route_movement(leader)
+
+        def read_sections():
+            _next_route_movement(leader)
+            return leader.route_segments
+
+        cached = CachedValue("route sections", dependencies=leader._route_cache._facts.dependencies,
+                             build=read_sections)
+        previous = cached.get()
+        traffic.replace_vehicle_route(
+            leader.id, lane_route("new-route", [(0, 200), (300, 200)]))
+        self.assertIsNot(leader.route_segments, previous)
+        self.assertIs(cached.get(), leader.route_segments)
+
+    def test_route_read_phase_rejects_replacement_before_vehicle_fields_change(self):
+        from simulation_cache import MutationNotAllowedError
+        from test_spawn_admission import lane_route
+
+        _city, traffic, leader, _follower, _occupancy = single_lane_pair()
+        original_route, original_sections, original_brain = (
+            leader.route, leader.route_segments, leader.brain)
+        with leader._route_cache._revision.read_only():
+            with self.assertRaises(MutationNotAllowedError):
+                traffic.replace_vehicle_route(
+                    leader.id, lane_route("rejected-route", [(0, 200), (300, 200)]))
+        self.assertIs(leader.route, original_route)
+        self.assertIs(leader.route_segments, original_sections)
+        self.assertIs(leader.brain, original_brain)
+
     def test_update_mode_is_validated(self):
         with self.assertRaisesRegex(ValueError, "legacy or data_first"):
             TestTrafficSimulation(update_mode="unknown")
@@ -68,12 +114,57 @@ class DataFirstPipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unique IDs"):
             TestTrafficSimulation(cars=[leader, follower])
 
-    def test_tick_rebuilds_occupancy_only_before_and_after_batch(self):
+    def test_tick_publishes_movement_deltas_without_rebuilding(self):
         city, traffic, _leader, _follower, occupancy = single_lane_pair()
 
-        traffic.update(city, 0.05)
+        with patch.object(occupancy, "_sort_lane", wraps=occupancy._sort_lane) as sort:
+            traffic.update(city, 0.05)
+        self.assertEqual(sort.call_count, 0, "ordinary ordered motion needs no lane sort")
 
-        self.assertEqual(occupancy.rebuild_calls, 2)
+        self.assertEqual(occupancy.rebuild_calls, 0)
+
+    def test_legacy_tick_also_avoids_full_roster_rebuilds(self):
+        city, traffic, _leader, _follower, occupancy = single_lane_pair()
+        traffic.update_mode = "legacy"
+        traffic.update(city, 0.05)
+        self.assertEqual(occupancy.rebuild_calls, 0)
+
+    def test_manual_advance_publishes_before_the_next_admission(self):
+        city, traffic, leader, follower, occupancy = single_lane_pair()
+        traffic.remove_vehicle(follower.id)
+        leader.distance = 120
+        leader.advance(0)
+        source, destination = city.intersections
+        new_car = traffic.spawn_car(city, source, destination)
+        self.assertIsNotNone(new_car)
+        self.assertEqual(occupancy.rebuild_calls, 0)
+
+    def test_explicit_placement_and_resize_publish_without_roster_rebuild(self):
+        _city, traffic, leader, follower, occupancy = single_lane_pair()
+        traffic.place_vehicle(leader.id, 80)
+        self.assertEqual(occupancy.lead_gap(follower, 100), 34)
+        traffic.resize_vehicle(leader.id, length=40, width=8)
+        self.assertEqual(occupancy.lead_gap(follower, 100), 21)
+        self.assertEqual(occupancy._max_car_length, 40)
+        self.assertEqual(occupancy.rebuild_calls, 0)
+        with self.assertRaises(ValueError):
+            traffic.resize_vehicle(leader.id, length=-1, width=8)
+        self.assertEqual(leader.length, 40)
+
+    def test_route_replacement_removes_old_lane_membership_and_route_facts(self):
+        from test_spawn_admission import lane_route
+
+        _city, traffic, leader, _follower, occupancy = single_lane_pair()
+        replacement = lane_route("replacement", [(0, 200), (300, 200)])
+        traffic.replace_vehicle_route(leader.id, replacement, distance=90)
+        self.assertEqual(leader.position, (90, 200))
+        self.assertEqual(leader.controlled_movements, ())
+        own_entries = [entry for lane in occupancy._sections.values()
+                       for entry in lane if entry.car is leader]
+        self.assertEqual(len(own_entries), 1)
+        self.assertEqual(own_entries[0].position, 90)
+        self.assertTrue(occupancy.is_current(leader))
+        self.assertEqual(occupancy.rebuild_calls, 0)
 
     def test_profiler_records_occupancy_rebuild_subphases_when_enabled(self):
         city, traffic, *_ = single_lane_pair()
@@ -91,6 +182,17 @@ class DataFirstPipelineTests(unittest.TestCase):
             self.assertIn(name, sample.timings_ms)
             self.assertGreaterEqual(sample.timings_ms[name], 0.0)
         self.assertIn("intent_route_lookup", sample.timings_ms)
+
+    def test_empty_tick_does_not_report_previous_publication_timings(self):
+        city, traffic, *_ = single_lane_pair()
+        traffic.occupancy.profile_internal_timings = True
+        traffic.update(city, 0.05)
+        traffic.clear_vehicles()
+        traffic.update(city, 0.05)
+        timings = traffic.profiler.samples[-1].timings_ms
+        for phase in ("occupancy_position_lookup", "occupancy_bin_build",
+                      "occupancy_section_mapping", "occupancy_finalize"):
+            self.assertEqual(timings[phase], 0.0)
 
     def test_motion_does_not_depend_on_car_list_order(self):
         first = single_lane_pair(reverse=False)

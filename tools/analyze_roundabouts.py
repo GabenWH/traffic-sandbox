@@ -84,7 +84,8 @@ def run(args):
             # Once behavior diverges, spawn success can also diverge; this is
             # a sensitivity check, not a matched-state proof of causation.
             if args.experiment == 'reverse_order':
-                sim.cars.sort(key=lambda c: int(c.id.rsplit('-', 1)[1]), reverse=True)
+                sim.reorder_vehicles(c.id for c in sorted(
+                    sim.cars, key=lambda c: int(c.id.rsplit('-', 1)[1]), reverse=True))
             completed += len(sim.update(city, args.dt))
             for index, a in enumerate(sim.cars):
                 for b in sim.cars[index+1:]:

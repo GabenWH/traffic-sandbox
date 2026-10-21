@@ -30,6 +30,10 @@ class JunctionLookup:
             "junction lookup", dependencies=(self._topology,), build=self._build,
         )
 
+    @property
+    def dependencies(self) -> tuple[RevisionSource, ...]:
+        return self._lookup.dependencies
+
     def get(self, city_map: CityMap) -> Mapping[str, Intersection]:
         revision = city_map.mobility_revision
         if self._city is not city_map or self._revision != revision:

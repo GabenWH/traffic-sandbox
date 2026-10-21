@@ -141,7 +141,15 @@ class CachedValue(Generic[T]):
                 raise UndeclaredDependencyError(
                     f"{parent.name!r} omits root sources of {self.name!r}",
                 )
-        stamps = tuple(source.stamp() for source in self._dependencies)
+        if len(self._dependencies) == 1:
+            stamp = self._dependencies[0].stamp()
+            if (self._value is not _MISSING and self._stamps is not None
+                    and stamp == self._stamps[0]):
+                self._hits += 1
+                return cast(T, self._value)
+            stamps = (stamp,)
+        else:
+            stamps = tuple(source.stamp() for source in self._dependencies)
         if self._value is not _MISSING and stamps == self._stamps:
             self._hits += 1
             return cast(T, self._value)
