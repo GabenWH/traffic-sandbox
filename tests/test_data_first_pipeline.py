@@ -75,6 +75,23 @@ class DataFirstPipelineTests(unittest.TestCase):
 
         self.assertEqual(occupancy.rebuild_calls, 2)
 
+    def test_profiler_records_occupancy_rebuild_subphases_when_enabled(self):
+        city, traffic, *_ = single_lane_pair()
+        traffic.occupancy.profile_internal_timings = True
+
+        traffic.update(city, 0.05)
+
+        sample = traffic.profiler.samples[-1]
+        for name in (
+            "occupancy_position_lookup",
+            "occupancy_bin_build",
+            "occupancy_section_mapping",
+            "occupancy_finalize",
+        ):
+            self.assertIn(name, sample.timings_ms)
+            self.assertGreaterEqual(sample.timings_ms[name], 0.0)
+        self.assertIn("intent_route_lookup", sample.timings_ms)
+
     def test_motion_does_not_depend_on_car_list_order(self):
         first = single_lane_pair(reverse=False)
         second = single_lane_pair(reverse=True)

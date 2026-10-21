@@ -134,6 +134,19 @@ class AllWayStopCoordinatorTests(unittest.TestCase):
         coordinator.release("first")
         self.assertTrue(coordinator.can_claim("second", self.connections[1]))
 
+    def test_claim_index_tracks_multiple_claims_and_partial_release(self) -> None:
+        coordinator = AllWayStopCoordinator()
+        first, second = self.connections[:2]
+
+        self.assertTrue(coordinator.claim_temporary_winner("car", first))
+        self.assertTrue(coordinator.claim_temporary_winner("car", second))
+        self.assertEqual(tuple(coordinator.claims_for("car")), (first, second))
+
+        coordinator.release("car", first)
+        self.assertEqual(tuple(coordinator.claims_for("car")), (second,))
+        coordinator.forget_car("car")
+        self.assertEqual(tuple(coordinator.claims_for("car")), ())
+
     def test_temporary_winner_can_break_waiting_order_but_not_active_claim(self) -> None:
         coordinator = AllWayStopCoordinator()
         coordinator.observe_stop("older", self.connections[0], 1.0)

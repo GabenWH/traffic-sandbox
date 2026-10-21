@@ -23,6 +23,9 @@ class AllWayStopCoordinator:
 
     arrivals: dict[str, StopArrival] = field(default_factory=dict)
     claims: dict[tuple[str, str], LaneConnection] = field(default_factory=dict)
+    _claims_by_car: dict[str, dict[str, LaneConnection]] = field(
+        default_factory=dict, repr=False,
+    )
 
     def observe_stop(
         self, car_id: str, connection: LaneConnection, stopped_at: float,
@@ -105,14 +108,14 @@ class AllWayStopCoordinator:
     def claim_merge(self, car_id, connection):
         if not self.can_enter_merge(car_id, connection):
             return False
-        self.claims[(car_id, connection.id)] = connection
+        self._store_claim(car_id, connection)
         self.arrivals.pop(car_id, None)
         return True
 
     def claim(self, car_id: str, connection: LaneConnection) -> bool:
         if not self.can_claim(car_id, connection):
             return False
-        self.claims[(car_id, connection.id)] = connection
+        self._store_claim(car_id, connection)
         self.arrivals.pop(car_id, None)
         return True
 
@@ -124,7 +127,7 @@ class AllWayStopCoordinator:
         """
         if not self.can_claim_temporary_winner(car_id, connection):
             return False
-        self.claims[(car_id, connection.id)] = connection
+        self._store_claim(car_id, connection)
         self.arrivals.pop(car_id, None)
         return True
 
@@ -135,9 +138,22 @@ class AllWayStopCoordinator:
     def release(self, car_id: str, connection: LaneConnection | None = None) -> None:
         # A car can occupy two close junctions at once. Clearing the first
         # must not erase its permission for the second.
-        for key in list(self.claims):
-            if key[0] == car_id and (connection is None or self.claims[key] is connection):
-                del self.claims[key]
+        owned = self._claims_by_car.get(car_id)
+        if not owned:
+            return
+        if connection is None:
+            released = tuple(owned.values())
+            del self._claims_by_car[car_id]
+        else:
+            current = owned.get(connection.id)
+            if current is not connection:
+                return
+            released = (current,)
+            del owned[connection.id]
+            if not owned:
+                del self._claims_by_car[car_id]
+        for released_connection in released:
+            self.claims.pop((car_id, released_connection.id), None)
 
     def forget_car(self, car_id: str) -> None:
         self.arrivals.pop(car_id, None)
@@ -145,6 +161,15 @@ class AllWayStopCoordinator:
 
     def has_claim(self, car_id: str, connection: LaneConnection) -> bool:
         return self.claims.get((car_id, connection.id)) is connection
+
+    def claims_for(self, car_id: str):
+        """Return only this car's active claims, in acquisition order."""
+        owned = self._claims_by_car.get(car_id)
+        return tuple(owned.values()) if owned else ()
+
+    def _store_claim(self, car_id: str, connection: LaneConnection) -> None:
+        self.claims[(car_id, connection.id)] = connection
+        self._claims_by_car.setdefault(car_id, {})[connection.id] = connection
 
     @staticmethod
     def _priority_key(arrival: StopArrival) -> tuple[float, float, str]:

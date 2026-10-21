@@ -87,9 +87,14 @@ class RoutedRoadVehicle:
     controlled_movements: tuple[tuple[float, float, LaneConnection], ...] = field(
         init=False, repr=False,
     )
+    _controlled_movement_by_id: dict[str, tuple[float, float, LaneConnection]] = field(
+        init=False, repr=False,
+    )
     route_segments: tuple[tuple[float, float, tuple[object, ...], float], ...] = field(
         init=False, repr=False,
     )
+    _occupancy_segment_index: int = field(default=0, init=False, repr=False)
+    _occupancy_route_segments: object = field(default=None, init=False, repr=False)
     _claimed_movement: LaneConnection | None = field(default=None, init=False, repr=False)
     cruise_speed_bound: float = field(default=TEST_CAR_SPEED_MPH*22/15, init=False)
     _merge_entry_speed: float | None = field(default=None, init=False, repr=False)
@@ -104,6 +109,9 @@ class RoutedRoadVehicle:
         if any(not isfinite(size) or size <= 0 for size in (self.length, self.width)):
             raise ValueError("A road vehicle needs positive finite dimensions")
         self.controlled_movements = _controlled_movement_ranges(self.route)
+        self._controlled_movement_by_id = {
+            movement[2].id: movement for movement in self.controlled_movements
+        }
         self.route_segments = _route_occupancy_segments(self.route)
         self.position, self.heading = _position_and_heading(self.points, 0.0)
 
@@ -122,11 +130,46 @@ class RoutedRoadVehicle:
     def claimed_movement(self) -> LaneConnection | None:
         return self._claimed_movement
 
+    def controlled_movement_for(
+        self, connection: LaneConnection,
+    ) -> tuple[float, float, LaneConnection] | None:
+        movement = self._controlled_movement_by_id.get(connection.id)
+        return movement if movement is not None and movement[2] is connection else None
+
+    def active_claimed_movements(
+        self, coordinator: AllWayStopCoordinator,
+    ) -> tuple[tuple[float, float, LaneConnection], ...]:
+        movements = (
+            self.controlled_movement_for(connection)
+            for connection in coordinator.claims_for(self.id)
+        )
+        return tuple(movement for movement in movements if movement is not None)
+
+    def inside_claimed_movement(self, coordinator: AllWayStopCoordinator) -> bool:
+        front = self.distance + self.length / 2
+        rear = self.distance - self.length / 2
+        return any(
+            start <= front and rear < end
+            for start, end, _connection in self.active_claimed_movements(coordinator)
+        )
+
     def occupancy_position(self) -> tuple[tuple[object, ...], float] | None:
         """Return canonical mobility-link key and longitudinal position."""
-        for start, end, key, offset in self.route_segments:
+        if self._occupancy_route_segments is not self.route_segments:
+            self._occupancy_segment_index = 0
+            self._occupancy_route_segments = self.route_segments
+        index = self._occupancy_segment_index
+        # Ordinary motion advances this cursor; direct placement/rewinding can
+        # also move it backwards without leaving the old lane occupied.
+        while index > 0 and self.distance < self.route_segments[index - 1][1]:
+            index -= 1
+        while index < len(self.route_segments):
+            start, end, key, offset = self.route_segments[index]
             if self.distance < end or end == self.total_length:
+                self._occupancy_segment_index = index
                 return key, offset + max(0.0, min(end - start, self.distance - start))
+            index += 1
+        self._occupancy_segment_index = index
         return None
 
 
@@ -438,11 +481,7 @@ class RoadVehicleSimulation:
                 movement is not None
                 and self.stop_coordinator.has_claim(car.id, movement[2])
             )
-            inside = any(
-                self.stop_coordinator.has_claim(car.id, connection)
-                and start <= car.distance + car.length/2
-                and car.distance - car.length/2 < end
-                for start, end, connection in car.controlled_movements)
+            inside = car.inside_claimed_movement(self.stop_coordinator)
             distance_to_stop = (
                 max(0.0, movement[0] - car.length / 2 - car.distance)
                 if movement is not None and not has_claim
@@ -575,11 +614,10 @@ class RoadVehicleSimulation:
                 temporary_winner_entered = True
             # Keep every junction occupied until our REAR clears it, even
             # while our FRONT is already obeying the next yield or stop.
-            for _, end, connection in car.controlled_movements:
+            for _, end, connection in car.active_claimed_movements(self.stop_coordinator):
                 if car.distance - car.length / 2 >= end:
                     self.stop_coordinator.release(car.id, connection)
-            remaining_claims = [connection for _, _, connection in car.controlled_movements
-                                if self.stop_coordinator.has_claim(car.id, connection)]
+            remaining_claims = self.stop_coordinator.claims_for(car.id)
             car._claimed_movement = remaining_claims[-1] if remaining_claims else None
             # Refresh occupancy so a later car in this same tick sees the
             # space just taken by a merge. At this prototype's 60-car limit a
@@ -665,8 +703,18 @@ class RoadVehicleSimulation:
         spawned_at: float,
     ) -> list[RoutedRoadVehicle]:
         """Advance one frame as snapshot -> intents -> resolve -> batch apply."""
+        occupancy_phase_seconds: dict[str, float] = {}
+
+        def rebuild_occupancy() -> None:
+            self.occupancy.rebuild(self.cars)
+            if self.occupancy.profile_internal_timings:
+                for name, duration_ms in self.occupancy.last_rebuild_timings_ms.items():
+                    occupancy_phase_seconds[name] = (
+                        occupancy_phase_seconds.get(name, 0.0) + duration_ms / 1000.0
+                    )
+
         occupancy_started = perf_counter()
-        self.occupancy.rebuild(self.cars)
+        rebuild_occupancy()
         cars = tuple(sorted(self.cars, key=lambda car: car.id))
 
         for car in cars:
@@ -708,6 +756,9 @@ class RoadVehicleSimulation:
         intent_phase_seconds = {
             "intent_route_lookup": 0.0,
             "intent_control_state": 0.0,
+            "intent_control_claim_lookup": 0.0,
+            "intent_control_inside_scan": 0.0,
+            "intent_control_stop_distance": 0.0,
             "intent_merge_observation": 0.0,
             "intent_priority_query": 0.0,
             "intent_exit_gap": 0.0,
@@ -733,24 +784,23 @@ class RoadVehicleSimulation:
             # Capture existing coordinator state and whether the car is already
             # inside one of the crossings it controls.
             phase_started = perf_counter()
-            has_claim = (
-                movement is not None
-                and self.stop_coordinator.has_claim(car.id, movement[2])
-            )
-            inside = any(
-                self.stop_coordinator.has_claim(car.id, connection)
-                and start <= car.distance + car.length / 2
-                and car.distance - car.length / 2 < end
-                for start, end, connection in car.controlled_movements
-            )
+            subphase_started = perf_counter()
+            has_claim = movement is not None and self.stop_coordinator.has_claim(car.id, movement[2])
+            intent_phase_seconds["intent_control_claim_lookup"] += perf_counter() - subphase_started
+
+            subphase_started = perf_counter()
+            inside = car.inside_claimed_movement(self.stop_coordinator)
+            intent_phase_seconds["intent_control_inside_scan"] += perf_counter() - subphase_started
 
             # Measure the remaining distance to the stop line only when the car
             # still needs permission to enter.
+            subphase_started = perf_counter()
             distance_to_stop = (
                 max(0.0, movement[0] - car.length / 2 - car.distance)
                 if movement is not None and not has_claim
                 else None
             )
+            intent_phase_seconds["intent_control_stop_distance"] += perf_counter() - subphase_started
             intent_phase_seconds["intent_control_state"] += perf_counter() - phase_started
 
             # Observe merge traffic and ask the shared coordinator whether this
@@ -1001,18 +1051,15 @@ class RoadVehicleSimulation:
         # Claims and occupancy change only after the full position batch lands.
         for intent in resolved:
             car = intent.car
-            for _, end, connection in car.controlled_movements:
+            for _, end, connection in car.active_claimed_movements(self.stop_coordinator):
                 if car.distance - car.length / 2 >= end:
                     self.stop_coordinator.release(car.id, connection)
-            remaining_claims = [
-                connection for _, _, connection in car.controlled_movements
-                if self.stop_coordinator.has_claim(car.id, connection)
-            ]
+            remaining_claims = self.stop_coordinator.claims_for(car.id)
             car._claimed_movement = remaining_claims[-1] if remaining_claims else None
         for car in completed:
             self.stop_coordinator.forget_car(car.id)
             self.cars.remove(car)
-        self.occupancy.rebuild(self.cars)
+        rebuild_occupancy()
         occupancy_at = perf_counter()
 
         stopped_count = sum(car.speed <= 0.1 for car in self.cars)
@@ -1036,6 +1083,10 @@ class RoadVehicleSimulation:
             "conflict_resolution": (resolved_at - intents_at) * 1000,
             "movement_apply": (applied_at - resolved_at) * 1000,
             "occupancy_rebuild": (occupancy_at - applied_at) * 1000,
+            **{
+                name: duration * 1000
+                for name, duration in occupancy_phase_seconds.items()
+            },
             "post_update": (finished_at - occupancy_at) * 1000,
             "total": (finished_at - frame_started) * 1000,
         }

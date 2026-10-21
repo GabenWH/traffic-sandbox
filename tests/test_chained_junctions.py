@@ -42,6 +42,23 @@ class ChainedJunctionTests(unittest.TestCase):
         coordinator.forget_car(car.id)
         self.assertFalse(coordinator.has_claim(car.id, following[2]))
 
+    def test_inside_check_uses_only_active_claims_across_chained_junctions(self):
+        city = world_from_dict(json.loads((Path(__file__).parent / 'fixtures/slip_lanes.json').read_text())).city_map
+        traffic = TestTrafficSimulation()
+        car = traffic.spawn_car(city, city.cul_de_sacs[2], city.cul_de_sacs[3])
+        previous, following = car.controlled_movements[:2]
+        coordinator = traffic.stop_coordinator
+        self.assertTrue(coordinator.claim_temporary_winner(car.id, previous[2]))
+        self.assertTrue(coordinator.claim_temporary_winner(car.id, following[2]))
+        car.distance = (previous[0] + previous[1]) / 2
+
+        class RouteScanForbidden:
+            def __iter__(self):
+                raise AssertionError("inside check scanned the full route")
+
+        car.controlled_movements = RouteScanForbidden()
+        self.assertTrue(car.inside_claimed_movement(coordinator))
+
     def test_waits_before_short_link_when_roundabout_gap_is_blocked(self):
         city = world_from_dict(json.loads((Path(__file__).parent / 'fixtures/slip_lanes.json').read_text())).city_map
         traffic = TestTrafficSimulation()
