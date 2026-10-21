@@ -26,6 +26,7 @@ from mobility import (
 from models import ManeuverType, ControlType, Intersection, Lane, LaneConnection, Point, polyline_length
 from pathfinding import Path
 from traffic_occupancy import TrafficOccupancyIndex
+from traffic_network_cache import JunctionLookup
 from traffic_debugger import TrafficDebugger
 from units import mph_to_pixels_per_second
 from vehicle import VehicleAppearance, vehicle_footprints_overlap
@@ -193,6 +194,9 @@ class RoadVehicleSimulation:
     _spawn_routes: dict[tuple[int, int], Path[MobilityNode, MobilityLink] | None] = field(
         default_factory=dict, init=False, repr=False,
     )
+    _junction_lookup: JunctionLookup = field(
+        default_factory=JunctionLookup, init=False, repr=False, compare=False,
+    )
     occupancy: TrafficOccupancyIndex = field(
         default_factory=TrafficOccupancyIndex, repr=False,
     )
@@ -256,7 +260,7 @@ class RoadVehicleSimulation:
         return junction.id in self.active_junction_ids
 
     def active_junctions(self, city_map: CityMap) -> list[Intersection]:
-        by_id = {junction.id: junction for junction in city_map.intersections}
+        by_id = self._junction_lookup.get(city_map)
         return [by_id[item] for item in self.active_junction_ids if item in by_id]
 
     def spawn_car(
@@ -385,9 +389,9 @@ class RoadVehicleSimulation:
         if self.debugger is not None:
             self.debugger.begin_frame()
         self.elapsed_time += elapsed_seconds
-        current_ids = {junction.id for junction in city_map.intersections}
+        junctions_by_id = self._junction_lookup.get(city_map)
         self.active_junction_ids = [
-            item for item in self.active_junction_ids if item in current_ids
+            item for item in self.active_junction_ids if item in junctions_by_id
         ]
         self._spawn_elapsed = {
             item: self._spawn_elapsed.get(item, 0.0)
