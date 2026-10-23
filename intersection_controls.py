@@ -4,10 +4,150 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from math import atan2, pi
+from enum import StrEnum
 from functools import lru_cache
+from math import atan2, isfinite, pi
 
 from models import LaneConnection, ControlType
+
+
+class SignalAspect(StrEnum):
+    """The vehicle-entry aspect currently shown to a movement group."""
+
+    GREEN = "green"
+    YELLOW = "yellow"
+    ALL_RED = "all_red"
+
+
+@dataclass(frozen=True)
+class SignalPhase:
+    """A fixed green interval followed by yellow and all-red clearance."""
+
+    green_seconds: float
+    movement_ids: frozenset[str]
+    yellow_seconds: float = 3.0
+    all_red_seconds: float = 1.0
+    name: str = ""
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.green_seconds) or self.green_seconds <= 0:
+            raise ValueError("Signal green time must be finite and positive")
+        if not isfinite(self.yellow_seconds) or self.yellow_seconds < 0:
+            raise ValueError("Signal yellow time must be finite and nonnegative")
+        if not isfinite(self.all_red_seconds) or self.all_red_seconds < 0:
+            raise ValueError("Signal all-red time must be finite and nonnegative")
+        if isinstance(self.movement_ids, str):
+            raise ValueError("Signal movement IDs must be supplied as a collection")
+        try:
+            movement_ids = frozenset(self.movement_ids)
+        except TypeError as error:
+            raise ValueError("Signal movement IDs must be an iterable of IDs") from error
+        if any(not isinstance(item, str) or not item for item in movement_ids):
+            raise ValueError("Signal movement IDs must be nonempty strings")
+        object.__setattr__(self, "movement_ids", movement_ids)
+
+
+@dataclass(frozen=True)
+class SignalPlan:
+    """A cyclic sequence of fixed-time movement phases."""
+
+    phases: tuple[SignalPhase, ...]
+
+    def __post_init__(self) -> None:
+        phases = tuple(self.phases)
+        if not phases or any(not isinstance(phase, SignalPhase) for phase in phases):
+            raise ValueError("A signal plan needs at least one valid phase")
+        cycle_seconds = sum(
+            phase.green_seconds + phase.yellow_seconds + phase.all_red_seconds
+            for phase in phases
+        )
+        if not isfinite(cycle_seconds) or cycle_seconds <= 0:
+            raise ValueError("Signal cycle time must be finite and positive")
+        object.__setattr__(self, "phases", phases)
+
+    @property
+    def cycle_seconds(self) -> float:
+        return sum(
+            phase.green_seconds + phase.yellow_seconds + phase.all_red_seconds
+            for phase in self.phases
+        )
+
+
+@dataclass(frozen=True)
+class SignalPlanChange:
+    """Switch to a plan at a simulation-time boundary and restart its cycle."""
+
+    at_seconds: float
+    plan: SignalPlan
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.at_seconds) or self.at_seconds < 0:
+            raise ValueError("Signal plan change time must be finite and nonnegative")
+        if not isinstance(self.plan, SignalPlan):
+            raise ValueError("Signal plan changes need a valid plan")
+
+
+@dataclass(frozen=True)
+class SignalState:
+    aspect: SignalAspect
+    phase_index: int
+    movement_ids: frozenset[str]
+
+
+@dataclass(frozen=True)
+class FixedTimeSignalController:
+    """Cycle fixed-time plans using simulation time, with optional plan changes.
+
+    A scheduled plan starts at its declared time with phase zero. Any vehicle
+    already granted a movement claim may finish clearing; new claims still
+    have to pass the coordinator's conflicting-occupancy check.
+    """
+
+    plan: SignalPlan
+    schedule: tuple[SignalPlanChange, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.plan, SignalPlan):
+            raise ValueError("A fixed-time controller needs a valid plan")
+        schedule = tuple(self.schedule)
+        if any(not isinstance(item, SignalPlanChange) for item in schedule):
+            raise ValueError("Signal schedule entries must be valid plan changes")
+        times = [item.at_seconds for item in schedule]
+        if times != sorted(times) or len(times) != len(set(times)):
+            raise ValueError("Signal plan changes must be in strictly increasing time order")
+        object.__setattr__(self, "schedule", schedule)
+
+    def state_at(self, elapsed_seconds: float) -> SignalState:
+        """Return the active phase state at nonnegative simulation time."""
+        if not isfinite(elapsed_seconds) or elapsed_seconds < 0:
+            raise ValueError("Signal time must be finite and nonnegative")
+        plan = self.plan
+        plan_started = 0.0
+        for change in self.schedule:
+            if change.at_seconds > elapsed_seconds:
+                break
+            plan = change.plan
+            plan_started = change.at_seconds
+
+        cycle_time = (elapsed_seconds - plan_started) % plan.cycle_seconds
+        for index, phase in enumerate(plan.phases):
+            if cycle_time < phase.green_seconds:
+                return SignalState(SignalAspect.GREEN, index, phase.movement_ids)
+            cycle_time -= phase.green_seconds
+            if cycle_time < phase.yellow_seconds:
+                return SignalState(SignalAspect.YELLOW, index, phase.movement_ids)
+            cycle_time -= phase.yellow_seconds
+            if cycle_time < phase.all_red_seconds:
+                return SignalState(SignalAspect.ALL_RED, index, frozenset())
+            cycle_time -= phase.all_red_seconds
+        # Modulo and finite positive phase lengths make this unreachable except
+        # for accumulated floating-point roundoff at the cycle boundary.
+        first = plan.phases[0]
+        return SignalState(SignalAspect.GREEN, 0, first.movement_ids)
+
+    def is_green(self, movement_id: str, elapsed_seconds: float) -> bool:
+        state = self.state_at(elapsed_seconds)
+        return state.aspect is SignalAspect.GREEN and movement_id in state.movement_ids
 
 
 @dataclass(frozen=True)
@@ -101,6 +241,17 @@ class AllWayStopCoordinator:
         operate together, and circulating cars do not wait for entering cars.
         """
         return not self._blocked_by_claim(car_id, connection)
+
+    def can_claim_signal(self, car_id: str, connection: LaneConnection) -> bool:
+        """A green signal skips arrival ordering but not conflict occupancy."""
+        return not self._blocked_by_claim(car_id, connection)
+
+    def claim_signal(self, car_id: str, connection: LaneConnection) -> bool:
+        if not self.can_claim_signal(car_id, connection):
+            return False
+        self.claims[(car_id, connection.id)] = connection
+        self.arrivals.pop(car_id, None)
+        return True
 
     def claim_merge(self, car_id, connection):
         if not self.can_enter_merge(car_id, connection):

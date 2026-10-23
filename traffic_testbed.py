@@ -10,7 +10,7 @@ from time import perf_counter
 
 from city import CityMap
 from car_brain import CarBrain, CarDecision, CarObservation
-from intersection_controls import AllWayStopCoordinator
+from intersection_controls import AllWayStopCoordinator, FixedTimeSignalController
 from merge_behavior import observe_merge, MERGE_STRATEGIES, MergeTrafficSnapshot
 from soft_deadlock import DeadlockCandidate, SoftDeadlockResolver, merge_space_clear
 from simulation_profiler import SimulationProfiler
@@ -144,6 +144,9 @@ class RoadVehicleSimulation:
     stop_coordinator: AllWayStopCoordinator = field(
         default_factory=AllWayStopCoordinator, repr=False,
     )
+    signal_controllers: dict[str, FixedTimeSignalController] = field(
+        default_factory=dict, repr=False,
+    )
     elapsed_time: float = 0.0
     _spawned_count: int = field(default=0, init=False, repr=False)
     _network_token: tuple[int, int] | None = field(default=None, init=False, repr=False)
@@ -186,6 +189,18 @@ class RoadVehicleSimulation:
     def _validate_update_mode(self) -> None:
         if self.update_mode not in ("legacy", "data_first"):
             raise ValueError("Traffic update mode must be legacy or data_first")
+
+    def signal_is_green(self, connection: LaneConnection) -> bool:
+        """Return the configured signal permission for one movement.
+
+        Signal controls without a matching controller fail closed, so a
+        partially configured intersection cannot silently behave like yield.
+        """
+        controller_id = connection.control.controller_id
+        controller = self.signal_controllers.get(controller_id or "")
+        return controller is not None and controller.is_green(
+            connection.id, self.elapsed_time,
+        )
 
     def sync_network(self, city_map: CityMap) -> tuple[bool, list[RoutedRoadVehicle]]:
         """Discard routes made for an older version of the city lane graph."""
@@ -395,6 +410,7 @@ class RoadVehicleSimulation:
             car.cruise_speed_bound = _route_cruise_speed(car, self.speed_mph)
         priority_contenders = _observe_priority_arrivals(
             self.cars, self.stop_coordinator, self.elapsed_time,
+            self.signal_controllers,
         )
         deadlock_candidates = []
         for car in self.cars:
@@ -410,8 +426,10 @@ class RoadVehicleSimulation:
                 continue
             deadlock_candidates.append(DeadlockCandidate(
                 car.id,
-                (movement[2].merge_target is not None
-                 or car.id in priority_contenders)
+                ((movement[2].merge_target is not None
+                  or car.id in priority_contenders)
+                 and (movement[2].control.kind is not ControlType.SIGNAL
+                      or self.signal_is_green(movement[2])))
                 and car.brain.wait_reason != "following queued car"
                 and _temporary_winner_path_clear(
                     car, movement, self.cars, self.occupancy,
@@ -450,8 +468,21 @@ class RoadVehicleSimulation:
             )
             is_merge = movement is not None and movement[2].merge_target is not None
             merge_observation = observe_merge(car, movement, self.cars) if is_merge else None
+            signal_green = (
+                movement is not None
+                and movement[2].control.kind is ControlType.SIGNAL
+                and not has_claim
+                and self.signal_is_green(movement[2])
+            )
+            signal_red = (
+                movement is not None
+                and movement[2].control.kind is ControlType.SIGNAL
+                and not has_claim
+                and not signal_green
+            )
             priority = _intersection_priority(
                 car, movement, distance_to_stop, self.stop_coordinator,
+                signal_green=signal_green,
             )
             priority_reason = "waiting for intersection priority"
             if movement is not None and not has_claim and not is_merge:
@@ -503,7 +534,14 @@ class RoadVehicleSimulation:
                     speed=car.speed,
                     distance_to_stop=distance_to_stop,
                     must_stop=movement is not None and not has_claim and movement[2].control.kind is ControlType.STOP,
-                    must_yield=movement is not None and not has_claim and movement[2].control.kind is not ControlType.STOP,
+                    must_yield=(
+                        movement is not None and not has_claim
+                        and movement[2].control.kind not in (
+                            ControlType.STOP, ControlType.SIGNAL,
+                        )
+                    ),
+                    signal_red=signal_red,
+                    signal_green=signal_green,
                     priority_reason=priority_reason,
                     merge=merge_observation,
                     has_priority=priority,
@@ -541,8 +579,12 @@ class RoadVehicleSimulation:
                     has_claim = self.stop_coordinator.claim_temporary_winner(
                         car.id, movement[2])
                 else:
-                    has_claim = (self.stop_coordinator.claim_merge(car.id, movement[2]) if is_merge
-                                 else self.stop_coordinator.claim(car.id, movement[2]))
+                    if is_merge:
+                        has_claim = self.stop_coordinator.claim_merge(car.id, movement[2])
+                    elif movement[2].control.kind is ControlType.SIGNAL:
+                        has_claim = self.stop_coordinator.claim_signal(car.id, movement[2])
+                    else:
+                        has_claim = self.stop_coordinator.claim(car.id, movement[2])
                 if has_claim:
                     car._claimed_movement = movement[2]
                     if is_merge:
@@ -678,6 +720,7 @@ class RoadVehicleSimulation:
 
         priority_contenders = _observe_priority_arrivals(
             cars, self.stop_coordinator, self.elapsed_time,
+            self.signal_controllers,
         )
         deadlock_candidates = []
         for car in cars:
@@ -693,8 +736,10 @@ class RoadVehicleSimulation:
                 continue
             deadlock_candidates.append(DeadlockCandidate(
                 car.id,
-                (movement[2].merge_target is not None
-                 or car.id in priority_contenders)
+                ((movement[2].merge_target is not None
+                  or car.id in priority_contenders)
+                 and (movement[2].control.kind is not ControlType.SIGNAL
+                      or self.signal_is_green(movement[2])))
                 and car.brain.wait_reason != "following queued car"
                 and _temporary_winner_path_clear(
                     car, movement, cars, self.occupancy,
@@ -753,6 +798,19 @@ class RoadVehicleSimulation:
             )
             intent_phase_seconds["intent_control_state"] += perf_counter() - phase_started
 
+            signal_green = (
+                movement is not None
+                and movement[2].control.kind is ControlType.SIGNAL
+                and not has_claim
+                and self.signal_is_green(movement[2])
+            )
+            signal_red = (
+                movement is not None
+                and movement[2].control.kind is ControlType.SIGNAL
+                and not has_claim
+                and not signal_green
+            )
+
             # Observe merge traffic and ask the shared coordinator whether this
             # car may claim the crossing or enter the merge.
             phase_started = perf_counter()
@@ -765,6 +823,7 @@ class RoadVehicleSimulation:
             phase_started = perf_counter()
             priority = _intersection_priority(
                 car, movement, distance_to_stop, self.stop_coordinator,
+                signal_green=signal_green,
             )
             priority_reason = "waiting for intersection priority"
             intent_phase_seconds["intent_priority_query"] += perf_counter() - phase_started
@@ -841,8 +900,12 @@ class RoadVehicleSimulation:
                     ),
                     must_yield=(
                         movement is not None and not has_claim
-                        and movement[2].control.kind is not ControlType.STOP
+                        and movement[2].control.kind not in (
+                            ControlType.STOP, ControlType.SIGNAL,
+                        )
                     ),
+                    signal_red=signal_red,
+                    signal_green=signal_green,
                     priority_reason=priority_reason,
                     merge=merge_observation,
                     has_priority=priority,
@@ -927,6 +990,10 @@ class RoadVehicleSimulation:
                     )
                 elif intent.is_merge:
                     has_claim = self.stop_coordinator.claim_merge(
+                        intent.car.id, movement[2],
+                    )
+                elif movement[2].control.kind is ControlType.SIGNAL:
+                    has_claim = self.stop_coordinator.claim_signal(
                         intent.car.id, movement[2],
                     )
                 else:
@@ -1199,10 +1266,18 @@ def _entry_claim_distance(speed: float) -> float:
     return max(10.0, speed * 0.6)
 
 
-def _intersection_priority(car, movement, distance_to_stop, coordinator) -> bool:
+def _intersection_priority(
+    car, movement, distance_to_stop, coordinator, *, signal_green: bool = False,
+) -> bool:
     if movement is None:
         return False
     connection = movement[2]
+    if connection.control.kind is ControlType.SIGNAL:
+        if not signal_green:
+            return False
+        if connection.merge_target is not None:
+            return coordinator.can_enter_merge(car.id, connection)
+        return coordinator.can_claim_signal(car.id, connection)
     if connection.merge_target is not None:
         return coordinator.can_enter_merge(car.id, connection)
     if (connection.control.kind is not ControlType.STOP
@@ -1212,7 +1287,9 @@ def _intersection_priority(car, movement, distance_to_stop, coordinator) -> bool
     return coordinator.can_claim(car.id, connection)
 
 
-def _observe_priority_arrivals(cars, coordinator, elapsed_time) -> set[str]:
+def _observe_priority_arrivals(
+    cars, coordinator, elapsed_time, signal_controllers=None,
+) -> set[str]:
     """Register only the entry-ready front vehicle of each incoming lane.
 
     Route distance to the entry compares cars with different route origins.
@@ -1249,6 +1326,11 @@ def _observe_priority_arrivals(cars, coordinator, elapsed_time) -> set[str]:
         connection = movement[2]
         if connection.merge_target is not None:
             continue
+        if (connection.control.kind is ControlType.SIGNAL
+                and not _signal_is_green(
+                    connection, signal_controllers or {}, elapsed_time,
+                )):
+            continue
         if not coordinator.has_claim(car.id, connection):
             if distance > _entry_claim_distance(car.speed):
                 continue
@@ -1257,7 +1339,8 @@ def _observe_priority_arrivals(cars, coordinator, elapsed_time) -> set[str]:
                 continue
         ready.append((car, connection, distance))
     eligible = {car.id: connection for car, connection, _ in ready
-                if not coordinator.has_claim(car.id, connection)}
+                if not coordinator.has_claim(car.id, connection)
+                and connection.control.kind is not ControlType.SIGNAL}
     coordinator.retain_arrivals(eligible)
     for car, connection, distance in ready:
         if car.id not in eligible:
@@ -1269,6 +1352,12 @@ def _observe_priority_arrivals(cars, coordinator, elapsed_time) -> set[str]:
                 car.id, connection, elapsed_time + distance / max(car.speed, 1.0),
             )
     return {car.id for car, _, _ in ready}
+
+
+def _signal_is_green(connection, signal_controllers, elapsed_time) -> bool:
+    controller_id = connection.control.controller_id
+    controller = signal_controllers.get(controller_id or "")
+    return controller is not None and controller.is_green(connection.id, elapsed_time)
 
 
 def _next_controlled_movement(

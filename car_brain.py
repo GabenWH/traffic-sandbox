@@ -49,6 +49,8 @@ class CarObservation:
     inside_maneuver: bool = False
     temporary_winner: bool = False
     temporary_winner_blocked: bool = False
+    signal_red: bool = False
+    signal_green: bool = False
 
 
 @dataclass(frozen=True)
@@ -114,7 +116,23 @@ class CarBrain:
 
         # Our rear may still occupy one junction while our nose must obey the
         # next signal. Clearing the old junction does not cancel that signal.
-        if observation.inside_intersection and not (observation.must_stop or observation.must_yield):
+        if observation.signal_red and observation.distance_to_stop is not None:
+            self.stopped_elapsed = 0.0
+            distance = max(0.0, observation.distance_to_stop)
+            desired = min(desired, sqrt(2.0 * COMFORTABLE_BRAKING * distance))
+            state = BehaviorState.WAITING_FOR_PRIORITY
+            reason = "red signal"
+        elif observation.signal_green and observation.distance_to_stop is not None:
+            self.stopped_elapsed = 0.0
+            if observation.has_priority:
+                state = BehaviorState.ENTERING_INTERSECTION
+                request_claim = True
+            else:
+                distance = max(0.0, observation.distance_to_stop)
+                desired = min(desired, sqrt(2.0 * COMFORTABLE_BRAKING * distance))
+                state = BehaviorState.WAITING_FOR_PRIORITY
+                reason = observation.priority_reason
+        elif observation.inside_intersection and not (observation.must_stop or observation.must_yield):
             state = BehaviorState.CLEARING_INTERSECTION
             self.stopped_elapsed = 0.0
         elif observation.must_yield and observation.distance_to_stop is not None:

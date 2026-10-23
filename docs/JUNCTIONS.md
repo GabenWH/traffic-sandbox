@@ -15,11 +15,46 @@ New traffic uses four rolling drivers followed by one cautious driver. The
 **Phantom target** field shows which circulating car a rolling driver is following.
 Save and load to check the junction type is retained.
 
+Fixed-time vehicle signals are configurable in the routed simulation API. Assign
+each signal-controlled lane connection a `ControlDefinition` with the shared
+controller ID, then list compatible connection IDs in the controller's phases.
+The controller uses simulation seconds, supports green/yellow/all-red clearance,
+and can switch plans at any nonnegative simulation time. Signal phases are
+programmatic; the Inspector has no phase editor yet.
+
+```python
+from intersection_controls import (
+    FixedTimeSignalController, SignalPhase, SignalPlan, SignalPlanChange,
+)
+from models import ControlDefinition, ControlType
+
+# Build these sets from movement IDs that may safely receive green together.
+for movement in intersection.lane_connections:
+    movement.control = ControlDefinition(ControlType.SIGNAL, "main")
+
+day_plan = SignalPlan((
+    SignalPhase(28.0, north_south_ids, name="north-south"),
+    SignalPhase(24.0, east_west_ids, name="east-west"),
+))
+evening_plan = SignalPlan((
+    SignalPhase(22.0, north_south_ids),
+    SignalPhase(30.0, east_west_ids),
+))
+traffic.signal_controllers["main"] = FixedTimeSignalController(
+    day_plan,
+    schedule=(SignalPlanChange(17_400.0, evening_plan),),
+)
+```
+
+An absent controller leaves the movement red. Yellow and all-red intervals deny
+new claims; vehicles with an existing claim finish clearing before conflicting
+movements can enter.
+
 Converting a junction clears temporary cars (their routes describe the old
 geometry), but keeps your source/sink selections. Let new cars spawn afterward.
 Roundabouts have one circulating lane and right-hand traffic. Multi-lane spiral
-roundabouts, zipper merging, driver personalities and traffic lights are outside
-this version. The older fixed-freeway simulation is not migrated here.
+roundabouts, zipper merging and driver personalities are outside this version.
+The older fixed-freeway simulation is not migrated here.
 
 ## The code in plain English
 
@@ -46,12 +81,14 @@ this version. The older fixed-freeway simulation is not migrated here.
    is waiting for someone else, one stable winner breaks the cycle. Existing
    all-way stops retain their conservative one-car-at-a-time policy. Merge entries
    do not join that arrival queue: claims only stop two cars occupying a conflicting
-   entrance together. Each driver's brain decides whether through traffic leaves
-   enough space. Circulating cars retain priority.
+   entrance together. Fixed-time signal plans grant explicit movement groups with
+   simulation-time cycles and scheduled plan changes. Each driver's brain decides
+   whether through traffic leaves enough space. Circulating cars retain priority.
 5. **`car_brain.py` makes the individual decision.** It first applies its driver's
    following preference, then asks the selected merge strategy using that speed.
-   This prevents reserving a gap at cruise speed while actually queued. A yield
-   allows rolling entry; a stop still requires the full stop dwell.
+   This prevents reserving a gap at cruise speed while actually queued. A signal
+   denies new entry outside green; a yield allows rolling entry; a stop still
+   requires the full stop dwell.
 6. **`traffic_testbed.py` applies motion.** It checks exit space, grants claims close
    to entry, rechecks merge reservations until the nose enters, and releases them
    after the rear clears. A four-foot physical following guard is separate from
