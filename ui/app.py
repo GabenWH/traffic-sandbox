@@ -45,7 +45,7 @@ class FreewaySimulator(
 ):
     """Coordinate models, windows, tools, rendering, and simulation ticks."""
 
-    def __init__(self, root: tk.Tk) -> None:
+    def __init__(self, root: tk.Tk, *, traffic_engine: str = "data_first") -> None:
         self.root = root
         root.title("Freeway Simulator")
         root.report_callback_exception = self.report_callback_exception
@@ -59,7 +59,7 @@ class FreewaySimulator(
         ensure_western_land_port(self.city_map)
         # All constructed-road actors share this occupancy and priority model.
         self.road_vehicles = RoadVehicleSimulation(
-            update_mode="data_first",
+            update_mode=traffic_engine,
             debugger=TrafficDebugger(),
         )
         self.test_traffic = self.road_vehicles

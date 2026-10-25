@@ -267,6 +267,7 @@ class RoadVehicleSimulation:
         default_factory=SoftDeadlockResolver, repr=False,
     )
     update_mode: str = "legacy"
+    _native_controller: object = field(default=None, init=False, repr=False, compare=False)
 
     colors = ("#ff5b72", "#37e6ff", "#f7d154", "#7fea8c", "#c98cff")
 
@@ -279,6 +280,8 @@ class RoadVehicleSimulation:
         if name in ("cars", "active_junction_ids") and isinstance(
                 self.__dict__.get(name), _ReadOnlySequence):
             raise AttributeError(f"{name} is read-only; use the simulation mutation APIs")
+        if name == "update_mode" and self.__dict__.get(name) != value and self.__dict__.get("_native_controller") is not None:
+            self._discard_native()
         object.__setattr__(self, name, value)
 
     def __post_init__(self) -> None:
@@ -317,6 +320,10 @@ class RoadVehicleSimulation:
         return self._roster_view.get()[0]
 
     def _mark_occupancy_changed(self, car: RoutedRoadVehicle) -> None:
+        # Explicit advance/place calls on a public vehicle view are inputs too.
+        # Reimport the complete mirrored state before the next native operation.
+        if self._native_controller is not None and not self._native_controller.publishing:
+            self._discard_native()
         identity = id(car)
         if identity not in self._occupancy_changes and not self.occupancy.is_current(car):
             self._occupancy_changes[identity] = car
@@ -332,8 +339,21 @@ class RoadVehicleSimulation:
         return False
 
     def _validate_update_mode(self) -> None:
-        if self.update_mode not in ("legacy", "data_first"):
-            raise ValueError("Traffic update mode must be legacy or data_first")
+        if self.update_mode not in ("legacy", "data_first", "native"):
+            raise ValueError("Traffic update mode must be legacy or data_first or native")
+
+    def _native_backend(self, city_map=None):
+        if self._native_controller is None:
+            from native_spawning import NativeRoadSimulation
+            self._native_controller = NativeRoadSimulation(self, city_map)
+        elif city_map is not None:
+            self._native_controller.bind_city(city_map)
+        return self._native_controller
+
+    def _discard_native(self):
+        if self._native_controller is not None:
+            self._native_controller.close()
+            self._native_controller = None
 
     def sync_network(self, city_map: CityMap) -> tuple[bool, list[RoutedRoadVehicle]]:
         """Discard routes made for an older version of the city lane graph."""
@@ -391,6 +411,8 @@ class RoadVehicleSimulation:
     ) -> RoutedRoadVehicle | None:
         """Spawn one car when a directed route exists between two junctions."""
         self.sync_network(city_map)
+        if self.update_mode == "native":
+            return self._native_backend(city_map).spawn_car(source, destination)
         if source is destination or self._roster_view.get()[2] >= self.max_cars:
             return None
         route_key = (id(source), id(destination))
@@ -439,6 +461,12 @@ class RoadVehicleSimulation:
 
         Publish pending placements before checking the retained occupancy index.
         """
+        if self.update_mode == "native":
+            return self._native_backend().admit_route(
+                route, vehicle_id=vehicle_id, source_id=source_id, destination_id=destination_id,
+                appearance=appearance, source_type=source_type, length=length, width=width,
+                speed_cap_mph=speed_cap_mph, color=color,
+            )
         if vehicle_id in self._roster_view.get()[1]:
             return None
         points = vehicle_route_points(route)
@@ -500,6 +528,9 @@ class RoadVehicleSimulation:
                 completed.extend(self.update(city_map, step))
                 remaining -= step
             return completed
+        if self.update_mode == "native":
+            return self._native_backend(city_map).update(elapsed_seconds)
+        self._discard_native()
         frame_started = perf_counter()
         if self.debugger is not None:
             self.debugger.begin_frame()
@@ -1254,6 +1285,7 @@ class RoadVehicleSimulation:
 
     def clear_vehicles(self) -> list[RoutedRoadVehicle]:
         """Remove every active city road vehicle and release its claims."""
+        self._discard_native()
         removed = list(self.cars)
         for car in removed:
             self.stop_coordinator.forget_car(car.id)
@@ -1273,6 +1305,8 @@ class RoadVehicleSimulation:
     def place_vehicle(self, vehicle_id: str, distance: float) -> None:
         """Publish a manual placement before the next occupancy query."""
         self._vehicle(vehicle_id).place(distance)
+        if self._native_controller is not None:
+            self._native_controller.engine.place(vehicle_id, distance)
         self._publish_occupancy_changes()
 
     def resize_vehicle(self, vehicle_id: str, *, length: float, width: float) -> None:
@@ -1280,6 +1314,8 @@ class RoadVehicleSimulation:
             raise ValueError("Vehicle dimensions must be positive and finite")
         car = self._vehicle(vehicle_id)
         car.length, car.width = length, width
+        if self._native_controller is not None:
+            self._native_controller.engine.resize(vehicle_id, length, width)
         self._mark_occupancy_changed(car)
         self._publish_occupancy_changes()
 
@@ -1294,6 +1330,7 @@ class RoadVehicleSimulation:
         segments = _route_occupancy_segments(route)
         # Validate the route source's write guard before changing live fields.
         car._route_cache.sync(movements, segments)
+        self._discard_native()
         self.stop_coordinator.forget_car(vehicle_id)
         car.route, car.points, car.total_length = route, points, total_length
         car.controlled_movements, car.route_segments = movements, segments
@@ -1312,6 +1349,7 @@ class RoadVehicleSimulation:
             raise ValueError("Vehicle order must contain each active ID exactly once")
         if ids == tuple(car.id for car in self.cars):
             return
+        self._discard_native()
         with self._roster_revision.mutate():
             self._cars[:] = [by_id[item] for item in ids]
         # Explicit processing-order replacement also replaces occupancy tie order.
@@ -1327,6 +1365,8 @@ class RoadVehicleSimulation:
         car = next((item for item in self.cars if item.id == vehicle_id), None)
         if car is None:
             return None
+        if self._native_controller is not None:
+            self._native_controller.engine.remove(vehicle_id)
         with self._roster_revision.mutate():
             self._cars.remove(car)
         self.stop_coordinator.forget_car(car.id)

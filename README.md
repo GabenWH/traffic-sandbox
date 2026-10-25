@@ -13,6 +13,14 @@ Run it with Python 3:
 python3 freeway_simulator.py
 ```
 
+To run constructed-road vehicle spawning and movement in C++17:
+
+```bash
+python3 freeway_simulator.py --traffic-engine native
+```
+
+This requires a local C++17 compiler. See [native engine usage and parity tests](native/traffic/README.md).
+
 To use the 3D road view, install Panda3D first:
 
 ```bash
