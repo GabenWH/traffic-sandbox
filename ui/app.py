@@ -346,17 +346,18 @@ class FreewaySimulator(
         FreewaySimulator._sync_road_network(self)
         if self.running:
             phases = {
-                building.id: building.phase
-                for building in self.city_map.buildings
+                buildable.id: buildable.phase
+                for buildable in (*self.city_map.buildings, *self.city_map.roads)
             }
+            road_revision = self.city_map.mobility_revision
             self.construction_simulation.update(
                 self.city_map,
                 elapsed_seconds * self.simulation_speed,
             )
             if any(
-                phases.get(building.id) != building.phase
-                for building in self.city_map.buildings
-            ):
+                phases.get(buildable.id) != buildable.phase
+                for buildable in (*self.city_map.buildings, *self.city_map.roads)
+            ) or road_revision != self.city_map.mobility_revision:
                 self.redraw_world()
         self.draw_road_vehicles()
 

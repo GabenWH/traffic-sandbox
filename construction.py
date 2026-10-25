@@ -20,6 +20,7 @@ from mobility import (
 from models import (
     BuildablePhase,
     Point,
+    Road,
     WorkType,
     point_at_polyline_distance,
     polyline_length,
@@ -150,13 +151,49 @@ class CrewPayload:
     workers: int
 
 
+@dataclass(frozen=True)
+class ExportPayload:
+    resource_id: str
+    amount: float
+
+
+@dataclass
+class RoadDeconstructionJob:
+    road_id: str
+    salvage_amount: float
+    required_workers: int = 2
+    exported_amount: float = 0.0
+    work_complete: bool = False
+    export_scheduled: bool = False
+
+
+REGIONAL_EXPORT_SITE_ID = "regional-road-port-export"
+DECONSTRUCTION_RESOURCE_ID = "deconstruction_materials"
+DECONSTRUCTION_WORK_PER_SQUARE_FOOT = 0.01
+
+
+def road_surface_area(road: Road) -> float:
+    """Paved surface area in square feet (the world's native length unit)."""
+    return polyline_length(road.centerline) * road.width
+
+
+def road_access_points(city_map: CityMap, road: Road) -> tuple[LanePosition, ...]:
+    """Directional lane positions at the road work site's midpoint."""
+    if road not in city_map.roads:
+        return ()
+    midpoint = point_at_polyline_distance(
+        road.centerline, polyline_length(road.centerline) / 2,
+    )
+    return tuple(nearest_lane_position(lane, midpoint)[0] for lane in road.lanes)
+
+
 @dataclass
 class ConstructionTrip:
     id: str
     provider_id: str
     building_id: str
     truck_id: str
-    payload: MaterialPayload | CrewPayload
+    payload: MaterialPayload | CrewPayload | ExportPayload
     route_points: tuple[Point, ...]
     speed: float
     distance_travelled: float = 0.0
@@ -220,6 +257,37 @@ class ConstructionSimulation:
         self._city_map: CityMap | None = None
         self._network_token: tuple[int, int] | None = None
         self._material_delivery_counts: dict[tuple[str, str], int] = {}
+        self.road_deconstruction_jobs: dict[str, RoadDeconstructionJob] = {}
+        self.exported_materials: dict[str, float] = {}
+
+    def request_road_deconstruction(
+        self, city_map: CityMap, road: Road,
+    ) -> RoadDeconstructionJob:
+        """Schedule demolition and export using the road's Buildable state."""
+        if road not in city_map.roads:
+            raise ValueError("Road must belong to this city")
+        if any(abs(x) <= WEST_EDGE_TOLERANCE for x, _y in road.centerline):
+            raise ValueError("The regional port road cannot be deconstructed")
+        if road.phase in (BuildablePhase.DEMOLISHING, BuildablePhase.DECOMMISSIONED):
+            raise ValueError("Road is already being decommissioned")
+        if road.active_work is not None:
+            raise ValueError("Road already has active work")
+        if DECONSTRUCTION_RESOURCE_ID not in self.resources:
+            raise ConstructionCatalogError(
+                f"Unknown deconstruction resource {DECONSTRUCTION_RESOURCE_ID!r}"
+            )
+        salvage = road_surface_area(road)
+        if not isfinite(salvage) or salvage <= 0:
+            raise ValueError("Road must have positive finite paved surface area")
+        job = RoadDeconstructionJob(road.id, salvage)
+        road.begin_work(
+            WorkType.DEMOLITION, max(1.0, salvage * DECONSTRUCTION_WORK_PER_SQUARE_FOOT),
+        )
+        road.inventory.add(DECONSTRUCTION_RESOURCE_ID, salvage)
+        road.construction_workers = job.required_workers
+        road.assigned_workers = 0
+        self.road_deconstruction_jobs[road.id] = job
+        return job
 
     def update(
         self,
@@ -232,6 +300,7 @@ class ConstructionSimulation:
         self._city_map = city_map
         self.completed_road_vehicles = []
         self.sync_network(city_map)
+        self._restore_road_deconstruction_jobs(city_map)
         completed: list[ConstructionTrip] = []
         self._start_ready_work(city_map)
         self._queue_outstanding_demand(city_map)
@@ -253,6 +322,9 @@ class ConstructionSimulation:
                     self._apply_delivery(trip)
                     self.trips.remove(trip)
                     completed.append(trip)
+            # A completed export can remove a road during this update.
+            # Requeue other jobs' loads before advancing their stale routes.
+            self.completed_road_vehicles.extend(self.sync_network(city_map))
             remaining = max(0.0, remaining - step)
             self._seconds_until_next_departure = max(
                 0.0, self._seconds_until_next_departure - step,
@@ -264,14 +336,35 @@ class ConstructionSimulation:
             self._depart_next_trip_if_ready()
         return tuple(completed)
 
+    def _restore_road_deconstruction_jobs(self, city_map: CityMap) -> None:
+        """Resume saved work orders and salvage that has not reached export."""
+        for road in city_map.roads:
+            work = road.active_work
+            if (
+                road.id in self.road_deconstruction_jobs
+                or road.phase is not BuildablePhase.DEMOLISHING
+                or work is None or work.kind is not WorkType.DEMOLITION
+            ):
+                continue
+            remaining = road.inventory.amounts.get(DECONSTRUCTION_RESOURCE_ID, 0.0)
+            total = road_surface_area(road)
+            if remaining <= 0:
+                continue
+            self.road_deconstruction_jobs[road.id] = RoadDeconstructionJob(
+                road.id, total, exported_amount=max(0.0, total - remaining),
+                work_complete=work.is_complete,
+            )
+
     def sync_network(self, city_map: CityMap) -> list[RoutedRoadVehicle]:
         """Cancel deliveries whose saved routes use a replaced lane graph."""
         token = (id(city_map), city_map.mobility_revision)
+        cancelled = []
         if self._network_token is not None and token != self._network_token:
-            self.clear_trips()
+            cancelled = [t.road_vehicle for t in self.trips if t.road_vehicle is not None]
+            self.clear_trips(preserve_deconstruction=True)
         self._network_token = token
         _changed, removed = self.road_vehicles.sync_network(city_map)
-        return removed
+        return [*cancelled, *removed]
 
     def _advance_work(self, city_map: CityMap, elapsed_seconds: float) -> None:
         for building in city_map.buildings:
@@ -283,6 +376,21 @@ class ConstructionSimulation:
             ):
                 if building.perform_work(building.assigned_workers * elapsed_seconds):
                     building.assigned_workers = 0
+        for road_id, job in tuple(self.road_deconstruction_jobs.items()):
+            road = next((r for r in city_map.roads if r.id == road_id), None)
+            if (
+                road is None or job.work_complete or elapsed_seconds <= 0
+                or road.active_work is None
+                or road.active_work.kind is not WorkType.DEMOLITION
+                or road.assigned_workers <= 0
+            ):
+                continue
+            # Keep the completed work order until export finishes, so saving
+            # preserves a resumable demolition site rather than an empty road.
+            road.active_work.add_work(road.assigned_workers * elapsed_seconds)
+            if road.active_work.is_complete:
+                road.assigned_workers = 0
+                job.work_complete = True
 
     def _start_ready_work(self, city_map: CityMap) -> None:
         for building in city_map.buildings:
@@ -299,6 +407,7 @@ class ConstructionSimulation:
     def _queue_outstanding_demand(self, city_map: CityMap) -> None:
         self._dispatch_materials(city_map)
         self._dispatch_workers(city_map)
+        self._dispatch_deconstruction_exports(city_map)
 
     def _depart_next_trip_if_ready(self) -> None:
         if (
@@ -310,11 +419,12 @@ class ConstructionSimulation:
         if trip.route is None:
             raise ValueError("Construction trip has no mobility route")
         truck = self.trucks[trip.truck_id]
+        is_export = isinstance(trip.payload, ExportPayload)
         vehicle = self.road_vehicles.admit_route(
             trip.route,
             vehicle_id=trip.id,
-            source_id=trip.provider_id,
-            destination_id=trip.building_id,
+            source_id=trip.building_id if is_export else trip.provider_id,
+            destination_id=REGIONAL_EXPORT_SITE_ID if is_export else trip.building_id,
             appearance=self._appearance_for_trip(trip, truck),
             length=truck.length,
             width=truck.width,
@@ -385,11 +495,23 @@ class ConstructionSimulation:
         ]
         return min(routes, key=lambda route: route.cost) if routes else None
 
+    def _best_road_route(
+        self, city_map: CityMap, road: Road, *, outbound: bool = False,
+    ) -> Path[MobilityNode, MobilityLink] | None:
+        port = self.provider.access_points(city_map)
+        site = road_access_points(city_map, road)
+        starts, destinations = (site, port) if outbound else (port, site)
+        routes = [
+            route for start in starts for destination in destinations
+            if (route := city_map.find_vehicle_route_between(start, destination)) is not None
+        ]
+        return min(routes, key=lambda route: route.cost) if routes else None
+
     def _make_trip(
         self,
-        building: Building,
+        building: Building | Road,
         truck: TruckSpec,
-        payload: MaterialPayload | CrewPayload,
+        payload: MaterialPayload | CrewPayload | ExportPayload,
         route: Path[MobilityNode, MobilityLink],
     ) -> ConstructionTrip:
         points = vehicle_route_points(route)
@@ -411,13 +533,31 @@ class ConstructionSimulation:
     def _apply_delivery(self, trip: ConstructionTrip) -> None:
         if self._city_map is None:
             return
+        road = next((r for r in self._city_map.roads if r.id == trip.building_id), None)
+        if isinstance(trip.payload, ExportPayload):
+            if road is None:
+                return
+            _state, consumed = road.inventory.consume(trip.payload.resource_id, trip.payload.amount)
+            self.exported_materials[trip.payload.resource_id] = (
+                self.exported_materials.get(trip.payload.resource_id, 0.0) + consumed
+            )
+            job = self.road_deconstruction_jobs.get(road.id)
+            if job is not None:
+                job.exported_amount += consumed
+                if job.exported_amount >= job.salvage_amount - ulp(job.salvage_amount) * 8:
+                    self._city_map.remove_road(road)
+                    self.road_deconstruction_jobs.pop(road.id)
+            return
         building = next(
             (item for item in self._city_map.buildings if item.id == trip.building_id),
             None,
         )
-        if building is None:
+        target = building or road
+        if target is None:
             return
         if isinstance(trip.payload, MaterialPayload):
+            if building is None:
+                return
             building.record_construction_delivery(
                 trip.payload.resource_id,
                 trip.payload.amount,
@@ -427,7 +567,7 @@ class ConstructionSimulation:
                 self._material_delivery_counts.get(key, 0) + 1
             )
         else:
-            building.assigned_workers += trip.payload.workers
+            target.assigned_workers += trip.payload.workers
 
     def _materials_complete(self, building: Building) -> bool:
         for resource_id, required in building.construction_needs.items():
@@ -465,15 +605,22 @@ class ConstructionSimulation:
         )
         return ulp(required) * max(4, transit_count + delivery_count + 2)
 
-    def clear_trips(self) -> None:
+    def clear_trips(self, *, preserve_deconstruction: bool = False) -> None:
         """Discard runtime trips when the current city is replaced."""
         for trip in self.trips:
             self.road_vehicles.remove_vehicle(trip.id)
         self.trips.clear()
         self.pending_trips.clear()
-        self.completed_road_vehicles.clear()
+        if not preserve_deconstruction:
+            self.completed_road_vehicles.clear()
         self._seconds_until_next_departure = 0.0
         self._material_delivery_counts.clear()
+        if preserve_deconstruction:
+            for job in self.road_deconstruction_jobs.values():
+                job.export_scheduled = False
+        else:
+            self.road_deconstruction_jobs.clear()
+            self.exported_materials.clear()
 
     def _dispatch_materials(self, city_map: CityMap) -> None:
         material_trucks = [
@@ -576,3 +723,57 @@ class ConstructionSimulation:
                 self._make_trip(building, truck, CrewPayload(count), route)
                 deficit -= count
                 available -= count
+
+        for job in self.road_deconstruction_jobs.values():
+            road = next((r for r in city_map.roads if r.id == job.road_id), None)
+            if road is None or job.work_complete:
+                continue
+            deficit = job.required_workers - road.assigned_workers - self._in_transit_workers(road.id)
+            if deficit <= 0:
+                continue
+            available = self.provider.available_workers()
+            if isnan(available) or available <= 0:
+                continue
+            route = self._best_road_route(city_map, road)
+            if route is None:
+                continue
+            while deficit > 0:
+                count = min(deficit, truck.crew_capacity)
+                if isfinite(available):
+                    count = min(count, int(available))
+                if count <= 0 or not self.provider.reserve_workers(count):
+                    break
+                self._make_trip(road, truck, CrewPayload(count), route)
+                deficit -= count
+                available -= count
+
+    def _dispatch_deconstruction_exports(self, city_map: CityMap) -> None:
+        material_trucks = [
+            t for t in self.trucks.values() if t.payload_kg > 0 and t.cargo_m3 > 0
+        ]
+        resource = self.resources.get(DECONSTRUCTION_RESOURCE_ID)
+        if not material_trucks or resource is None:
+            return
+        for job in self.road_deconstruction_jobs.values():
+            if not job.work_complete or job.export_scheduled:
+                continue
+            road = next((r for r in city_map.roads if r.id == job.road_id), None)
+            if road is None:
+                continue
+            route = self._best_road_route(city_map, road, outbound=True)
+            if route is None:
+                continue
+            truck = max(material_trucks, key=lambda t: (
+                min(t.payload_kg / resource.mass_kg_per_unit, t.cargo_m3 / resource.volume_m3_per_unit),
+                t.id,
+            ))
+            max_load = min(
+                truck.payload_kg / resource.mass_kg_per_unit,
+                truck.cargo_m3 / resource.volume_m3_per_unit,
+            )
+            remaining = job.salvage_amount - job.exported_amount
+            while remaining > 0:
+                amount = min(remaining, max_load)
+                self._make_trip(road, truck, ExportPayload(DECONSTRUCTION_RESOURCE_ID, amount), route)
+                remaining -= amount
+            job.export_scheduled = True

@@ -22,7 +22,7 @@ class SyncToolbarTests(unittest.TestCase):
         definitions = discover_tool_definitions()
         self.assertEqual(entries[0], original_entry)
         self.assertEqual(added, [tool_id for tool_id in definitions if tool_id != "file"])
-        self.assertEqual([entry["id"] for entry in entries], list(definitions))
+        self.assertEqual([entry["id"] for entry in entries], ["file", *added])
 
 
 if __name__ == "__main__":

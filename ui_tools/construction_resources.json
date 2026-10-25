@@ -24,6 +24,14 @@
       "mass_kg_per_unit": 1000,
       "volume_m3_per_unit": 1,
       "visual_key": "steel"
+    },
+    {
+      "id": "deconstruction_materials",
+      "name": "Deconstruction materials",
+      "unit": "ft²",
+      "mass_kg_per_unit": 20,
+      "volume_m3_per_unit": 0.01,
+      "visual_key": "deconstruction_materials"
     }
   ],
   "trucks": [
