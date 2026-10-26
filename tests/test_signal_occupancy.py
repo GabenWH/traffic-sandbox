@@ -1,6 +1,7 @@
 """Signal permissions follow light state; physical bodies own clearance."""
 import random
 import unittest
+from unittest.mock import patch
 
 from car_brain import BehaviorState
 from city import CityMap, Terrain
@@ -30,6 +31,59 @@ def scenario(mode):
 
 
 class SignalPermissionTests(unittest.TestCase):
+    def test_each_car_reads_one_shared_signal_aspect_per_update(self):
+        for mode in ('legacy', 'data_first'):
+            with self.subTest(mode=mode):
+                city, t, car, _, _ = scenario(mode)
+                with patch.object(t, '_signal_aspect', wraps=t._signal_aspect) as read_aspect:
+                    t.update(city, .05)
+                self.assertEqual(read_aspect.call_count, 1)
+
+    def test_data_first_only_rechecks_signal_after_a_new_claim(self):
+        city, t, car, _, _ = scenario('data_first')
+        with patch.object(
+            t.stop_coordinator,
+            'can_enter_signal',
+            wraps=t.stop_coordinator.can_enter_signal,
+        ) as check_entry:
+            t.update(city, .05)
+        self.assertEqual(check_entry.call_count, 1)
+
+    def test_far_green_approach_defers_physical_clearance_check(self):
+        city, t, car, (start, _, _), _ = scenario('data_first')
+        car.distance = start - car.length / 2 - 200.
+        car.speed = 10.
+        car.advance(0)
+        before = car.distance
+        with patch.object(
+            t.stop_coordinator,
+            'can_enter_signal',
+            wraps=t.stop_coordinator.can_enter_signal,
+        ) as check_entry:
+            t.update(city, .05)
+        self.assertEqual(check_entry.call_count, 0)
+        self.assertGreater(car.distance, before)
+
+    def test_legacy_refreshes_signal_occupancy_incrementally_per_car(self):
+        city, t, car, _, _ = scenario('legacy')
+        with patch.object(
+            t,
+            '_observe_signal_occupancy',
+            wraps=t._observe_signal_occupancy,
+        ) as refresh_all:
+            t.update(city, .05)
+        self.assertEqual(refresh_all.call_count, 1)
+
+    def test_data_first_refreshes_signal_occupancy_incrementally_after_batch(self):
+        city, t, car, _, _ = scenario('data_first')
+        with patch.object(
+            t,
+            '_observe_signal_occupancy',
+            wraps=t._observe_signal_occupancy,
+        ) as refresh_all:
+            t.update(city, .05)
+        self.assertEqual(refresh_all.call_count, 1)
+
     def test_signal_merge_latches_entry_speed_without_reserving(self):
         for mode in ('legacy', 'data_first'):
             with self.subTest(mode=mode):

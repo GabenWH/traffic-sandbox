@@ -122,6 +122,29 @@ class SignalOccupancyTests(unittest.TestCase):
         coordinator.observe_signal_occupants(())
         self.assertTrue(coordinator.can_enter_signal("crossing", conflict))
 
+    def test_indexed_signal_block_counts_clear_after_last_occupant(self):
+        city = CityMap(terrain=Terrain(trees=[]))
+        city.add_road([(0, 300), (600, 300)])
+        city.add_road([(300, 0), (300, 600)])
+        movements = city.standard_intersections[0].lane_connections
+        first = movements[0]
+        conflict = next(item for item in movements
+                        if item is not first
+                        and item.source_output != first.source_output
+                        and movements_conflict(first, item))
+        coordinator = AllWayStopCoordinator()
+        coordinator.configure_signal_conflicts(movements)
+        coordinator.observe_signal_occupants((
+            ("leader", first),
+            ("follower", first),
+        ))
+
+        self.assertFalse(coordinator.can_enter_signal("crossing", conflict))
+        coordinator.observe_signal_car("leader", ())
+        self.assertFalse(coordinator.can_enter_signal("crossing", conflict))
+        coordinator.observe_signal_car("follower", ())
+        self.assertTrue(coordinator.can_enter_signal("crossing", conflict))
+
 
 class RoutedSignalIntegrationTests(unittest.TestCase):
     def make_scenario(self, update_mode, *, scheduled_red=False):

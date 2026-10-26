@@ -1,5 +1,7 @@
 # Signal rewrite: old/new comparison
 
+> Historical full-flow results from the initial occupancy rewrite, before the CPU follow-up. Updated CPU measurements are in [signal-permission-cache-comparison.md](signal-permission-cache-comparison.md); full-flow throughput was not rerun for that follow-up.
+
 Baseline: upstream main `fa6fe8203ddf9f1c982d4e8e87b18c1b090a6c50`, whose signal implementation is unchanged from `f0ae7aa`. Rewrite core: `b2110c753afd40eeec6f940bfb4864e48f960e2f`. Raw measurements and source fingerprints are in [signal-rewrite-comparison.json](signal-rewrite-comparison.json).
 
 The app uses `data_first`: median completed trips increased **52%** for straight traffic and **50%** for mixed turns. Fixed-state CPU medians increased **20–27%** at 32–128 cars in this experiment; paired CPU differences were noisy and sometimes reversed. All new flow runs had zero observed red entries and overlap pair-ticks.

@@ -69,19 +69,23 @@ class TrafficOccupancyIndex:
             # visible on the target's ruler; uncommitted yield traffic must not
             # create an imaginary obstacle on the ring.
             claimed = getattr(car, "claimed_movement", None)
+            entry = None
             if claimed is None:
-                claimed = next((connection for start, end, connection
-                                in getattr(car, "controlled_movements", ())
-                                if getattr(getattr(connection, "control", None), "kind", None) is ControlType.SIGNAL
-                                and connection.merge_target is not None
-                                and car.distance + car.length / 2 > start + 1e-8
-                                and car.distance - car.length / 2 < end), None)
+                candidates = getattr(car, "signal_merge_movements", None)
+                if candidates is None:
+                    candidates = getattr(car, "controlled_movements", ())
+                entry = next((item for item in candidates
+                              if getattr(getattr(item[2], "control", None), "kind", None) is ControlType.SIGNAL
+                              and car.distance + car.length / 2 > item[0] + 1e-8
+                              and car.distance - car.length / 2 < item[1]), None)
+                claimed = entry[2] if entry is not None else None
             target = getattr(claimed, "merge_target", None)
             if target is None:
                 continue
-            entry = next(((start, end) for start, end, connection
-                          in getattr(car, "controlled_movements", ())
-                          if connection is claimed), None)
+            if entry is None:
+                entry = next(((start, end) for start, end, connection
+                              in getattr(car, "controlled_movements", ())
+                              if connection is claimed), None)
             front = car.distance + car.length / 2
             if entry is None or front < entry[0]:
                 continue

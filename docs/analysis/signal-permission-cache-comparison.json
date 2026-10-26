@@ -1,0 +1,579 @@
+{
+  "complete": true,
+  "comparison": "original signal implementation, previous physical-occupancy rewrite, and optimized permission/occupancy checks",
+  "commits": {
+    "original": "fa6fe8203ddf9f1c982d4e8e87b18c1b090a6c50",
+    "prior_rewrite": "188648ddbb89d6e0e765709fa1bbbde6e8ee2572",
+    "optimized": "uncommitted working tree at measurement time"
+  },
+  "source_sha256": {
+    "original": "8a07ccbabe03bbc180634e8da1a4f85da0cf5dbb4237fcf69ccca1251e088d07",
+    "prior": "2d0b4e0dd8964c3eb2a20cca395f0ae05bb8ab5ad1117d3453b2e07562d40989",
+    "optimized": "3327a0aa327a0badf949ec36c6854aa0799bcf087ffa4e13d37c222c81388c8d"
+  },
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.39",
+  "methodology": "Isolated subprocesses with counterbalanced system order; frozen 32/64/128-car states; 50 timed update() samples after 20 warmups; three seeds; legacy and data_first update modes. A single 0.05-second flow tick is performed after each frozen run but excluded from CPU summaries. This isolates update cost; it is not a throughput benchmark.",
+  "runs": [
+    {
+      "system": "original",
+      "mode": "legacy",
+      "seed": 0,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 2.6466184999999998,
+          "p95_ms": 3.150758,
+          "median_cpu_ms": 2.6477709999999997,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 9.179044000000001,
+          "p95_ms": 10.767498,
+          "median_cpu_ms": 9.181360999999999,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 33.2410075,
+          "p95_ms": 42.095704,
+          "median_cpu_ms": 33.24461,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "prior",
+      "mode": "legacy",
+      "seed": 0,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 3.4134995,
+          "p95_ms": 4.015432,
+          "median_cpu_ms": 3.4149554999999996,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 11.548274500000002,
+          "p95_ms": 14.004376,
+          "median_cpu_ms": 11.550283,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 40.835443,
+          "p95_ms": 42.368268,
+          "median_cpu_ms": 40.835064,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "optimized",
+      "mode": "legacy",
+      "seed": 0,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 2.9456344999999997,
+          "p95_ms": 3.268135,
+          "median_cpu_ms": 2.9468199999999998,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 9.9019015,
+          "p95_ms": 14.171826,
+          "median_cpu_ms": 9.9033675,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 38.661867,
+          "p95_ms": 46.595164,
+          "median_cpu_ms": 38.605114,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "prior",
+      "mode": "legacy",
+      "seed": 1,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 3.670807,
+          "p95_ms": 4.29341,
+          "median_cpu_ms": 3.6726125,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 11.915728000000001,
+          "p95_ms": 12.84587,
+          "median_cpu_ms": 11.918244,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 42.1765645,
+          "p95_ms": 50.372356,
+          "median_cpu_ms": 42.179981,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "optimized",
+      "mode": "legacy",
+      "seed": 1,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 3.025404,
+          "p95_ms": 4.261622,
+          "median_cpu_ms": 3.0273545000000004,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 9.932803499999999,
+          "p95_ms": 10.761458,
+          "median_cpu_ms": 9.925104999999999,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 43.892039499999996,
+          "p95_ms": 60.041118,
+          "median_cpu_ms": 43.89678,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "original",
+      "mode": "legacy",
+      "seed": 1,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 2.9491345,
+          "p95_ms": 5.170182,
+          "median_cpu_ms": 2.9505055000000002,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 12.5715495,
+          "p95_ms": 19.664006,
+          "median_cpu_ms": 12.577386,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 38.606639,
+          "p95_ms": 51.332526,
+          "median_cpu_ms": 38.611368,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "optimized",
+      "mode": "legacy",
+      "seed": 2,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 3.127642,
+          "p95_ms": 4.402443,
+          "median_cpu_ms": 3.1254705,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 10.010847,
+          "p95_ms": 20.387847,
+          "median_cpu_ms": 10.014002,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 36.175001,
+          "p95_ms": 42.170535,
+          "median_cpu_ms": 36.179117000000005,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "original",
+      "mode": "legacy",
+      "seed": 2,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 2.5343845,
+          "p95_ms": 3.003797,
+          "median_cpu_ms": 2.5357395,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 8.618289,
+          "p95_ms": 9.872489,
+          "median_cpu_ms": 8.619756500000001,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 33.331584,
+          "p95_ms": 46.50712,
+          "median_cpu_ms": 33.335791,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "prior",
+      "mode": "legacy",
+      "seed": 2,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 3.649433,
+          "p95_ms": 4.435131,
+          "median_cpu_ms": 3.6508245,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 11.598552999999999,
+          "p95_ms": 14.061383,
+          "median_cpu_ms": 11.6007625,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 42.2890225,
+          "p95_ms": 79.481537,
+          "median_cpu_ms": 42.1627055,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "prior",
+      "mode": "data_first",
+      "seed": 0,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.32338,
+          "p95_ms": 1.615946,
+          "median_cpu_ms": 1.324497,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 2.683494,
+          "p95_ms": 3.395537,
+          "median_cpu_ms": 2.684746,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 5.310188,
+          "p95_ms": 6.864115,
+          "median_cpu_ms": 5.311646,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "optimized",
+      "mode": "data_first",
+      "seed": 0,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.092246,
+          "p95_ms": 1.325418,
+          "median_cpu_ms": 1.0930575,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 2.2186785,
+          "p95_ms": 2.605988,
+          "median_cpu_ms": 2.2197705,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 4.512506,
+          "p95_ms": 4.899654,
+          "median_cpu_ms": 4.5138415,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "original",
+      "mode": "data_first",
+      "seed": 0,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.193028,
+          "p95_ms": 1.688996,
+          "median_cpu_ms": 1.1941730000000002,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 2.2896405,
+          "p95_ms": 2.978458,
+          "median_cpu_ms": 2.2910209999999998,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 4.6193415,
+          "p95_ms": 5.303042,
+          "median_cpu_ms": 4.620635,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "optimized",
+      "mode": "data_first",
+      "seed": 1,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.2291124999999998,
+          "p95_ms": 1.853414,
+          "median_cpu_ms": 1.2304315,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 2.5274039999999998,
+          "p95_ms": 4.238217,
+          "median_cpu_ms": 2.5286340000000003,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 4.917473,
+          "p95_ms": 5.436687,
+          "median_cpu_ms": 4.9190775,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "original",
+      "mode": "data_first",
+      "seed": 1,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.144804,
+          "p95_ms": 1.840963,
+          "median_cpu_ms": 1.145716,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 2.1451599999999997,
+          "p95_ms": 2.434546,
+          "median_cpu_ms": 2.1363760000000003,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 4.488264,
+          "p95_ms": 4.997676,
+          "median_cpu_ms": 4.489755000000001,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "prior",
+      "mode": "data_first",
+      "seed": 1,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.302141,
+          "p95_ms": 1.761452,
+          "median_cpu_ms": 1.303505,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 2.5543465000000003,
+          "p95_ms": 2.898655,
+          "median_cpu_ms": 2.5557239999999997,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 5.4259305,
+          "p95_ms": 6.481019,
+          "median_cpu_ms": 5.427517999999999,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "original",
+      "mode": "data_first",
+      "seed": 2,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.117348,
+          "p95_ms": 1.482512,
+          "median_cpu_ms": 1.1186215000000002,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 2.1954965,
+          "p95_ms": 2.51683,
+          "median_cpu_ms": 2.196561,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 4.900043999999999,
+          "p95_ms": 9.218382,
+          "median_cpu_ms": 4.9016470000000005,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "prior",
+      "mode": "data_first",
+      "seed": 2,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.3229425,
+          "p95_ms": 2.207444,
+          "median_cpu_ms": 1.32386,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 2.5125279999999997,
+          "p95_ms": 3.145436,
+          "median_cpu_ms": 2.513772,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 5.3092535000000005,
+          "p95_ms": 6.76661,
+          "median_cpu_ms": 5.3110800000000005,
+          "samples": 50
+        }
+      ]
+    },
+    {
+      "system": "optimized",
+      "mode": "data_first",
+      "seed": 2,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.415618,
+          "p95_ms": 1.849317,
+          "median_cpu_ms": 1.417094,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 2.283576,
+          "p95_ms": 2.498486,
+          "median_cpu_ms": 2.279379,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 4.64161,
+          "p95_ms": 5.438015,
+          "median_cpu_ms": 4.6435435,
+          "samples": 50
+        }
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "mode": "legacy",
+      "cars": 32,
+      "original_median_cpu_ms": 2.6477709999999997,
+      "prior_median_cpu_ms": 3.6508245,
+      "optimized_median_cpu_ms": 3.0273545000000004,
+      "optimized_vs_original_percent": 14.335964099614396,
+      "optimized_vs_prior_percent": -17.077512216760894
+    },
+    {
+      "mode": "legacy",
+      "cars": 64,
+      "original_median_cpu_ms": 9.181360999999999,
+      "prior_median_cpu_ms": 11.6007625,
+      "optimized_median_cpu_ms": 9.925104999999999,
+      "optimized_vs_original_percent": 8.100585523213821,
+      "optimized_vs_prior_percent": -14.444373807325183
+    },
+    {
+      "mode": "legacy",
+      "cars": 128,
+      "original_median_cpu_ms": 33.335791,
+      "prior_median_cpu_ms": 42.1627055,
+      "optimized_median_cpu_ms": 38.605114,
+      "optimized_vs_original_percent": 15.806803564373206,
+      "optimized_vs_prior_percent": -8.4377685393078
+    },
+    {
+      "mode": "data_first",
+      "cars": 32,
+      "original_median_cpu_ms": 1.145716,
+      "prior_median_cpu_ms": 1.32386,
+      "optimized_median_cpu_ms": 1.2304315,
+      "optimized_vs_original_percent": 7.394109884124855,
+      "optimized_vs_prior_percent": -7.0572794706389
+    },
+    {
+      "mode": "data_first",
+      "cars": 64,
+      "original_median_cpu_ms": 2.196561,
+      "prior_median_cpu_ms": 2.5557239999999997,
+      "optimized_median_cpu_ms": 2.279379,
+      "optimized_vs_original_percent": 3.7703482853424175,
+      "optimized_vs_prior_percent": -10.812787296280801
+    },
+    {
+      "mode": "data_first",
+      "cars": 128,
+      "original_median_cpu_ms": 4.620635,
+      "prior_median_cpu_ms": 5.311646,
+      "optimized_median_cpu_ms": 4.6435435,
+      "optimized_vs_original_percent": 0.4957868344935168,
+      "optimized_vs_prior_percent": -12.578069020412874
+    }
+  ]
+}
