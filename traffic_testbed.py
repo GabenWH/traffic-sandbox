@@ -9,8 +9,10 @@ import random
 from time import perf_counter
 
 from city import CityMap
-from car_brain import CarBrain, CarDecision, CarObservation
-from intersection_controls import AllWayStopCoordinator, FixedTimeSignalController
+from car_brain import (CarBrain, CarDecision, CarObservation, BehaviorState,
+                       COMFORTABLE_BRAKING)
+from intersection_controls import (AllWayStopCoordinator, FixedTimeSignalController,
+                                   SignalAspect, movements_conflict)
 from merge_behavior import observe_merge, MERGE_STRATEGIES, MergeTrafficSnapshot
 from soft_deadlock import DeadlockCandidate, SoftDeadlockResolver, merge_space_clear
 from simulation_profiler import SimulationProfiler
@@ -58,6 +60,7 @@ class TrafficIntent:
     lead_car: "RoutedRoadVehicle" | None
     lead_distance: float | None
     decision: CarDecision
+    signal_entry: bool = False
 
 
 @dataclass
@@ -87,6 +90,9 @@ class RoutedRoadVehicle:
     controlled_movements: tuple[tuple[float, float, LaneConnection], ...] = field(
         init=False, repr=False,
     )
+    signal_merge_movements: tuple[tuple[float, float, LaneConnection], ...] = field(
+        init=False, repr=False,
+    )
     route_segments: tuple[tuple[float, float, tuple[object, ...], float], ...] = field(
         init=False, repr=False,
     )
@@ -104,6 +110,10 @@ class RoutedRoadVehicle:
         if any(not isfinite(size) or size <= 0 for size in (self.length, self.width)):
             raise ValueError("A road vehicle needs positive finite dimensions")
         self.controlled_movements = _controlled_movement_ranges(self.route)
+        self.signal_merge_movements = tuple(
+            item for item in self.controlled_movements
+            if item[2].merge_target is not None
+        )
         self.route_segments = _route_occupancy_segments(self.route)
         self.position, self.heading = _position_and_heading(self.points, 0.0)
 
@@ -147,6 +157,11 @@ class RoadVehicleSimulation:
     signal_controllers: dict[str, FixedTimeSignalController] = field(
         default_factory=dict, repr=False,
     )
+    _signal_states: dict = field(default_factory=dict, init=False, repr=False)
+    _signal_permissions: dict = field(default_factory=dict, init=False, repr=False)
+    _signal_connections: dict = field(default_factory=dict, init=False, repr=False)
+    _signal_network_token: tuple | None = field(default=None, init=False, repr=False)
+    _signal_validation_key: tuple | None = field(default=None, init=False, repr=False)
     elapsed_time: float = 0.0
     _spawned_count: int = field(default=0, init=False, repr=False)
     _network_token: tuple[int, int] | None = field(default=None, init=False, repr=False)
@@ -197,9 +212,93 @@ class RoadVehicleSimulation:
         partially configured intersection cannot silently behave like yield.
         """
         controller_id = connection.control.controller_id
-        controller = self.signal_controllers.get(controller_id or "")
+        controller = self.signal_controllers.get(controller_id) if controller_id else None
         return controller is not None and controller.is_green(
             connection.id, self.elapsed_time,
+        )
+
+    def _signal_aspect(self, connection: LaneConnection):
+        controller_id = connection.control.controller_id
+        if not controller_id:
+            return None
+        return self._signal_permissions.get(controller_id, {}).get(connection.id)
+
+    def _signal_step_limit(self) -> float:
+        limit = 0.05
+        for controller in self.signal_controllers.values():
+            boundary = controller.next_boundary_after(self.elapsed_time)
+            if 0 < boundary - self.elapsed_time < 1e-10:
+                self.elapsed_time = boundary
+                boundary = controller.next_boundary_after(self.elapsed_time)
+            limit = min(limit, boundary - self.elapsed_time)
+        return limit
+
+    def _prepare_signal_frame(self, city_map: CityMap) -> None:
+        states = {key: controller.state_at(self.elapsed_time)
+                  for key, controller in self.signal_controllers.items() if key}
+        state_changed = states != self._signal_states
+        self._signal_states = states
+        token = (id(city_map), city_map.mobility_revision)
+        network_changed = token != self._signal_network_token
+        if network_changed:
+            self._signal_connections = {}
+            for layer in city_map.mobility.layers.values():
+                for node in layer.graph.nodes:
+                    for transition in layer.graph.transitions_from(node):
+                        if transition.edge.kind == "lane_connection":
+                            connection = transition.edge.value
+                            self._signal_connections[connection.id] = connection
+            self._signal_network_token = token
+            self._signal_validation_key = None
+            self.stop_coordinator.configure_signal_conflicts(
+                self._signal_connections.values(),
+            )
+        if state_changed or network_changed:
+            self._signal_permissions = {
+                controller_id: {
+                    movement_id: state.aspect
+                    for movement_id in state.movement_ids
+                }
+                for controller_id, state in states.items()
+                if state.aspect in (SignalAspect.GREEN, SignalAspect.YELLOW)
+            }
+        green = []
+        for controller_id, state in self._signal_states.items():
+            if state.aspect not in (SignalAspect.GREEN, SignalAspect.YELLOW):
+                continue
+            for movement_id in sorted(state.movement_ids):
+                connection = self._signal_connections.get(movement_id)
+                if (connection is not None and connection.control.kind is ControlType.SIGNAL
+                        and connection.control.controller_id == controller_id):
+                    green.append(connection)
+        key = tuple((connection.id, connection.control.controller_id) for connection in green)
+        if key != self._signal_validation_key:
+            for index, connection in enumerate(green):
+                for other in green[index + 1:]:
+                    if (connection.source_output != other.source_output
+                            and movements_conflict(connection, other)):
+                        raise ValueError("Conflicting protected signal permissions: "
+                                         + connection.id + " and " + other.id)
+            self._signal_validation_key = key
+        self._observe_signal_occupancy()
+
+    def _observe_signal_occupancy(self) -> None:
+        self.stop_coordinator.observe_signal_occupants(
+            (car.id, connection)
+            for car in self.cars
+            for start, end, connection in car.controlled_movements
+            if connection.control.kind is ControlType.SIGNAL
+            and car.distance + car.length / 2 > start + 1e-8
+            and car.distance - car.length / 2 < end
+        )
+
+    def _observe_signal_car(self, car: RoutedRoadVehicle) -> None:
+        self.stop_coordinator.observe_signal_car(
+            car.id,
+            (connection for start, end, connection in car.controlled_movements
+             if connection.control.kind is ControlType.SIGNAL
+             and car.distance + car.length / 2 > start + 1e-8
+             and car.distance - car.length / 2 < end),
         )
 
     def sync_network(self, city_map: CityMap) -> tuple[bool, list[RoutedRoadVehicle]]:
@@ -345,17 +444,19 @@ class RoadVehicleSimulation:
         # Keep observations frequent even when the UI fast-forwards or a test
         # advances several seconds at once. Otherwise a car can skip a whole
         # entrance between two decisions.
-        if elapsed_seconds > 0.05 + 1e-9:
+        step_limit = self._signal_step_limit()
+        if elapsed_seconds > step_limit + 1e-10:
             completed = []
             remaining = elapsed_seconds
             while remaining > 1e-9:
-                step = min(0.05, remaining)
+                step = min(self._signal_step_limit(), remaining)
                 completed.extend(self.update(city_map, step))
                 remaining -= step
             return completed
         frame_started = perf_counter()
         if self.debugger is not None:
             self.debugger.begin_frame()
+        self._prepare_signal_frame(city_map)
         self.elapsed_time += elapsed_seconds
         current_ids = {junction.id for junction in city_map.intersections}
         self.active_junction_ids = [
@@ -422,7 +523,7 @@ class RoadVehicleSimulation:
             if car.id != self.deadlock_resolver.winner_id and not is_waiting:
                 continue
             movement = _next_controlled_movement(car, self.stop_coordinator)
-            if movement is None:
+            if movement is None or movement[2].control.kind is ControlType.SIGNAL:
                 continue
             deadlock_candidates.append(DeadlockCandidate(
                 car.id,
@@ -457,8 +558,9 @@ class RoadVehicleSimulation:
                 and self.stop_coordinator.has_claim(car.id, movement[2])
             )
             inside = any(
-                self.stop_coordinator.has_claim(car.id, connection)
-                and start <= car.distance + car.length/2
+                (self.stop_coordinator.has_claim(car.id, connection)
+                 or connection.control.kind is ControlType.SIGNAL)
+                and start < car.distance + car.length/2
                 and car.distance - car.length/2 < end
                 for start, end, connection in car.controlled_movements)
             distance_to_stop = (
@@ -468,21 +570,21 @@ class RoadVehicleSimulation:
             )
             is_merge = movement is not None and movement[2].merge_target is not None
             merge_observation = observe_merge(car, movement, self.cars) if is_merge else None
-            signal_green = (
+            signal_movement = (
                 movement is not None
                 and movement[2].control.kind is ControlType.SIGNAL
-                and not has_claim
-                and self.signal_is_green(movement[2])
             )
+            signal_aspect = self._signal_aspect(movement[2]) if signal_movement else None
+            signal_green = signal_movement and not has_claim and signal_aspect is SignalAspect.GREEN
+            signal_yellow = signal_movement and signal_aspect is SignalAspect.YELLOW
             signal_red = (
-                movement is not None
-                and movement[2].control.kind is ControlType.SIGNAL
+                signal_movement
                 and not has_claim
-                and not signal_green
+                and not signal_green and not signal_yellow
             )
             priority = _intersection_priority(
                 car, movement, distance_to_stop, self.stop_coordinator,
-                signal_green=signal_green,
+                signal_green=signal_green, signal_yellow=signal_yellow,
             )
             priority_reason = "waiting for intersection priority"
             if movement is not None and not has_claim and not is_merge:
@@ -520,7 +622,8 @@ class RoadVehicleSimulation:
             # Ordinary following can still brake for a real vehicle ahead.
             for active in car.controlled_movements:
                 if (active[2].merge_target is not None
-                        and self.stop_coordinator.has_claim(car.id, active[2])
+                        and (self.stop_coordinator.has_claim(car.id, active[2])
+                             or active[2].control.kind is ControlType.SIGNAL)
                         and car.distance + car.length/2 >= active[0]
                         and car.distance - car.length/2 < active[1]):
                     # Execute the plan checked at approval. Changing phantom
@@ -541,7 +644,8 @@ class RoadVehicleSimulation:
                         )
                     ),
                     signal_red=signal_red,
-                    signal_green=signal_green,
+                    signal_movement_id=movement[2].id if movement else "",
+                    signal_green=signal_green, signal_yellow=signal_yellow,
                     priority_reason=priority_reason,
                     merge=merge_observation,
                     has_priority=priority,
@@ -581,8 +685,6 @@ class RoadVehicleSimulation:
                 else:
                     if is_merge:
                         has_claim = self.stop_coordinator.claim_merge(car.id, movement[2])
-                    elif movement[2].control.kind is ControlType.SIGNAL:
-                        has_claim = self.stop_coordinator.claim_signal(car.id, movement[2])
                     else:
                         has_claim = self.stop_coordinator.claim(car.id, movement[2])
                 if has_claim:
@@ -592,6 +694,10 @@ class RoadVehicleSimulation:
                         # Begin the checked plan in this same update; do not
                         # spend one tick executing the old approach target.
                         decision = replace(decision, desired_speed=decision.merge_entry_speed)
+
+            if is_merge and decision.signal_entry_allowed:
+                car._merge_entry_speed = decision.merge_entry_speed
+                decision = replace(decision, desired_speed=decision.merge_entry_speed)
 
             speed_delta = decision.desired_speed - car.speed
             limit = (TEST_CAR_ACCELERATION if speed_delta > 0 else TEST_CAR_BRAKING) * elapsed_seconds
@@ -606,7 +712,7 @@ class RoadVehicleSimulation:
                 )
                 if travel == 0.0:
                     car.speed = 0.0
-            if movement is not None and not has_claim:
+            if movement is not None and not (has_claim or decision.signal_entry_allowed):
                 stop_distance = movement[0] - car.length / 2
                 travel = min(travel, max(0.0, stop_distance - car.distance))
                 if travel == 0.0:
@@ -627,6 +733,7 @@ class RoadVehicleSimulation:
             # space just taken by a merge. At this prototype's 60-car limit a
             # simple rebuild is clearer than maintaining incremental bins.
             self.occupancy.rebuild(self.cars)
+            self._observe_signal_car(car)
             if not alive:
                 completed.append(car)
                 self.stop_coordinator.forget_car(car.id)
@@ -655,7 +762,7 @@ class RoadVehicleSimulation:
             # meaningful throughput. Keep the winner committed until its nose
             # enters the conflict; otherwise its first cautious movement would
             # cancel the very intent meant to break the hesitation cycle.
-            made_progress=traffic_is_flowing or bool(completed),
+            made_progress=traffic_is_flowing or bool(completed) or (not deadlock_candidates and bool(self._signal_states)),
             candidate_ids=tuple(candidate.car_id for candidate in deadlock_candidates),
             winner_resolved=(
                 temporary_winner_entered
@@ -732,7 +839,7 @@ class RoadVehicleSimulation:
             if car.id != self.deadlock_resolver.winner_id and not is_waiting:
                 continue
             movement = _next_controlled_movement(car, self.stop_coordinator)
-            if movement is None:
+            if movement is None or movement[2].control.kind is ControlType.SIGNAL:
                 continue
             deadlock_candidates.append(DeadlockCandidate(
                 car.id,
@@ -783,8 +890,9 @@ class RoadVehicleSimulation:
                 and self.stop_coordinator.has_claim(car.id, movement[2])
             )
             inside = any(
-                self.stop_coordinator.has_claim(car.id, connection)
-                and start <= car.distance + car.length / 2
+                (self.stop_coordinator.has_claim(car.id, connection)
+                 or connection.control.kind is ControlType.SIGNAL)
+                and start < car.distance + car.length / 2
                 and car.distance - car.length / 2 < end
                 for start, end, connection in car.controlled_movements
             )
@@ -798,17 +906,17 @@ class RoadVehicleSimulation:
             )
             intent_phase_seconds["intent_control_state"] += perf_counter() - phase_started
 
-            signal_green = (
+            signal_movement = (
                 movement is not None
                 and movement[2].control.kind is ControlType.SIGNAL
-                and not has_claim
-                and self.signal_is_green(movement[2])
             )
+            signal_aspect = self._signal_aspect(movement[2]) if signal_movement else None
+            signal_green = signal_movement and not has_claim and signal_aspect is SignalAspect.GREEN
+            signal_yellow = signal_movement and signal_aspect is SignalAspect.YELLOW
             signal_red = (
-                movement is not None
-                and movement[2].control.kind is ControlType.SIGNAL
+                signal_movement
                 and not has_claim
-                and not signal_green
+                and not signal_green and not signal_yellow
             )
 
             # Observe merge traffic and ask the shared coordinator whether this
@@ -823,7 +931,7 @@ class RoadVehicleSimulation:
             phase_started = perf_counter()
             priority = _intersection_priority(
                 car, movement, distance_to_stop, self.stop_coordinator,
-                signal_green=signal_green,
+                signal_green=signal_green, signal_yellow=signal_yellow,
             )
             priority_reason = "waiting for intersection priority"
             intent_phase_seconds["intent_priority_query"] += perf_counter() - phase_started
@@ -879,7 +987,8 @@ class RoadVehicleSimulation:
             cruise_speed = _route_cruise_speed(car, self.speed_mph)
             for active in car.controlled_movements:
                 if (active[2].merge_target is not None
-                        and self.stop_coordinator.has_claim(car.id, active[2])
+                        and (self.stop_coordinator.has_claim(car.id, active[2])
+                             or active[2].control.kind is ControlType.SIGNAL)
                         and car.distance + car.length / 2 >= active[0]
                         and car.distance - car.length / 2 < active[1]
                         and car._merge_entry_speed is not None):
@@ -905,7 +1014,8 @@ class RoadVehicleSimulation:
                         )
                     ),
                     signal_red=signal_red,
-                    signal_green=signal_green,
+                    signal_movement_id=movement[2].id if movement else "",
+                    signal_green=signal_green, signal_yellow=signal_yellow,
                     priority_reason=priority_reason,
                     merge=merge_observation,
                     has_priority=priority,
@@ -949,6 +1059,7 @@ class RoadVehicleSimulation:
                 lead_car=lead_car,
                 lead_distance=lead_distance,
                 decision=decision,
+                signal_entry=decision.signal_entry_allowed,
             ))
             intent_phase_seconds["intent_packaging"] += perf_counter() - phase_started
         # End of intent_generation; coordinator arbitration starts below.
@@ -976,6 +1087,14 @@ class RoadVehicleSimulation:
             return (2, 0.0, 0.0, intent.car.id)
 
         by_id = {intent.car.id: intent for intent in intents}
+        claim_revisions_before = {
+            intent.movement[2].intersection_id:
+            self.stop_coordinator.claim_revision_for(
+                intent.movement[2].intersection_id,
+            )
+            for intent in intents
+            if intent.signal_entry and intent.movement is not None
+        }
         for intent in sorted(intents, key=claim_order):
             movement = intent.movement
             decision = intent.decision
@@ -990,10 +1109,6 @@ class RoadVehicleSimulation:
                     )
                 elif intent.is_merge:
                     has_claim = self.stop_coordinator.claim_merge(
-                        intent.car.id, movement[2],
-                    )
-                elif movement[2].control.kind is ControlType.SIGNAL:
-                    has_claim = self.stop_coordinator.claim_signal(
                         intent.car.id, movement[2],
                     )
                 else:
@@ -1011,7 +1126,38 @@ class RoadVehicleSimulation:
             by_id[intent.car.id] = replace(
                 intent, has_claim=has_claim, decision=decision,
             )
-        resolved = [by_id[intent.car.id] for intent in intents]
+        resolved = []
+        for original in intents:
+            intent = by_id[original.car.id]
+            decision = intent.decision
+            if (intent.signal_entry and intent.movement is not None
+                    and intent.distance_to_stop is not None
+                    and intent.distance_to_stop <= _entry_claim_distance(
+                        intent.speed_before,
+                    )
+                    and self.stop_coordinator.claim_revision_for(
+                        intent.movement[2].intersection_id,
+                    ) != claim_revisions_before.get(
+                        intent.movement[2].intersection_id, 0,
+                    )
+                    and not self.stop_coordinator.can_enter_signal(
+                        intent.car.id, intent.movement[2],
+                    )):
+                decision = replace(
+                    decision, signal_entry_allowed=False,
+                    desired_speed=min(decision.desired_speed, sqrt(
+                        2 * COMFORTABLE_BRAKING * max(0.0, intent.distance_to_stop or 0.0))),
+                    state=BehaviorState.WAITING_FOR_PRIORITY,
+                    wait_reason="waiting for conflicting traffic",
+                )
+                intent.car.brain.state = decision.state
+                intent.car.brain.wait_reason = decision.wait_reason
+                intent.car.brain.desired_speed = decision.desired_speed
+                intent = replace(intent, signal_entry=False, priority=False, decision=decision)
+            if intent.signal_entry and intent.is_merge:
+                intent.car._merge_entry_speed = decision.merge_entry_speed
+                intent = replace(intent, decision=replace(decision, desired_speed=decision.merge_entry_speed))
+            resolved.append(intent)
         resolved_at = perf_counter()
 
         next_speeds: dict[str, float] = {}
@@ -1025,7 +1171,7 @@ class RoadVehicleSimulation:
             ) * elapsed_seconds
             next_speed = car.speed + max(-limit, min(limit, speed_delta))
             travel = next_speed * elapsed_seconds
-            if intent.movement is not None and not intent.has_claim:
+            if intent.movement is not None and not (intent.has_claim or intent.signal_entry):
                 stop_distance = intent.movement[0] - car.length / 2
                 travel = min(
                     travel,
@@ -1076,6 +1222,7 @@ class RoadVehicleSimulation:
                 if self.stop_coordinator.has_claim(car.id, connection)
             ]
             car._claimed_movement = remaining_claims[-1] if remaining_claims else None
+            self._observe_signal_car(car)
         for car in completed:
             self.stop_coordinator.forget_car(car.id)
             self.cars.remove(car)
@@ -1086,7 +1233,7 @@ class RoadVehicleSimulation:
         traffic_is_flowing = bool(self.cars) and stopped_count < 0.8 * len(self.cars)
         self.deadlock_resolver.observe_frame(
             elapsed_seconds,
-            made_progress=traffic_is_flowing or bool(completed),
+            made_progress=traffic_is_flowing or bool(completed) or (not deadlock_candidates and bool(self._signal_states)),
             candidate_ids=tuple(candidate.car_id for candidate in deadlock_candidates),
             winner_resolved=(
                 temporary_winner_entered
@@ -1268,16 +1415,18 @@ def _entry_claim_distance(speed: float) -> float:
 
 def _intersection_priority(
     car, movement, distance_to_stop, coordinator, *, signal_green: bool = False,
+    signal_yellow: bool = False,
 ) -> bool:
     if movement is None:
         return False
     connection = movement[2]
     if connection.control.kind is ControlType.SIGNAL:
-        if not signal_green:
+        if not (signal_green or signal_yellow):
             return False
-        if connection.merge_target is not None:
-            return coordinator.can_enter_merge(car.id, connection)
-        return coordinator.can_claim_signal(car.id, connection)
+        if (distance_to_stop is not None
+                and distance_to_stop > _entry_claim_distance(car.speed)):
+            return True
+        return coordinator.can_enter_signal(car.id, connection)
     if connection.merge_target is not None:
         return coordinator.can_enter_merge(car.id, connection)
     if (connection.control.kind is not ControlType.STOP
@@ -1326,10 +1475,7 @@ def _observe_priority_arrivals(
         connection = movement[2]
         if connection.merge_target is not None:
             continue
-        if (connection.control.kind is ControlType.SIGNAL
-                and not _signal_is_green(
-                    connection, signal_controllers or {}, elapsed_time,
-                )):
+        if connection.control.kind is ControlType.SIGNAL:
             continue
         if not coordinator.has_claim(car.id, connection):
             if distance > _entry_claim_distance(car.speed):
@@ -1354,12 +1500,6 @@ def _observe_priority_arrivals(
     return {car.id for car, _, _ in ready}
 
 
-def _signal_is_green(connection, signal_controllers, elapsed_time) -> bool:
-    controller_id = connection.control.controller_id
-    controller = signal_controllers.get(controller_id or "")
-    return controller is not None and controller.is_green(connection.id, elapsed_time)
-
-
 def _next_controlled_movement(
     car: RoutedRoadVehicle, coordinator: AllWayStopCoordinator,
 ) -> tuple[float, float, LaneConnection] | None:
@@ -1372,8 +1512,10 @@ def _next_controlled_movement(
         (
             movement for movement in car.controlled_movements
             if car.distance - car.length / 2 < movement[1]
-            and not (coordinator.has_claim(car.id, movement[2])
-                     and car.distance + car.length / 2 >= movement[0])
+            and not ((movement[2].control.kind is ControlType.SIGNAL
+                      and car.distance + car.length / 2 > movement[0] + 1e-8)
+                     or (coordinator.has_claim(car.id, movement[2])
+                         and car.distance + car.length / 2 >= movement[0]))
             and movement[2].roundabout_role != "exit"
             and movement[2].maneuver.kind is not ManeuverType.U_TURN
         ),
