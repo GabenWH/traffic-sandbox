@@ -33,9 +33,9 @@
 - [x] Run signal and full regression suites; correct failures.
 
 ## Task 3: Comparison and review
-- [ ] Add tools/compare_signal_systems.py for seeded identical demand, counterbalanced process runs, frozen-state CPU comparison, throughput, queue, overlaps, and entry metrics.
-- [ ] Run old/new benchmarks and save machine-readable and human-readable results under docs/analysis.
-- [ ] Review the complete diff, test all important findings, commit and publish the isolated feature branch.
+- [x] Add tools/compare_signal_systems.py for seeded identical demand, counterbalanced process runs, frozen-state CPU comparison, throughput, queue, overlaps, and entry metrics.
+- [x] Run old/new benchmarks and save machine-readable and human-readable results under docs/analysis.
+- [x] Review the complete diff, test all important findings, commit and publish the isolated feature branch.
 
 ## Verification ledger
 - Baseline main fa6fe820: 330 tests run, 17 skipped, no failures.
@@ -54,3 +54,5 @@
 - Ruling: Use 32/64/128 cars for the fixed-load comparison, matching the 128-car
   cap used by paired flow runs. The unrequested 256-car stress case was excluded
   because its legacy update cost dominated runtime.
+
+- Task 3: all 12 paired worker runs completed; 24 flow cases / 72 simulated minutes. All new cases had zero observed red entries and overlaps. Frozen-state CPU changes were mixed, while completed traffic improved consistently.

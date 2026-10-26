@@ -1,0 +1,1007 @@
+{
+  "complete": true,
+  "source_sha256": {
+    "old": "8a07ccbabe03bbc180634e8da1a4f85da0cf5dbb4237fcf69ccca1251e088d07",
+    "new": "2d0b4e0dd8964c3eb2a20cca395f0ae05bb8ab5ad1117d3453b2e07562d40989"
+  },
+  "frozen_counts": [
+    32,
+    64,
+    128
+  ],
+  "frozen_samples": 50,
+  "baseline_commit": "fa6fe8203ddf9f1c982d4e8e87b18c1b090a6c50",
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.39",
+  "methodology": "Counterbalanced isolated processes; fixed external demand retained in FIFO backlogs; CPU region is update only. Frozen-state restoration, source admissions and overlap/entry checks excluded. 20 frozen warmup ticks excluded. Flow figures include initial startup and end-of-run backlog.",
+  "seconds": 180.0,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "runs": [
+    {
+      "mode": "legacy",
+      "seed": 0,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 4.518574,
+          "p95_ms": 7.451099,
+          "median_cpu_ms": 4.5211735,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 13.396238,
+          "p95_ms": 19.538858,
+          "median_cpu_ms": 13.399308999999999,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 67.76856699999999,
+          "p95_ms": 133.301914,
+          "median_cpu_ms": 67.7743365,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 121,
+          "completed": 75,
+          "remaining": 46,
+          "external_backlog": 329,
+          "completed_per_hour": 1500.0,
+          "mean_completed_trip_seconds": 82.20266666666666,
+          "max_queue": 346,
+          "mean_active": 42.91305555555556,
+          "median_ms": 10.289222,
+          "p95_ms": 21.789997,
+          "median_cpu_ms": 10.2879445,
+          "total_update_cpu_seconds": 44.790128412,
+          "overlap_pair_ticks": 0,
+          "red_entries": 6,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 87,
+          "completed": 41,
+          "remaining": 46,
+          "external_backlog": 363,
+          "completed_per_hour": 820.0,
+          "mean_completed_trip_seconds": 88.60243902439025,
+          "max_queue": 396,
+          "mean_active": 43.56111111111111,
+          "median_ms": 10.6978185,
+          "p95_ms": 22.621812,
+          "median_cpu_ms": 10.697305499999999,
+          "total_update_cpu_seconds": 45.107160661,
+          "overlap_pair_ticks": 0,
+          "red_entries": 4,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "old"
+    },
+    {
+      "mode": "legacy",
+      "seed": 0,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 4.277253,
+          "p95_ms": 5.289278,
+          "median_cpu_ms": 4.2795755,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 14.2018415,
+          "p95_ms": 25.031927,
+          "median_cpu_ms": 14.2047435,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 53.233004,
+          "p95_ms": 63.496224,
+          "median_cpu_ms": 53.237601999999995,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 160,
+          "completed": 116,
+          "remaining": 44,
+          "external_backlog": 290,
+          "completed_per_hour": 2320.0,
+          "mean_completed_trip_seconds": 77.14181034482759,
+          "max_queue": 307,
+          "mean_active": 42.48444444444444,
+          "median_ms": 8.213377000000001,
+          "p95_ms": 15.287514,
+          "median_cpu_ms": 8.2164115,
+          "total_update_cpu_seconds": 31.201661528,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 6,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 107,
+          "completed": 62,
+          "remaining": 45,
+          "external_backlog": 343,
+          "completed_per_hour": 1240.0,
+          "mean_completed_trip_seconds": 85.13145161290323,
+          "max_queue": 372,
+          "mean_active": 42.992222222222225,
+          "median_ms": 13.8130855,
+          "p95_ms": 34.472124,
+          "median_cpu_ms": 13.801704,
+          "total_update_cpu_seconds": 64.46511837,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 3,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "new"
+    },
+    {
+      "mode": "legacy",
+      "seed": 1,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 7.304371,
+          "p95_ms": 13.315712,
+          "median_cpu_ms": 7.3070475,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 23.3298395,
+          "p95_ms": 30.347146,
+          "median_cpu_ms": 23.3334855,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 79.66322650000001,
+          "p95_ms": 115.717872,
+          "median_cpu_ms": 79.665307,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 160,
+          "completed": 116,
+          "remaining": 44,
+          "external_backlog": 290,
+          "completed_per_hour": 2320.0,
+          "mean_completed_trip_seconds": 77.14181034482759,
+          "max_queue": 307,
+          "mean_active": 42.48444444444444,
+          "median_ms": 9.2498445,
+          "p95_ms": 19.3377,
+          "median_cpu_ms": 9.253364000000001,
+          "total_update_cpu_seconds": 43.301238925999996,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 6,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 104,
+          "completed": 60,
+          "remaining": 44,
+          "external_backlog": 346,
+          "completed_per_hour": 1200.0,
+          "mean_completed_trip_seconds": 88.8425,
+          "max_queue": 375,
+          "mean_active": 42.99527777777778,
+          "median_ms": 8.259651,
+          "p95_ms": 16.514905,
+          "median_cpu_ms": 8.2631355,
+          "total_update_cpu_seconds": 33.485267985,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 2,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "new"
+    },
+    {
+      "mode": "legacy",
+      "seed": 1,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 5.4119405,
+          "p95_ms": 9.841371,
+          "median_cpu_ms": 5.414659,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 16.3237345,
+          "p95_ms": 20.787508,
+          "median_cpu_ms": 16.3265025,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 55.6525455,
+          "p95_ms": 68.605959,
+          "median_cpu_ms": 55.657523499999996,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 121,
+          "completed": 75,
+          "remaining": 46,
+          "external_backlog": 329,
+          "completed_per_hour": 1500.0,
+          "mean_completed_trip_seconds": 82.20266666666666,
+          "max_queue": 346,
+          "mean_active": 42.91305555555556,
+          "median_ms": 11.531448999999999,
+          "p95_ms": 25.615749,
+          "median_cpu_ms": 11.540093500000001,
+          "total_update_cpu_seconds": 52.601584089999996,
+          "overlap_pair_ticks": 0,
+          "red_entries": 6,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 88,
+          "completed": 40,
+          "remaining": 48,
+          "external_backlog": 362,
+          "completed_per_hour": 800.0,
+          "mean_completed_trip_seconds": 86.37125,
+          "max_queue": 395,
+          "mean_active": 43.60583333333334,
+          "median_ms": 10.244694500000001,
+          "p95_ms": 20.12344,
+          "median_cpu_ms": 10.242566,
+          "total_update_cpu_seconds": 44.683044831,
+          "overlap_pair_ticks": 0,
+          "red_entries": 4,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "old"
+    },
+    {
+      "mode": "legacy",
+      "seed": 2,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 4.1605345,
+          "p95_ms": 6.188082,
+          "median_cpu_ms": 4.163367,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 14.2590065,
+          "p95_ms": 20.894999,
+          "median_cpu_ms": 14.2625125,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 50.814579,
+          "p95_ms": 74.182724,
+          "median_cpu_ms": 50.8194485,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 121,
+          "completed": 75,
+          "remaining": 46,
+          "external_backlog": 329,
+          "completed_per_hour": 1500.0,
+          "mean_completed_trip_seconds": 82.20266666666666,
+          "max_queue": 346,
+          "mean_active": 42.91305555555556,
+          "median_ms": 7.549898000000001,
+          "p95_ms": 12.005681,
+          "median_cpu_ms": 7.5539845,
+          "total_update_cpu_seconds": 30.628288367,
+          "overlap_pair_ticks": 0,
+          "red_entries": 6,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 85,
+          "completed": 39,
+          "remaining": 46,
+          "external_backlog": 365,
+          "completed_per_hour": 780.0,
+          "mean_completed_trip_seconds": 87.83461538461539,
+          "max_queue": 396,
+          "mean_active": 43.544444444444444,
+          "median_ms": 8.573927000000001,
+          "p95_ms": 15.398597,
+          "median_cpu_ms": 8.5772765,
+          "total_update_cpu_seconds": 32.583398973,
+          "overlap_pair_ticks": 0,
+          "red_entries": 4,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "old"
+    },
+    {
+      "mode": "legacy",
+      "seed": 2,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 8.552587,
+          "p95_ms": 11.814155,
+          "median_cpu_ms": 8.705788,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 31.384864999999998,
+          "p95_ms": 49.488618,
+          "median_cpu_ms": 31.368384499999998,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 90.59807699999999,
+          "p95_ms": 139.01026,
+          "median_cpu_ms": 90.5681245,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 160,
+          "completed": 116,
+          "remaining": 44,
+          "external_backlog": 290,
+          "completed_per_hour": 2320.0,
+          "mean_completed_trip_seconds": 77.14181034482759,
+          "max_queue": 307,
+          "mean_active": 42.48444444444444,
+          "median_ms": 9.430927,
+          "p95_ms": 18.797029,
+          "median_cpu_ms": 9.4346125,
+          "total_update_cpu_seconds": 41.796510124,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 6,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 102,
+          "completed": 57,
+          "remaining": 45,
+          "external_backlog": 348,
+          "completed_per_hour": 1140.0,
+          "mean_completed_trip_seconds": 87.76228070175439,
+          "max_queue": 380,
+          "mean_active": 42.925555555555555,
+          "median_ms": 9.5056565,
+          "p95_ms": 13.800439,
+          "median_cpu_ms": 9.510431,
+          "total_update_cpu_seconds": 34.69558799,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 3,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "new"
+    },
+    {
+      "mode": "data_first",
+      "seed": 0,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 2.301015,
+          "p95_ms": 4.110745,
+          "median_cpu_ms": 2.303544,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 3.6941699999999997,
+          "p95_ms": 5.420574,
+          "median_cpu_ms": 3.696681,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 7.3447379999999995,
+          "p95_ms": 10.890147,
+          "median_cpu_ms": 7.347633,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 158,
+          "completed": 114,
+          "remaining": 44,
+          "external_backlog": 292,
+          "completed_per_hour": 2280.0,
+          "mean_completed_trip_seconds": 78.04429824561404,
+          "max_queue": 310,
+          "mean_active": 42.050555555555555,
+          "median_ms": 2.5699175,
+          "p95_ms": 4.17523,
+          "median_cpu_ms": 2.5740860000000003,
+          "total_update_cpu_seconds": 9.638224260000001,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 2,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 106,
+          "completed": 62,
+          "remaining": 44,
+          "external_backlog": 344,
+          "completed_per_hour": 1240.0,
+          "mean_completed_trip_seconds": 85.29193548387097,
+          "max_queue": 372,
+          "mean_active": 42.778333333333336,
+          "median_ms": 2.6216815,
+          "p95_ms": 4.456846,
+          "median_cpu_ms": 2.6284655,
+          "total_update_cpu_seconds": 10.468228342,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 3,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "new"
+    },
+    {
+      "mode": "data_first",
+      "seed": 0,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.9832215,
+          "p95_ms": 3.393857,
+          "median_cpu_ms": 1.9855925,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 3.7845994999999997,
+          "p95_ms": 7.972935,
+          "median_cpu_ms": 3.7870600000000003,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 8.126054,
+          "p95_ms": 14.088372,
+          "median_cpu_ms": 8.1291265,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 121,
+          "completed": 75,
+          "remaining": 46,
+          "external_backlog": 329,
+          "completed_per_hour": 1500.0,
+          "mean_completed_trip_seconds": 82.29733333333334,
+          "max_queue": 346,
+          "mean_active": 42.655833333333334,
+          "median_ms": 3.377863,
+          "p95_ms": 7.099244,
+          "median_cpu_ms": 3.383749,
+          "total_update_cpu_seconds": 16.412612696,
+          "overlap_pair_ticks": 0,
+          "red_entries": 6,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 87,
+          "completed": 41,
+          "remaining": 46,
+          "external_backlog": 363,
+          "completed_per_hour": 820.0,
+          "mean_completed_trip_seconds": 88.66707317073171,
+          "max_queue": 394,
+          "mean_active": 43.40138888888889,
+          "median_ms": 3.121394,
+          "p95_ms": 6.955499,
+          "median_cpu_ms": 3.127942,
+          "total_update_cpu_seconds": 15.053682766,
+          "overlap_pair_ticks": 0,
+          "red_entries": 4,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "old"
+    },
+    {
+      "mode": "data_first",
+      "seed": 1,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 2.748954,
+          "p95_ms": 6.446174,
+          "median_cpu_ms": 2.7513319999999997,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 5.109367499999999,
+          "p95_ms": 10.775394,
+          "median_cpu_ms": 5.112199,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 8.2782445,
+          "p95_ms": 20.751069,
+          "median_cpu_ms": 8.3109205,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 121,
+          "completed": 75,
+          "remaining": 46,
+          "external_backlog": 329,
+          "completed_per_hour": 1500.0,
+          "mean_completed_trip_seconds": 82.29733333333334,
+          "max_queue": 346,
+          "mean_active": 42.655833333333334,
+          "median_ms": 2.4906885,
+          "p95_ms": 4.463984,
+          "median_cpu_ms": 2.4960959999999996,
+          "total_update_cpu_seconds": 10.047255804,
+          "overlap_pair_ticks": 0,
+          "red_entries": 6,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 87,
+          "completed": 40,
+          "remaining": 47,
+          "external_backlog": 363,
+          "completed_per_hour": 800.0,
+          "mean_completed_trip_seconds": 86.43875,
+          "max_queue": 393,
+          "mean_active": 43.444722222222225,
+          "median_ms": 2.7546945000000003,
+          "p95_ms": 4.3203,
+          "median_cpu_ms": 2.758624,
+          "total_update_cpu_seconds": 10.142677081,
+          "overlap_pair_ticks": 0,
+          "red_entries": 4,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "old"
+    },
+    {
+      "mode": "data_first",
+      "seed": 1,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 2.511848,
+          "p95_ms": 4.422857,
+          "median_cpu_ms": 2.514466,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 4.5382915,
+          "p95_ms": 6.500963,
+          "median_cpu_ms": 4.5412575,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 9.714929999999999,
+          "p95_ms": 12.832811,
+          "median_cpu_ms": 9.7184345,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 158,
+          "completed": 114,
+          "remaining": 44,
+          "external_backlog": 292,
+          "completed_per_hour": 2280.0,
+          "mean_completed_trip_seconds": 78.04429824561404,
+          "max_queue": 310,
+          "mean_active": 42.050555555555555,
+          "median_ms": 3.0016645,
+          "p95_ms": 5.283504,
+          "median_cpu_ms": 3.0124065,
+          "total_update_cpu_seconds": 12.083815242,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 2,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 104,
+          "completed": 60,
+          "remaining": 44,
+          "external_backlog": 346,
+          "completed_per_hour": 1200.0,
+          "mean_completed_trip_seconds": 88.96583333333335,
+          "max_queue": 374,
+          "mean_active": 42.78527777777778,
+          "median_ms": 3.2237875000000003,
+          "p95_ms": 5.419627,
+          "median_cpu_ms": 3.2279545,
+          "total_update_cpu_seconds": 12.182602595,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 3,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "new"
+    },
+    {
+      "mode": "data_first",
+      "seed": 2,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 2.890187,
+          "p95_ms": 9.363217,
+          "median_cpu_ms": 2.8929545,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 6.935523,
+          "p95_ms": 10.643294,
+          "median_cpu_ms": 6.893375,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 11.460139,
+          "p95_ms": 18.174169,
+          "median_cpu_ms": 11.463772500000001,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 158,
+          "completed": 114,
+          "remaining": 44,
+          "external_backlog": 292,
+          "completed_per_hour": 2280.0,
+          "mean_completed_trip_seconds": 78.04429824561404,
+          "max_queue": 310,
+          "mean_active": 42.050555555555555,
+          "median_ms": 2.7103669999999997,
+          "p95_ms": 4.202577,
+          "median_cpu_ms": 2.7140635,
+          "total_update_cpu_seconds": 10.017534906000002,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 2,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 102,
+          "completed": 56,
+          "remaining": 46,
+          "external_backlog": 348,
+          "completed_per_hour": 1120.0,
+          "mean_completed_trip_seconds": 86.83839285714286,
+          "max_queue": 380,
+          "mean_active": 43.219722222222224,
+          "median_ms": 2.6709490000000002,
+          "p95_ms": 5.068702,
+          "median_cpu_ms": 2.6744174999999997,
+          "total_update_cpu_seconds": 11.372916529,
+          "overlap_pair_ticks": 0,
+          "red_entries": 0,
+          "yellow_entries": 2,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "new"
+    },
+    {
+      "mode": "data_first",
+      "seed": 2,
+      "frozen": [
+        {
+          "cars": 32,
+          "median_ms": 1.7890605000000002,
+          "p95_ms": 3.28971,
+          "median_cpu_ms": 1.7913225000000002,
+          "samples": 50
+        },
+        {
+          "cars": 64,
+          "median_ms": 3.115959,
+          "p95_ms": 4.749645,
+          "median_cpu_ms": 3.118913,
+          "samples": 50
+        },
+        {
+          "cars": 128,
+          "median_ms": 6.4084015,
+          "p95_ms": 7.975109,
+          "median_cpu_ms": 6.411542,
+          "samples": 50
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 121,
+          "completed": 75,
+          "remaining": 46,
+          "external_backlog": 329,
+          "completed_per_hour": 1500.0,
+          "mean_completed_trip_seconds": 82.29733333333334,
+          "max_queue": 346,
+          "mean_active": 42.655833333333334,
+          "median_ms": 2.395616,
+          "p95_ms": 4.092684,
+          "median_cpu_ms": 2.399203,
+          "total_update_cpu_seconds": 9.053472821,
+          "overlap_pair_ticks": 0,
+          "red_entries": 6,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        },
+        {
+          "case": "turns",
+          "seconds": 180.0,
+          "attempted": 450,
+          "admitted": 85,
+          "completed": 39,
+          "remaining": 46,
+          "external_backlog": 365,
+          "completed_per_hour": 780.0,
+          "mean_completed_trip_seconds": 87.89871794871796,
+          "max_queue": 394,
+          "mean_active": 43.39083333333333,
+          "median_ms": 2.5062290000000003,
+          "p95_ms": 4.064273,
+          "median_cpu_ms": 2.5105245,
+          "total_update_cpu_seconds": 9.387098517,
+          "overlap_pair_ticks": 0,
+          "red_entries": 4,
+          "yellow_entries": 0,
+          "hard_gridlock_seconds": 0.0
+        }
+      ],
+      "system": "old"
+    }
+  ],
+  "summary": {
+    "data_first": {
+      "frozen": [
+        {
+          "cars": 32,
+          "old_cpu_ms": 1.9855925,
+          "new_cpu_ms": 2.514466,
+          "median_change_pct": 26.63555084943159,
+          "paired_change_min_pct": -8.609139136970734,
+          "paired_change_max_pct": 61.4982505941839
+        },
+        {
+          "cars": 64,
+          "old_cpu_ms": 3.7870600000000003,
+          "new_cpu_ms": 4.5412575,
+          "median_change_pct": 19.915118852091073,
+          "paired_change_min_pct": -11.168217434415206,
+          "paired_change_max_pct": 121.01850869197057
+        },
+        {
+          "cars": 128,
+          "old_cpu_ms": 8.1291265,
+          "new_cpu_ms": 9.7184345,
+          "median_change_pct": 19.55078445390166,
+          "paired_change_min_pct": -9.613499064136843,
+          "paired_change_max_pct": 78.79899250445526
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "old_completed": 75,
+          "new_completed": 114,
+          "completion_change_pct": 52.0,
+          "old_flow_cpu_ms": 2.4960959999999996,
+          "new_flow_cpu_ms": 2.7140635
+        },
+        {
+          "case": "turns",
+          "old_completed": 40,
+          "new_completed": 60,
+          "completion_change_pct": 50.0,
+          "old_flow_cpu_ms": 2.758624,
+          "new_flow_cpu_ms": 2.6744174999999997
+        }
+      ],
+      "safety": {
+        "old": {
+          "red_entries": 30,
+          "overlap_pair_ticks": 0,
+          "hard_gridlock_seconds": 0.0
+        },
+        "new": {
+          "red_entries": 0,
+          "overlap_pair_ticks": 0,
+          "hard_gridlock_seconds": 0.0
+        }
+      }
+    },
+    "legacy": {
+      "frozen": [
+        {
+          "cars": 32,
+          "old_cpu_ms": 4.5211735,
+          "new_cpu_ms": 7.3070475,
+          "median_change_pct": 61.61838292646811,
+          "paired_change_min_pct": -5.3437011430771175,
+          "paired_change_max_pct": 109.10450604042352
+        },
+        {
+          "cars": 64,
+          "old_cpu_ms": 14.2625125,
+          "new_cpu_ms": 23.3334855,
+          "median_change_pct": 63.600105521379916,
+          "paired_change_min_pct": 6.0110151948880475,
+          "paired_change_max_pct": 119.93589488528053
+        },
+        {
+          "cars": 128,
+          "old_cpu_ms": 55.657523499999996,
+          "new_cpu_ms": 79.665307,
+          "median_change_pct": 43.13483962325417,
+          "paired_change_min_pct": -21.44873008089132,
+          "paired_change_max_pct": 78.21548083112313
+        }
+      ],
+      "flow": [
+        {
+          "case": "straight",
+          "old_completed": 75,
+          "new_completed": 116,
+          "completion_change_pct": 54.666666666666664,
+          "old_flow_cpu_ms": 10.2879445,
+          "new_flow_cpu_ms": 9.253364000000001
+        },
+        {
+          "case": "turns",
+          "old_completed": 40,
+          "new_completed": 60,
+          "completion_change_pct": 50.0,
+          "old_flow_cpu_ms": 10.242566,
+          "new_flow_cpu_ms": 9.510431
+        }
+      ],
+      "safety": {
+        "old": {
+          "red_entries": 30,
+          "overlap_pair_ticks": 0,
+          "hard_gridlock_seconds": 0.0
+        },
+        "new": {
+          "red_entries": 0,
+          "overlap_pair_ticks": 0,
+          "hard_gridlock_seconds": 0.0
+        }
+      }
+    }
+  }
+}
