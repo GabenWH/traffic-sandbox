@@ -37,17 +37,13 @@ class FixedTimeSignalControllerTests(unittest.TestCase):
         self.assertEqual(controller.state_at(24.0).aspect, SignalAspect.YELLOW)
         self.assertTrue(controller.is_green("north", 27.0))
 
-    def test_scheduled_plan_change_restarts_cycle_at_requested_time(self):
-        initial = SignalPlan((SignalPhase(60.0, frozenset({"north"}), 0.0, 0.0),))
-        changed = SignalPlan((SignalPhase(60.0, frozenset({"east"}), 0.0, 0.0),))
-        controller = FixedTimeSignalController(
-            initial,
-            schedule=(SignalPlanChange(17.5, changed),),
-        )
-
-        self.assertTrue(controller.is_green("north", 17.49))
-        self.assertFalse(controller.is_green("north", 17.5))
-        self.assertTrue(controller.is_green("east", 17.5))
+    def test_scheduled_plan_change_restarts_after_old_clearance(self):
+        initial = SignalPlan((SignalPhase(10.0, {"north"}, 3.0, 1.0),))
+        changed = SignalPlan((SignalPhase(60.0, {"east"}, 0.0, 0.0),))
+        controller = FixedTimeSignalController(initial, (SignalPlanChange(5.0, changed),))
+        self.assertTrue(controller.is_green("north", 9.99))
+        self.assertFalse(controller.is_green("east", 13.99))
+        self.assertTrue(controller.is_green("east", 14.0))
 
     def test_rejects_invalid_phase_durations_and_schedule_order(self):
         with self.assertRaises(ValueError):
@@ -84,7 +80,7 @@ class SignalBrainTests(unittest.TestCase):
         self.assertFalse(decision.request_claim)
         self.assertEqual(brain.stopped_elapsed, 0.0)
 
-    def test_green_signal_requests_a_claim_without_stop_dwell(self):
+    def test_green_signal_permits_entry_without_stop_dwell_or_claim(self):
         brain = CarBrain()
 
         decision = brain.decide(
@@ -99,31 +95,32 @@ class SignalBrainTests(unittest.TestCase):
         )
 
         self.assertEqual(decision.state, BehaviorState.ENTERING_INTERSECTION)
-        self.assertTrue(decision.request_claim)
+        self.assertFalse(decision.request_claim)
+        self.assertTrue(decision.signal_entry_allowed)
         self.assertFalse(decision.register_stop)
 
 
-class SignalClaimTests(unittest.TestCase):
-    def test_signal_claim_blocks_conflicting_movement_until_release(self):
+class SignalOccupancyTests(unittest.TestCase):
+    def test_signal_body_blocks_conflicting_movement_until_clear(self):
         city = CityMap(terrain=Terrain(trees=[]))
         city.add_road([(0, 300), (600, 300)])
         city.add_road([(300, 0), (300, 600)])
         movements = city.standard_intersections[0].lane_connections
         first = movements[0]
         conflict = next(item for item in movements
-                        if item is not first and movements_conflict(first, item))
+                        if item is not first and item.source_output != first.source_output
+                        and movements_conflict(first, item))
         compatible = next(item for item in movements
                           if item is not first and not movements_conflict(first, item))
         coordinator = AllWayStopCoordinator()
         first.control = ControlDefinition(ControlType.SIGNAL, "main")
 
-        self.assertTrue(coordinator.can_claim_signal("northbound", first))
-        self.assertTrue(coordinator.claim_signal("northbound", first))
-        self.assertFalse(coordinator.can_claim_signal("crossing", conflict))
-        self.assertTrue(coordinator.can_claim_signal("parallel", compatible))
-
-        coordinator.release("northbound", first)
-        self.assertTrue(coordinator.can_claim_signal("crossing", conflict))
+        coordinator.observe_signal_occupants((("northbound", first),))
+        self.assertFalse(coordinator.can_enter_signal("crossing", conflict))
+        self.assertTrue(coordinator.can_enter_signal("parallel", compatible))
+        self.assertTrue(coordinator.can_enter_signal("follower", first))
+        coordinator.observe_signal_occupants(())
+        self.assertTrue(coordinator.can_enter_signal("crossing", conflict))
 
 
 class RoutedSignalIntegrationTests(unittest.TestCase):
@@ -220,25 +217,24 @@ class RoutedSignalIntegrationTests(unittest.TestCase):
                 self.assertLessEqual(car.distance + car.length / 2, start + 1e-6)
                 self.assertIsNone(car.claimed_movement)
 
-    def test_green_claim_carries_car_through_phase_change_and_releases_rear_clear(self):
+    def test_entered_car_clears_after_controller_is_removed(self):
         for mode in ("legacy", "data_first"):
             with self.subTest(mode=mode):
-                city, traffic, car, movement = self.make_scenario(
-                    mode, scheduled_red=True,
-                )
-
+                city, traffic, car, movement = self.make_scenario(mode)
+                start, end, _ = next(x for x in car.controlled_movements if x[2] is movement)
+                car.distance = start - car.length / 2
+                car.speed = 10.0
+                car.advance(0)
                 traffic.update(city, 0.05)
-                self.assertIs(car.claimed_movement, movement)
+                self.assertIsNone(car.claimed_movement)
+                self.assertIn((car.id, movement.id), traffic.stop_coordinator.signal_occupants)
                 before_red = car.distance
-
+                traffic.signal_controllers.clear()
                 traffic.update(city, 0.05)
                 self.assertGreater(car.distance, before_red)
-                self.assertIs(car.claimed_movement, movement)
-
-                for _ in range(300):
+                while car.distance - car.length / 2 < end:
                     traffic.update(city, 0.05)
-
-                self.assertIsNone(car.claimed_movement)
+                self.assertNotIn((car.id, movement.id), traffic.stop_coordinator.signal_occupants)
 
 
 if __name__ == "__main__":

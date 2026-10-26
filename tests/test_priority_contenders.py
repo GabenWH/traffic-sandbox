@@ -204,6 +204,13 @@ class CompatibleStopMovementTests(unittest.TestCase):
 
 
 class CommittedEntryOccupancyTests(unittest.TestCase):
+    def test_entered_signal_merge_is_visible_without_a_claim(self):
+        entrant, circulating = self.cars(committed=False)
+        entrant.controlled_movements[0][2].control = ControlDefinition(ControlType.SIGNAL, 'main')
+        occupancy = TrafficOccupancyIndex()
+        occupancy.rebuild([entrant, circulating])
+        self.assertEqual(occupancy.lead_gap(circulating, 60.0), 6.0)
+
     def cars(self, *, committed, distance=90.0):
         target = ("lane", "ring")
         connection = SimpleNamespace(merge_target=target)

@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from math import floor
 from typing import Hashable, Protocol
 
+from models import ControlType
+
 
 OCCUPANCY_CELL_LENGTH = 32.0
 SECTION_CLEARANCE = 22.0
@@ -67,6 +69,13 @@ class TrafficOccupancyIndex:
             # visible on the target's ruler; uncommitted yield traffic must not
             # create an imaginary obstacle on the ring.
             claimed = getattr(car, "claimed_movement", None)
+            if claimed is None:
+                claimed = next((connection for start, end, connection
+                                in getattr(car, "controlled_movements", ())
+                                if getattr(getattr(connection, "control", None), "kind", None) is ControlType.SIGNAL
+                                and connection.merge_target is not None
+                                and car.distance + car.length / 2 > start + 1e-8
+                                and car.distance - car.length / 2 < end), None)
             target = getattr(claimed, "merge_target", None)
             if target is None:
                 continue
