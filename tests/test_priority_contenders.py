@@ -62,8 +62,7 @@ class PriorityContenderTests(unittest.TestCase):
                 city, traffic, queue = self.make_queue(mode)
                 traffic.update(city, 0)
                 leader, follower = queue[:2]
-                traffic.cars.remove(leader)
-                traffic.stop_coordinator.forget_car(leader.id)
+                traffic.remove_vehicle(leader.id)
                 follower.distance = (follower.controlled_movements[0][0]
                                      - follower.length / 2 - 5.0)
                 follower.advance(0)

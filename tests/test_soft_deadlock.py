@@ -197,8 +197,12 @@ class TemporaryWinnerSimulationTests(unittest.TestCase):
         self.assertEqual(joining.brain.desired_speed, 0.0)
         self.assertEqual(traffic.deadlock_resolver.winner_id, joining.id)
 
-        traffic.cars.remove(circulating)
-        traffic.stop_coordinator.forget_car(circulating.id)
+        traffic.remove_vehicle(circulating.id)
+        # Removing a vehicle resets deadlock bookkeeping. Keep this fixture's
+        # committed temporary winner while testing the newly cleared path.
+        traffic.deadlock_resolver.stall_seconds = 5.0
+        traffic.deadlock_resolver.winner_id = joining.id
+        traffic.deadlock_resolver.winner_movement_id = first[2].id
         traffic.update(city, 0.05)
 
         self.assertGreater(joining.distance, before)

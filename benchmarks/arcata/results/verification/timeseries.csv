@@ -1,0 +1,2 @@
+simulated_time_seconds,target_cap,mean_active_cars,max_active_cars,cumulative_spawned,mean_update_ms,p95_update_ms,max_update_ms,mean_update_fps,threshold_reached
+5.0,40,9.5,14,14,3.069,19.354,25.866,325.82,False

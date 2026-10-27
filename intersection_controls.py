@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from functools import lru_cache
-from math import atan2, isfinite, pi
+from math import atan2, floor, isfinite, pi, ulp
 
 from models import LaneConnection, ControlType
 
@@ -75,7 +75,7 @@ class SignalPlan:
 
 @dataclass(frozen=True)
 class SignalPlanChange:
-    """Switch to a plan at a simulation-time boundary and restart its cycle."""
+    """Request a plan, applied after the active phase finishes clearance."""
 
     at_seconds: float
     plan: SignalPlan
@@ -98,13 +98,16 @@ class SignalState:
 class FixedTimeSignalController:
     """Cycle fixed-time plans using simulation time, with optional plan changes.
 
-    A scheduled plan starts at its declared time with phase zero. Any vehicle
-    already granted a movement claim may finish clearing; new claims still
-    have to pass the coordinator's conflicting-occupancy check.
+    A scheduled request starts phase zero at the next completed phase clearance.
+    Vehicles physically crossing keep clearing; approaching vehicles receive no
+    reservation that could outlive their light.
     """
 
     plan: SignalPlan
     schedule: tuple[SignalPlanChange, ...] = ()
+    _effective_schedule: tuple[SignalPlanChange, ...] = field(
+        default=(), init=False, repr=False, compare=False,
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.plan, SignalPlan):
@@ -116,6 +119,17 @@ class FixedTimeSignalController:
         if times != sorted(times) or len(times) != len(set(times)):
             raise ValueError("Signal plan changes must be in strictly increasing time order")
         object.__setattr__(self, "schedule", schedule)
+        effective = []
+        for change in schedule:
+            if effective and change.at_seconds <= effective[-1].at_seconds:
+                # The previous request is still pending at this clearance.
+                effective[-1] = SignalPlanChange(effective[-1].at_seconds, change.plan)
+                continue
+            active = effective[-1].plan if effective else self.plan
+            started = effective[-1].at_seconds if effective else 0.0
+            boundary = _next_phase_clearance(active, started, change.at_seconds)
+            effective.append(SignalPlanChange(boundary, change.plan))
+        object.__setattr__(self, "_effective_schedule", tuple(effective))
 
     def state_at(self, elapsed_seconds: float) -> SignalState:
         """Return the active phase state at nonnegative simulation time."""
@@ -123,31 +137,71 @@ class FixedTimeSignalController:
             raise ValueError("Signal time must be finite and nonnegative")
         plan = self.plan
         plan_started = 0.0
-        for change in self.schedule:
-            if change.at_seconds > elapsed_seconds:
+        for change in self._effective_schedule:
+            if _before_signal_boundary(elapsed_seconds, change.at_seconds):
                 break
             plan = change.plan
             plan_started = change.at_seconds
 
-        cycle_time = (elapsed_seconds - plan_started) % plan.cycle_seconds
+        cycle_start = plan_started + floor((elapsed_seconds - plan_started) / plan.cycle_seconds) * plan.cycle_seconds
+        boundary = cycle_start
         for index, phase in enumerate(plan.phases):
-            if cycle_time < phase.green_seconds:
+            boundary += phase.green_seconds
+            if _before_signal_boundary(elapsed_seconds, boundary):
                 return SignalState(SignalAspect.GREEN, index, phase.movement_ids)
-            cycle_time -= phase.green_seconds
-            if cycle_time < phase.yellow_seconds:
+            boundary += phase.yellow_seconds
+            if _before_signal_boundary(elapsed_seconds, boundary):
                 return SignalState(SignalAspect.YELLOW, index, phase.movement_ids)
-            cycle_time -= phase.yellow_seconds
-            if cycle_time < phase.all_red_seconds:
+            boundary += phase.all_red_seconds
+            if _before_signal_boundary(elapsed_seconds, boundary):
                 return SignalState(SignalAspect.ALL_RED, index, frozenset())
-            cycle_time -= phase.all_red_seconds
-        # Modulo and finite positive phase lengths make this unreachable except
-        # for accumulated floating-point roundoff at the cycle boundary.
         first = plan.phases[0]
         return SignalState(SignalAspect.GREEN, 0, first.movement_ids)
 
     def is_green(self, movement_id: str, elapsed_seconds: float) -> bool:
         state = self.state_at(elapsed_seconds)
         return state.aspect is SignalAspect.GREEN and movement_id in state.movement_ids
+
+    def next_boundary_after(self, elapsed_seconds: float) -> float:
+        """Next aspect or effective plan event, for exact integration splits."""
+        if not isfinite(elapsed_seconds) or elapsed_seconds < 0:
+            raise ValueError("Signal time must be finite and nonnegative")
+        plan, started, pending = self.plan, 0.0, float('inf')
+        for change in self._effective_schedule:
+            if _before_signal_boundary(elapsed_seconds, change.at_seconds):
+                pending = change.at_seconds
+                break
+            plan, started = change.plan, change.at_seconds
+        cycle_start = started + floor((elapsed_seconds - started) / plan.cycle_seconds) * plan.cycle_seconds
+        for offset in (0, 1):
+            boundary = cycle_start + offset * plan.cycle_seconds
+            for phase in plan.phases:
+                for duration in (phase.green_seconds, phase.yellow_seconds, phase.all_red_seconds):
+                    boundary += duration
+                    if _before_signal_boundary(elapsed_seconds, boundary):
+                        return min(boundary, pending)
+        raise ArithmeticError("No representable next signal event")
+
+
+def _before_signal_boundary(elapsed: float, boundary: float) -> bool:
+    # Decimal durations accumulate a few ULPs over repeated cycles. Treat the
+    # same representable event consistently in aspect lookup and subdivision.
+    return elapsed < boundary and boundary - elapsed > 4 * max(ulp(elapsed), ulp(boundary))
+
+
+def _next_phase_clearance(plan: SignalPlan, started: float, requested: float) -> float:
+    """Apply a request only at an existing end-of-clearance boundary."""
+    if requested == started:
+        return requested
+    cycle_start = started + floor((requested - started) / plan.cycle_seconds) * plan.cycle_seconds
+    if cycle_start == requested:
+        return requested
+    boundary = cycle_start
+    for phase in plan.phases:
+        boundary += phase.green_seconds + phase.yellow_seconds + phase.all_red_seconds
+        if boundary >= requested:
+            return boundary
+    return cycle_start + plan.cycle_seconds
 
 
 @dataclass(frozen=True)
@@ -163,6 +217,131 @@ class AllWayStopCoordinator:
 
     arrivals: dict[str, StopArrival] = field(default_factory=dict)
     claims: dict[tuple[str, str], LaneConnection] = field(default_factory=dict)
+    _claims_by_car: dict[str, dict[str, LaneConnection]] = field(
+        default_factory=dict, repr=False,
+    )
+    signal_occupants: dict[tuple[str, str], LaneConnection] = field(default_factory=dict)
+    claim_revision: int = field(default=0, init=False, repr=False)
+    _claim_revisions_by_intersection: dict[str, int] = field(
+        default_factory=dict, init=False, repr=False,
+    )
+    _signal_conflicts: dict[str, frozenset[str]] = field(
+        default_factory=dict, init=False, repr=False,
+    )
+    _signal_occupant_keys_by_car: dict[str, set[tuple[str, str]]] = field(
+        default_factory=dict, init=False, repr=False,
+    )
+    _signal_block_counts: dict[str, int] = field(
+        default_factory=dict, init=False, repr=False,
+    )
+    _signal_owner_block_counts: dict[str, dict[str, int]] = field(
+        default_factory=dict, init=False, repr=False,
+    )
+
+    def configure_signal_conflicts(self, movements) -> None:
+        """Cache geometric signal conflicts for fast physical-occupancy checks."""
+        movements = tuple({item.id: item for item in movements}.values())
+        conflicts = {item.id: set() for item in movements}
+        for index, movement in enumerate(movements):
+            for other in movements[index + 1:]:
+                if (movement.intersection_id == other.intersection_id
+                        and movement.source_output != other.source_output
+                        and movements_conflict(movement, other)):
+                    conflicts[movement.id].add(other.id)
+                    conflicts[other.id].add(movement.id)
+        self._signal_conflicts = {
+            movement_id: frozenset(items)
+            for movement_id, items in conflicts.items()
+        }
+        self._rebuild_signal_block_counts()
+
+    def observe_signal_occupants(self, occupants) -> None:
+        """Replace the snapshot of physical signal crossing occupants."""
+        self.signal_occupants = {}
+        self._signal_occupant_keys_by_car = {}
+        for owner, connection in occupants:
+            key = (owner, connection.id)
+            self.signal_occupants[key] = connection
+            self._signal_occupant_keys_by_car.setdefault(owner, set()).add(key)
+        self._rebuild_signal_block_counts()
+
+    def observe_signal_car(self, car_id: str, movements) -> None:
+        """Replace one car's occupied signal movements incrementally."""
+        for key in self._signal_occupant_keys_by_car.pop(car_id, ()):
+            occupied = self.signal_occupants.pop(key)
+            self._adjust_signal_block_counts(car_id, occupied.id, -1)
+        for connection in movements:
+            key = (car_id, connection.id)
+            if key in self.signal_occupants:
+                continue
+            self.signal_occupants[key] = connection
+            self._signal_occupant_keys_by_car.setdefault(car_id, set()).add(key)
+            self._adjust_signal_block_counts(car_id, connection.id, 1)
+
+    def _adjust_signal_block_counts(self, owner: str, movement_id: str, delta: int) -> None:
+        for blocked_id in self._signal_conflicts.get(movement_id, ()):
+            total = self._signal_block_counts.get(blocked_id, 0) + delta
+            if total:
+                self._signal_block_counts[blocked_id] = total
+            else:
+                self._signal_block_counts.pop(blocked_id, None)
+            own = self._signal_owner_block_counts.get(owner)
+            if own is None:
+                if delta < 0:
+                    continue
+                own = self._signal_owner_block_counts.setdefault(owner, {})
+            own_total = own.get(blocked_id, 0) + delta
+            if own_total:
+                own[blocked_id] = own_total
+            else:
+                own.pop(blocked_id, None)
+                if not own:
+                    self._signal_owner_block_counts.pop(owner, None)
+
+    def _rebuild_signal_block_counts(self) -> None:
+        block_counts: dict[str, int] = {}
+        owner_counts: dict[str, dict[str, int]] = {}
+        for (owner, movement_id) in self.signal_occupants:
+            for blocked_id in self._signal_conflicts.get(movement_id, ()):
+                block_counts[blocked_id] = block_counts.get(blocked_id, 0) + 1
+                own = owner_counts.setdefault(owner, {})
+                own[blocked_id] = own.get(blocked_id, 0) + 1
+        self._signal_block_counts = block_counts
+        self._signal_owner_block_counts = owner_counts
+
+    def can_enter_signal(self, car_id: str, connection: LaneConnection) -> bool:
+        if connection.id in self._signal_conflicts:
+            blocked = self._signal_block_counts.get(connection.id, 0)
+            own_blocked = self._signal_owner_block_counts.get(car_id, {}).get(connection.id, 0)
+            if blocked > own_blocked:
+                return False
+        else:
+            for (owner, _), occupied in self.signal_occupants.items():
+                if owner == car_id or occupied.intersection_id != connection.intersection_id:
+                    continue
+                if occupied.source_output == connection.source_output:
+                    continue
+                if movements_conflict(connection, occupied):
+                    return False
+        return not self._blocked_by_reservation(car_id, connection)
+
+    def has_signal_occupancy(self, car_id: str, connection: LaneConnection) -> bool:
+        return self.signal_occupants.get((car_id, connection.id)) is connection
+
+    def _blocked_by_reservation(self, car_id, connection):
+        return any(owner != car_id and movements_conflict(connection, claimed)
+                   for (owner, _), claimed in self.claims.items()
+                   if claimed.intersection_id == connection.intersection_id)
+
+    def claim_revision_for(self, intersection_id: str) -> int:
+        return self._claim_revisions_by_intersection.get(intersection_id, 0)
+
+    def _record_claim_change(self, intersections) -> None:
+        self.claim_revision += 1
+        for intersection_id in intersections:
+            self._claim_revisions_by_intersection[intersection_id] = (
+                self._claim_revisions_by_intersection.get(intersection_id, 0) + 1
+            )
 
     def observe_stop(
         self, car_id: str, connection: LaneConnection, stopped_at: float,
@@ -187,7 +366,7 @@ class AllWayStopCoordinator:
         return any(
             owner != car_id and claimed.intersection_id == connection.intersection_id
             and movements_conflict(connection, claimed)
-            for (owner, _), claimed in self.claims.items()
+            for (owner, _), claimed in (*self.claims.items(), *self.signal_occupants.items())
         )
 
     def can_claim(self, car_id: str, connection: LaneConnection) -> bool:
@@ -242,28 +421,19 @@ class AllWayStopCoordinator:
         """
         return not self._blocked_by_claim(car_id, connection)
 
-    def can_claim_signal(self, car_id: str, connection: LaneConnection) -> bool:
-        """A green signal skips arrival ordering but not conflict occupancy."""
-        return not self._blocked_by_claim(car_id, connection)
-
-    def claim_signal(self, car_id: str, connection: LaneConnection) -> bool:
-        if not self.can_claim_signal(car_id, connection):
-            return False
-        self.claims[(car_id, connection.id)] = connection
-        self.arrivals.pop(car_id, None)
-        return True
-
     def claim_merge(self, car_id, connection):
         if not self.can_enter_merge(car_id, connection):
             return False
-        self.claims[(car_id, connection.id)] = connection
+        self._store_claim(car_id, connection)
+        self._record_claim_change((connection.intersection_id,))
         self.arrivals.pop(car_id, None)
         return True
 
     def claim(self, car_id: str, connection: LaneConnection) -> bool:
         if not self.can_claim(car_id, connection):
             return False
-        self.claims[(car_id, connection.id)] = connection
+        self._store_claim(car_id, connection)
+        self._record_claim_change((connection.intersection_id,))
         self.arrivals.pop(car_id, None)
         return True
 
@@ -275,7 +445,8 @@ class AllWayStopCoordinator:
         """
         if not self.can_claim_temporary_winner(car_id, connection):
             return False
-        self.claims[(car_id, connection.id)] = connection
+        self._store_claim(car_id, connection)
+        self._record_claim_change((connection.intersection_id,))
         self.arrivals.pop(car_id, None)
         return True
 
@@ -286,16 +457,43 @@ class AllWayStopCoordinator:
     def release(self, car_id: str, connection: LaneConnection | None = None) -> None:
         # A car can occupy two close junctions at once. Clearing the first
         # must not erase its permission for the second.
-        for key in list(self.claims):
-            if key[0] == car_id and (connection is None or self.claims[key] is connection):
-                del self.claims[key]
+        owned = self._claims_by_car.get(car_id)
+        if not owned:
+            return
+        if connection is None:
+            released = tuple(owned.values())
+            del self._claims_by_car[car_id]
+        else:
+            current = owned.get(connection.id)
+            if current is not connection:
+                return
+            released = (current,)
+            del owned[connection.id]
+            if not owned:
+                del self._claims_by_car[car_id]
+        for released_connection in released:
+            self.claims.pop((car_id, released_connection.id), None)
+        if released:
+            self._record_claim_change(
+                {item.intersection_id for item in released}
+            )
 
     def forget_car(self, car_id: str) -> None:
         self.arrivals.pop(car_id, None)
         self.release(car_id)
+        self.observe_signal_car(car_id, ())
 
     def has_claim(self, car_id: str, connection: LaneConnection) -> bool:
         return self.claims.get((car_id, connection.id)) is connection
+
+    def claims_for(self, car_id: str):
+        """Return only this car's active claims, in acquisition order."""
+        owned = self._claims_by_car.get(car_id)
+        return tuple(owned.values()) if owned else ()
+
+    def _store_claim(self, car_id: str, connection: LaneConnection) -> None:
+        self.claims[(car_id, connection.id)] = connection
+        self._claims_by_car.setdefault(car_id, {})[connection.id] = connection
 
     @staticmethod
     def _priority_key(arrival: StopArrival) -> tuple[float, float, str]:

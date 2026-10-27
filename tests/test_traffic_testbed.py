@@ -158,6 +158,9 @@ class TrafficTestbedTests(unittest.TestCase):
             "intent_generation",
             "intent_route_lookup",
             "intent_control_state",
+            "intent_control_claim_lookup",
+            "intent_control_inside_scan",
+            "intent_control_stop_distance",
             "intent_merge_observation",
             "intent_priority_query",
             "intent_exit_gap",
@@ -174,7 +177,9 @@ class TrafficTestbedTests(unittest.TestCase):
         }.issubset(sample.timings_ms))
         intent_subphases = (
             "intent_route_lookup",
-            "intent_control_state",
+            "intent_control_claim_lookup",
+            "intent_control_inside_scan",
+            "intent_control_stop_distance",
             "intent_merge_observation",
             "intent_priority_query",
             "intent_exit_gap",

@@ -13,6 +13,14 @@ Run it with Python 3:
 python3 freeway_simulator.py
 ```
 
+To run constructed-road vehicle spawning and movement in C++17:
+
+```bash
+python3 freeway_simulator.py --traffic-engine native
+```
+
+This requires a local C++17 compiler. See [native engine usage and parity tests](native/traffic/README.md).
+
 To use the 3D road view, install Panda3D first:
 
 ```bash
@@ -73,7 +81,11 @@ Select a standard intersection with **Inspect** and set **All-way stop** to
 request entry after a complete stop, while a runtime coordinator records
 arrival order and prevents conflicting claims. Equal arrivals use deterministic
 clockwise approach order. Select a routed car to inspect its brain state and
-wait reason. Traffic lights and the legacy freeway-car migration remain future work. Routed cars automatically use perfectly compliant turn signals:
+wait reason. Standard intersections also support fixed-time signal plans with
+green, yellow, and all-red intervals, scheduled plan changes after clearance,
+and fail-closed behavior when a controller is missing. A car already inside a
+signalized crossing keeps moving until its body clears; red signals are never
+overridden by deadlock recovery. Routed cars automatically use perfectly compliant turn signals:
 left/right indicators activate 100 feet before a turn, U-turns signal left,
 and the signal remains active until the car clears the movement.
 

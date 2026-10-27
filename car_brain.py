@@ -51,6 +51,8 @@ class CarObservation:
     temporary_winner_blocked: bool = False
     signal_red: bool = False
     signal_green: bool = False
+    signal_yellow: bool = False
+    signal_movement_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,7 @@ class CarDecision:
     register_stop: bool = False
     request_claim: bool = False
     merge_entry_speed: float | None = None
+    signal_entry_allowed: bool = False
 
 
 @dataclass
@@ -74,6 +77,8 @@ class CarBrain:
     signal_intent: SignalIntent = SignalIntent.NONE
     merge_style: str = "rolling"
     phantom_target: str = ""
+    _yellow_movement_id: str | None = None
+    _yellow_go: bool = False
 
     def __post_init__(self):
         if self.merge_style not in MERGE_STRATEGIES:
@@ -89,6 +94,14 @@ class CarBrain:
         reason = ""
         register_stop = False
         request_claim = False
+        signal_entry_allowed = False
+        if not observation.signal_yellow:
+            self._yellow_movement_id = None
+            self._yellow_go = False
+        elif self._yellow_movement_id != observation.signal_movement_id:
+            self._yellow_movement_id = observation.signal_movement_id
+            distance = max(0.0, observation.distance_to_stop or 0.0)
+            self._yellow_go = observation.speed ** 2 / (2 * COMFORTABLE_BRAKING) > distance
         self.phantom_target = ""
         # The predicted joining time must use the speed we will actually ask
         # for. A queued car cannot reserve a gap as if it could cruise through.
@@ -116,17 +129,20 @@ class CarBrain:
 
         # Our rear may still occupy one junction while our nose must obey the
         # next signal. Clearing the old junction does not cancel that signal.
-        if observation.signal_red and observation.distance_to_stop is not None:
+        if (observation.signal_red or (observation.signal_yellow and not self._yellow_go)) and observation.distance_to_stop is not None:
             self.stopped_elapsed = 0.0
             distance = max(0.0, observation.distance_to_stop)
             desired = min(desired, sqrt(2.0 * COMFORTABLE_BRAKING * distance))
             state = BehaviorState.WAITING_FOR_PRIORITY
-            reason = "red signal"
-        elif observation.signal_green and observation.distance_to_stop is not None:
+            reason = "yellow signal" if observation.signal_yellow else "red signal"
+        elif (observation.signal_green or observation.signal_yellow) and observation.distance_to_stop is not None:
             self.stopped_elapsed = 0.0
-            if observation.has_priority:
+            merge_ready = merge_choice is None or (
+                merge_choice.can_enter and merge_choice.entry_speed is not None
+                and merge_choice.entry_speed >= min(MIN_JOINING_SPEED, observation.cruise_speed))
+            if observation.has_priority and merge_ready:
                 state = BehaviorState.ENTERING_INTERSECTION
-                request_claim = True
+                signal_entry_allowed = True
             else:
                 distance = max(0.0, observation.distance_to_stop)
                 desired = min(desired, sqrt(2.0 * COMFORTABLE_BRAKING * distance))
@@ -216,7 +232,7 @@ class CarBrain:
         elif observation.temporary_winner_blocked:
             entry_speed = None
         decision = CarDecision(max(0.0, desired), state, reason, register_stop, request_claim,
-                               entry_speed)
+                               entry_speed, signal_entry_allowed)
         self.state = decision.state
         self.wait_reason = decision.wait_reason
         self.desired_speed = decision.desired_speed

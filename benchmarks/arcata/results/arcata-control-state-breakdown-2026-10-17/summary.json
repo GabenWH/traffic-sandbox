@@ -1,0 +1,837 @@
+{
+  "active_cars_at_end": 200,
+  "cap_stages": [
+    100,
+    200
+  ],
+  "completed_frames": 6000,
+  "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+  "data_note": "OpenStreetMap road geometry, not measured vehicle GPS traces.",
+  "duration_simulated_seconds": 300.0,
+  "finished_utc": "2026-10-17T20:31:18.285437+00:00",
+  "fps_threshold": 5.0,
+  "fps_threshold_definition": "rolling mean CPU update cost across 20 frames >= 200 ms/frame (5 updates/s)",
+  "frame_dt_seconds": 0.05,
+  "logical_cpu_count": 9,
+  "lowest_rolling_fps": 13.973,
+  "network": {
+    "boundary_clipped_points": 55,
+    "boundary_name": "Arcata",
+    "boundary_relation_id": "112123",
+    "driveable_ways_in_extract": 686,
+    "driveable_ways_used": 681,
+    "network_length_feet": 466914.5,
+    "osm_file_names": [
+      "arcata-roads-2026-06-01.json"
+    ],
+    "osm_snapshot": "2026-06-01T08:52:28Z",
+    "portal_junctions": 50,
+    "road_centerline_points": 6299,
+    "road_segments": 1181,
+    "roads_by_highway": {
+      "motorway": 34,
+      "residential": 742,
+      "secondary": 80,
+      "tertiary": 304,
+      "trunk": 3,
+      "unclassified": 18
+    },
+    "street_junctions": 971,
+    "ways_in_extract": 2030
+  },
+  "occupancy_internal_profiling": true,
+  "peak_active_cars": 200,
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.39",
+  "portal_count_used": 16,
+  "portals_used": [
+    "osm-junction:[\"portal\",\"185271540\",3,0.00618793]",
+    "osm-junction:[\"portal\",\"837982949\",0,0.43175739]",
+    "osm-junction:[\"portal\",\"937949216\",46,0.71719451]",
+    "osm-junction:[\"portal\",\"10267088\",693,0.610174115]",
+    "osm-junction:[\"portal\",\"25661143\",17,0.965083745]",
+    "osm-junction:[\"portal\",\"10268824\",1,0.679578681]",
+    "osm-junction:[\"portal\",\"36808590\",0,0.469386603]",
+    "osm-junction:[\"portal\",\"383728853\",4,0.092759438]",
+    "osm-junction:[\"portal\",\"999870712\",1,0.07265559]",
+    "osm-junction:[\"portal\",\"10266165\",28,0.448517394]",
+    "osm-junction:[\"portal\",\"10271650\",28,0.993551963]",
+    "osm-junction:[\"portal\",\"937949216\",87,0.490010578]",
+    "osm-junction:[\"portal\",\"10277623\",8,0.41254573]",
+    "osm-junction:[\"portal\",\"23960405\",8,0.600869428]",
+    "osm-junction:[\"portal\",\"582321083\",1,0.736716796]",
+    "osm-junction:[\"portal\",\"999870720\",35,0.309766897]"
+  ],
+  "profiler_statistics_all_samples": {
+    "routed_traffic": {
+      "conflict_resolution": {
+        "max_ms": 40.8047,
+        "mean_ms": 0.5393,
+        "median_ms": 0.4506,
+        "p95_ms": 0.876,
+        "p99_ms": 1.0794
+      },
+      "intent_brain_decision": {
+        "max_ms": 5.136,
+        "mean_ms": 0.7399,
+        "median_ms": 0.6392,
+        "p95_ms": 1.233,
+        "p99_ms": 1.521
+      },
+      "intent_chain_check": {
+        "max_ms": 0.8429,
+        "mean_ms": 0.0572,
+        "median_ms": 0.046,
+        "p95_ms": 0.1102,
+        "p99_ms": 0.1526
+      },
+      "intent_control_claim_lookup": {
+        "max_ms": 2.2332,
+        "mean_ms": 0.1399,
+        "median_ms": 0.1208,
+        "p95_ms": 0.2292,
+        "p99_ms": 0.345
+      },
+      "intent_control_inside_scan": {
+        "max_ms": 50.381,
+        "mean_ms": 5.6675,
+        "median_ms": 4.8084,
+        "p95_ms": 9.4501,
+        "p99_ms": 11.2035
+      },
+      "intent_control_state": {
+        "max_ms": 50.7052,
+        "mean_ms": 5.8997,
+        "median_ms": 4.9922,
+        "p95_ms": 9.8157,
+        "p99_ms": 11.6727
+      },
+      "intent_control_stop_distance": {
+        "max_ms": 0.3189,
+        "mean_ms": 0.0498,
+        "median_ms": 0.0419,
+        "p95_ms": 0.0825,
+        "p99_ms": 0.1321
+      },
+      "intent_exit_gap": {
+        "max_ms": 14.0368,
+        "mean_ms": 1.6292,
+        "median_ms": 1.2657,
+        "p95_ms": 3.5308,
+        "p99_ms": 4.6811
+      },
+      "intent_generation": {
+        "max_ms": 70.0503,
+        "mean_ms": 11.4183,
+        "median_ms": 9.3755,
+        "p95_ms": 19.9864,
+        "p99_ms": 24.3878
+      },
+      "intent_leader_lookup": {
+        "max_ms": 5.8002,
+        "mean_ms": 1.036,
+        "median_ms": 0.885,
+        "p95_ms": 1.6909,
+        "p99_ms": 2.0832
+      },
+      "intent_merge_observation": {
+        "max_ms": 1.1303,
+        "mean_ms": 0.0211,
+        "median_ms": 0.0167,
+        "p95_ms": 0.0312,
+        "p99_ms": 0.056
+      },
+      "intent_packaging": {
+        "max_ms": 4.0137,
+        "mean_ms": 0.2446,
+        "median_ms": 0.214,
+        "p95_ms": 0.4083,
+        "p99_ms": 0.5383
+      },
+      "intent_priority_query": {
+        "max_ms": 37.375,
+        "mean_ms": 0.5729,
+        "median_ms": 0.341,
+        "p95_ms": 1.2205,
+        "p99_ms": 1.4933
+      },
+      "intent_route_lookup": {
+        "max_ms": 52.3706,
+        "mean_ms": 0.5704,
+        "median_ms": 0.4238,
+        "p95_ms": 1.0514,
+        "p99_ms": 1.4324
+      },
+      "intent_speed_target": {
+        "max_ms": 3.2705,
+        "mean_ms": 0.5215,
+        "median_ms": 0.4526,
+        "p95_ms": 0.8765,
+        "p99_ms": 1.0802
+      },
+      "movement_apply": {
+        "max_ms": 21.2608,
+        "mean_ms": 3.3409,
+        "median_ms": 2.6597,
+        "p95_ms": 7.7626,
+        "p99_ms": 8.6882
+      },
+      "observe": {
+        "max_ms": 14.1112,
+        "mean_ms": 1.3596,
+        "median_ms": 1.0468,
+        "p95_ms": 2.909,
+        "p99_ms": 4.5724
+      },
+      "occupancy_bin_build": {
+        "max_ms": 37.3405,
+        "mean_ms": 0.2483,
+        "median_ms": 0.2447,
+        "p95_ms": 0.4269,
+        "p99_ms": 0.5633
+      },
+      "occupancy_finalize": {
+        "max_ms": 4.8738,
+        "mean_ms": 0.0948,
+        "median_ms": 0.0703,
+        "p95_ms": 0.206,
+        "p99_ms": 0.2917
+      },
+      "occupancy_position_lookup": {
+        "max_ms": 6.6449,
+        "mean_ms": 0.7645,
+        "median_ms": 0.5295,
+        "p95_ms": 1.8775,
+        "p99_ms": 2.4635
+      },
+      "occupancy_rebuild": {
+        "max_ms": 50.8292,
+        "mean_ms": 10.5197,
+        "median_ms": 8.5825,
+        "p95_ms": 19.4198,
+        "p99_ms": 22.702
+      },
+      "occupancy_section_mapping": {
+        "max_ms": 37.1713,
+        "mean_ms": 3.7426,
+        "median_ms": 3.0615,
+        "p95_ms": 7.4243,
+        "p99_ms": 9.3232
+      },
+      "post_update": {
+        "max_ms": 0.7916,
+        "mean_ms": 0.027,
+        "median_ms": 0.0211,
+        "p95_ms": 0.0538,
+        "p99_ms": 0.0947
+      },
+      "snapshot": {
+        "max_ms": 33.988,
+        "mean_ms": 2.7621,
+        "median_ms": 2.1326,
+        "p95_ms": 5.9933,
+        "p99_ms": 8.3124
+      },
+      "spawn": {
+        "max_ms": 97.9945,
+        "mean_ms": 0.9123,
+        "median_ms": 0.0859,
+        "p95_ms": 0.1913,
+        "p99_ms": 26.5511
+      },
+      "total": {
+        "max_ms": 135.8969,
+        "mean_ms": 30.8802,
+        "median_ms": 25.5819,
+        "p95_ms": 57.2257,
+        "p99_ms": 71.4888
+      }
+    }
+  },
+  "profiler_statistics_by_stage": {
+    "stage_1": {
+      "mean_active_cars": 84.96,
+      "sample_count": 3000,
+      "simulated_end_seconds": 150.0,
+      "simulated_start_seconds": 0.0,
+      "statistics": {
+        "conflict_resolution": {
+          "max_ms": 1.7929199998434342,
+          "mean_ms": 0.3188201133295176,
+          "median_ms": 0.34794950011018955,
+          "p95_ms": 0.448334999873623,
+          "p99_ms": 0.5998830001772149
+        },
+        "intent_brain_decision": {
+          "max_ms": 3.3456790006312076,
+          "mean_ms": 0.4565403700080424,
+          "median_ms": 0.4915204995086242,
+          "p95_ms": 0.6338039997899614,
+          "p99_ms": 0.806883002496761
+        },
+        "intent_chain_check": {
+          "max_ms": 0.1315130016337207,
+          "mean_ms": 0.027386315322322236,
+          "median_ms": 0.028931499173268094,
+          "p95_ms": 0.04072400042787194,
+          "p99_ms": 0.0707199997123098
+        },
+        "intent_control_claim_lookup": {
+          "max_ms": 2.233221999176749,
+          "mean_ms": 0.08819272791652111,
+          "median_ms": 0.09463650008001423,
+          "p95_ms": 0.12467700298657292,
+          "p99_ms": 0.19259499549661996
+        },
+        "intent_control_inside_scan": {
+          "max_ms": 9.143227997810754,
+          "mean_ms": 3.3749689606346087,
+          "median_ms": 3.786450998404689,
+          "p95_ms": 4.5281279999471735,
+          "p99_ms": 5.31751200060171
+        },
+        "intent_control_state": {
+          "max_ms": 9.324785000899283,
+          "mean_ms": 3.520182921966049,
+          "median_ms": 3.9501620017290406,
+          "p95_ms": 4.710482999144006,
+          "p99_ms": 5.547377001221321
+        },
+        "intent_control_stop_distance": {
+          "max_ms": 0.26870499868891784,
+          "mean_ms": 0.03088444999790833,
+          "median_ms": 0.03346999824316299,
+          "p95_ms": 0.03976800053351326,
+          "p99_ms": 0.07475200209228205
+        },
+        "intent_exit_gap": {
+          "max_ms": 4.187910000837292,
+          "mean_ms": 0.8014488249248947,
+          "median_ms": 0.8690805000242108,
+          "p95_ms": 1.251260998287762,
+          "p99_ms": 1.8019409985754464
+        },
+        "intent_generation": {
+          "max_ms": 15.925694000088697,
+          "mean_ms": 6.504819436662426,
+          "median_ms": 7.283809999989899,
+          "p95_ms": 8.801653999853443,
+          "p99_ms": 10.521566000079474
+        },
+        "intent_leader_lookup": {
+          "max_ms": 3.0849490030959714,
+          "mean_ms": 0.6434024986450216,
+          "median_ms": 0.7078399987676676,
+          "p95_ms": 0.8777460006967885,
+          "p99_ms": 1.0443049995956244
+        },
+        "intent_merge_observation": {
+          "max_ms": 1.1302990014883108,
+          "mean_ms": 0.013330894948467176,
+          "median_ms": 0.014044999261386693,
+          "p95_ms": 0.015735999113530852,
+          "p99_ms": 0.032627001019136515
+        },
+        "intent_packaging": {
+          "max_ms": 1.4435210000556253,
+          "mean_ms": 0.15183437601975433,
+          "median_ms": 0.1633274989671918,
+          "p95_ms": 0.21678099756172742,
+          "p99_ms": 0.3164129989272624
+        },
+        "intent_priority_query": {
+          "max_ms": 1.4439920005315798,
+          "mean_ms": 0.2225769104112866,
+          "median_ms": 0.24526350034648203,
+          "p95_ms": 0.3366430000824039,
+          "p99_ms": 0.431982999543834
+        },
+        "intent_route_lookup": {
+          "max_ms": 2.3956199966050917,
+          "mean_ms": 0.2745931266616329,
+          "median_ms": 0.2981604977776442,
+          "p95_ms": 0.4023330043310125,
+          "p99_ms": 0.5158670005585009
+        },
+        "intent_speed_target": {
+          "max_ms": 2.604273999168072,
+          "mean_ms": 0.31398940201506775,
+          "median_ms": 0.3440694999881089,
+          "p95_ms": 0.43975299968224135,
+          "p99_ms": 0.5822889988849056
+        },
+        "movement_apply": {
+          "max_ms": 4.789608000010048,
+          "mean_ms": 1.2287363486714942,
+          "median_ms": 1.2060969997946813,
+          "p95_ms": 2.4028709999583953,
+          "p99_ms": 2.8106659997320094
+        },
+        "observe": {
+          "max_ms": 5.5947890000425105,
+          "mean_ms": 0.6956921690058758,
+          "median_ms": 0.746720000051937,
+          "p95_ms": 1.0187440002482617,
+          "p99_ms": 1.4582469998458691
+        },
+        "occupancy_bin_build": {
+          "max_ms": 31.47984700035522,
+          "mean_ms": 0.16121842599856487,
+          "median_ms": 0.12525400029517186,
+          "p95_ms": 0.3101770003013371,
+          "p99_ms": 0.4278259998500289
+        },
+        "occupancy_finalize": {
+          "max_ms": 0.42187600001852843,
+          "mean_ms": 0.04684128132976184,
+          "median_ms": 0.046205000444388133,
+          "p95_ms": 0.09331099954579258,
+          "p99_ms": 0.14027099996383185
+        },
+        "occupancy_position_lookup": {
+          "max_ms": 2.2602459998779523,
+          "mean_ms": 0.2282576076696993,
+          "median_ms": 0.21910000032221433,
+          "p95_ms": 0.48889699928622576,
+          "p99_ms": 0.6460940003307769
+        },
+        "occupancy_rebuild": {
+          "max_ms": 38.58797900011268,
+          "mean_ms": 5.369850685664005,
+          "median_ms": 5.887025999754769,
+          "p95_ms": 7.96662099992318,
+          "p99_ms": 9.524195000267355
+        },
+        "occupancy_section_mapping": {
+          "max_ms": 7.242976000270573,
+          "mean_ms": 1.7353742946696304,
+          "median_ms": 1.8146339998565963,
+          "p95_ms": 2.9245590003483812,
+          "p99_ms": 3.8382040002034046
+        },
+        "post_update": {
+          "max_ms": 0.2122199998666474,
+          "mean_ms": 0.015214115669702247,
+          "median_ms": 0.014632499869549065,
+          "p95_ms": 0.024477000351907918,
+          "p99_ms": 0.05471200029205647
+        },
+        "snapshot": {
+          "max_ms": 6.873348000226542,
+          "mean_ms": 1.2195958946667815,
+          "median_ms": 1.2578849998590158,
+          "p95_ms": 2.0970599998690886,
+          "p99_ms": 3.0648320002910623
+        },
+        "spawn": {
+          "max_ms": 30.146867999974347,
+          "mean_ms": 0.7574913273336582,
+          "median_ms": 0.08018549988264567,
+          "p95_ms": 0.1584980000188807,
+          "p99_ms": 22.10936399978891
+        },
+        "total": {
+          "max_ms": 71.70964100032506,
+          "mean_ms": 16.11114984699816,
+          "median_ms": 17.33431249977002,
+          "p95_ms": 23.912607000056596,
+          "p99_ms": 35.60438400018029
+        }
+      },
+      "target_cap": 100
+    },
+    "stage_2": {
+      "mean_active_cars": 184.76,
+      "sample_count": 3000,
+      "simulated_end_seconds": 300.0,
+      "simulated_start_seconds": 150.0,
+      "statistics": {
+        "conflict_resolution": {
+          "max_ms": 40.80474800002776,
+          "mean_ms": 0.7597642246623764,
+          "median_ms": 0.7254990000546968,
+          "p95_ms": 0.9528759997010638,
+          "p99_ms": 1.2199999996482802
+        },
+        "intent_brain_decision": {
+          "max_ms": 5.1359609956307395,
+          "mean_ms": 1.0233583036101663,
+          "median_ms": 1.0226444996987993,
+          "p95_ms": 1.3247070000943495,
+          "p99_ms": 1.7918840007951076
+        },
+        "intent_chain_check": {
+          "max_ms": 0.8429130020886078,
+          "mean_ms": 0.08691422171402034,
+          "median_ms": 0.08741000169720792,
+          "p95_ms": 0.1232280005751818,
+          "p99_ms": 0.18258000409332453
+        },
+        "intent_control_claim_lookup": {
+          "max_ms": 1.8222589937977318,
+          "mean_ms": 0.19151424401055314,
+          "median_ms": 0.18921600030807895,
+          "p95_ms": 0.25577500218787463,
+          "p99_ms": 0.40026200213105767
+        },
+        "intent_control_inside_scan": {
+          "max_ms": 50.38103999595478,
+          "mean_ms": 7.960095885622043,
+          "median_ms": 8.12550899922826,
+          "p95_ms": 10.00076699665442,
+          "p99_ms": 12.917838005250815
+        },
+        "intent_control_state": {
+          "max_ms": 50.70521599964195,
+          "mean_ms": 8.27914346065836,
+          "median_ms": 8.458927000219774,
+          "p95_ms": 10.390635001385817,
+          "p99_ms": 13.240523003332783
+        },
+        "intent_control_stop_distance": {
+          "max_ms": 0.31885599810266285,
+          "mean_ms": 0.06862319301020155,
+          "median_ms": 0.06764199974895746,
+          "p95_ms": 0.09298199665863649,
+          "p99_ms": 0.15904500241958885
+        },
+        "intent_exit_gap": {
+          "max_ms": 14.036808995570027,
+          "mean_ms": 2.4570055320111046,
+          "median_ms": 2.3225320012443262,
+          "p95_ms": 4.010494999874936,
+          "p99_ms": 5.144399001892452
+        },
+        "intent_generation": {
+          "max_ms": 70.05028399998992,
+          "mean_ms": 16.33172761467161,
+          "median_ms": 16.56691450011749,
+          "p95_ms": 21.477881999999227,
+          "p99_ms": 27.996303000236367
+        },
+        "intent_leader_lookup": {
+          "max_ms": 5.80015799641842,
+          "mean_ms": 1.4286296200095119,
+          "median_ms": 1.4408895003725775,
+          "p95_ms": 1.7983279994950863,
+          "p99_ms": 2.464097999563819
+        },
+        "intent_merge_observation": {
+          "max_ms": 1.0550310012149566,
+          "mean_ms": 0.028938379736397717,
+          "median_ms": 0.02861149846467015,
+          "p95_ms": 0.03363000359968282,
+          "p99_ms": 0.07151600266297464
+        },
+        "intent_packaging": {
+          "max_ms": 4.0136790012184065,
+          "mean_ms": 0.3373977410248396,
+          "median_ms": 0.3335859992148471,
+          "p95_ms": 0.4443930029083276,
+          "p99_ms": 0.6009519961480692
+        },
+        "intent_priority_query": {
+          "max_ms": 37.375031999090425,
+          "mean_ms": 0.9232787567076836,
+          "median_ms": 0.965704500913489,
+          "p95_ms": 1.313812002990744,
+          "p99_ms": 1.9836440019389556
+        },
+        "intent_route_lookup": {
+          "max_ms": 52.37055700172277,
+          "mean_ms": 0.8662834733642436,
+          "median_ms": 0.7834094967620331,
+          "p95_ms": 1.185659005841444,
+          "p99_ms": 1.798302999304724
+        },
+        "intent_speed_target": {
+          "max_ms": 3.270509998401394,
+          "mean_ms": 0.7289393336624622,
+          "median_ms": 0.7302200006051862,
+          "p95_ms": 0.950008999552665,
+          "p99_ms": 1.2162730058662419
+        },
+        "movement_apply": {
+          "max_ms": 21.260779999920487,
+          "mean_ms": 5.453101430999898,
+          "median_ms": 5.426699500048926,
+          "p95_ms": 8.110543999919173,
+          "p99_ms": 9.312137000051735
+        },
+        "observe": {
+          "max_ms": 14.111244000105216,
+          "mean_ms": 2.02345822866558,
+          "median_ms": 1.8552760000147828,
+          "p95_ms": 3.600668999752088,
+          "p99_ms": 5.190653999761707
+        },
+        "occupancy_bin_build": {
+          "max_ms": 37.34045600049285,
+          "mean_ms": 0.3353706726632784,
+          "median_ms": 0.30669199986732565,
+          "p95_ms": 0.47188200005621184,
+          "p99_ms": 0.6270959997891623
+        },
+        "occupancy_finalize": {
+          "max_ms": 4.873806000432523,
+          "mean_ms": 0.14284766100778748,
+          "median_ms": 0.14038599965715548,
+          "p95_ms": 0.22939600012250594,
+          "p99_ms": 0.35011799991480075
+        },
+        "occupancy_position_lookup": {
+          "max_ms": 6.644885999776307,
+          "mean_ms": 1.3007475023402246,
+          "median_ms": 1.2957135002125142,
+          "p95_ms": 2.0806809998248355,
+          "p99_ms": 3.052492999813694
+        },
+        "occupancy_rebuild": {
+          "max_ms": 50.82922200017492,
+          "mean_ms": 15.669506727000075,
+          "median_ms": 16.299985000159722,
+          "p95_ms": 20.53022800009785,
+          "p99_ms": 24.391299999933835
+        },
+        "occupancy_section_mapping": {
+          "max_ms": 37.17132300016601,
+          "mean_ms": 5.74986876699874,
+          "median_ms": 5.770357499841339,
+          "p95_ms": 8.1583509995653,
+          "p99_ms": 10.852750000140077
+        },
+        "post_update": {
+          "max_ms": 0.7915529999991122,
+          "mean_ms": 0.038710969335321956,
+          "median_ms": 0.035493999803293264,
+          "p95_ms": 0.06254499976421357,
+          "p99_ms": 0.11435199985498912
+        },
+        "snapshot": {
+          "max_ms": 33.98796500005119,
+          "mean_ms": 4.30459283799549,
+          "median_ms": 4.160743000056755,
+          "p95_ms": 6.856163000065862,
+          "p99_ms": 9.584126000390825
+        },
+        "spawn": {
+          "max_ms": 97.99451499975476,
+          "mean_ms": 1.0670581636642662,
+          "median_ms": 0.08744649994696374,
+          "p95_ms": 0.22136300003694487,
+          "p99_ms": 28.420331999768678
+        },
+        "total": {
+          "max_ms": 135.8969029997752,
+          "mean_ms": 45.64926342199957,
+          "median_ms": 46.7607319999388,
+          "p95_ms": 62.24966799982212,
+          "p99_ms": 78.9808429999539
+        }
+      },
+      "target_cap": 200
+    }
+  },
+  "profiler_statistics_last_600_frames": {
+    "routed_traffic": {
+      "conflict_resolution": {
+        "max_ms": 2.8774580000572314,
+        "mean_ms": 0.7798363383176365,
+        "median_ms": 0.7368470000983507,
+        "p95_ms": 0.9555009996802255,
+        "p99_ms": 1.233540000157518
+      },
+      "intent_brain_decision": {
+        "max_ms": 4.526662000444048,
+        "mean_ms": 1.1182038716447096,
+        "median_ms": 1.056542998412624,
+        "p95_ms": 1.3971749967822689,
+        "p99_ms": 1.868306999313063
+      },
+      "intent_chain_check": {
+        "max_ms": 0.3241699969294132,
+        "mean_ms": 0.10770374680532768,
+        "median_ms": 0.10255700067318685,
+        "p95_ms": 0.1364799954899354,
+        "p99_ms": 0.18336100083615747
+      },
+      "intent_control_claim_lookup": {
+        "max_ms": 0.7604729999002302,
+        "mean_ms": 0.2006683266017717,
+        "median_ms": 0.18778450203171815,
+        "p95_ms": 0.25506100200800574,
+        "p99_ms": 0.39126400088207447
+      },
+      "intent_control_inside_scan": {
+        "max_ms": 18.919361997632222,
+        "mean_ms": 8.630337890005345,
+        "median_ms": 8.366812500298693,
+        "p95_ms": 10.244050999972387,
+        "p99_ms": 13.034853003318858
+      },
+      "intent_control_state": {
+        "max_ms": 19.253613994806074,
+        "mean_ms": 8.965912356651794,
+        "median_ms": 8.687499999723514,
+        "p95_ms": 10.585360996628879,
+        "p99_ms": 13.370496001243737
+      },
+      "intent_control_stop_distance": {
+        "max_ms": 0.31062200059750467,
+        "mean_ms": 0.07366330342695922,
+        "median_ms": 0.06827099878137233,
+        "p95_ms": 0.0946759987527912,
+        "p99_ms": 0.1426990015716001
+      },
+      "intent_exit_gap": {
+        "max_ms": 10.04128199610932,
+        "mean_ms": 2.727167581804224,
+        "median_ms": 2.455755500250234,
+        "p95_ms": 4.242912002155208,
+        "p99_ms": 5.283435002183978
+      },
+      "intent_generation": {
+        "max_ms": 69.06038799979797,
+        "mean_ms": 18.129170661683627,
+        "median_ms": 17.215574999909222,
+        "p95_ms": 22.603938999964157,
+        "p99_ms": 33.149267000226246
+      },
+      "intent_leader_lookup": {
+        "max_ms": 5.80015799641842,
+        "mean_ms": 1.5307933199354313,
+        "median_ms": 1.4701635018354864,
+        "p95_ms": 1.804537998395972,
+        "p99_ms": 2.4042380009632325
+      },
+      "intent_merge_observation": {
+        "max_ms": 0.2611310001157108,
+        "mean_ms": 0.030637188320573234,
+        "median_ms": 0.029129999347787816,
+        "p95_ms": 0.034291002066311194,
+        "p99_ms": 0.056098998356901575
+      },
+      "intent_packaging": {
+        "max_ms": 4.0136790012184065,
+        "mean_ms": 0.3684311832967069,
+        "median_ms": 0.3423660011776519,
+        "p95_ms": 0.48115200297615957,
+        "p99_ms": 0.60088099735367
+      },
+      "intent_priority_query": {
+        "max_ms": 5.284149998715293,
+        "mean_ms": 1.1323844367893798,
+        "median_ms": 1.0863849984161789,
+        "p95_ms": 1.3690990012946713,
+        "p99_ms": 2.692237000246678
+      },
+      "intent_route_lookup": {
+        "max_ms": 52.37055700172277,
+        "mean_ms": 1.1444785067927417,
+        "median_ms": 0.9074270010387409,
+        "p95_ms": 1.3818179977533873,
+        "p99_ms": 3.0524830031026795
+      },
+      "intent_speed_target": {
+        "max_ms": 3.270509998401394,
+        "mean_ms": 0.810726063217165,
+        "median_ms": 0.7733194997854298,
+        "p95_ms": 0.9921160035446519,
+        "p99_ms": 1.3911379978708283
+      },
+      "movement_apply": {
+        "max_ms": 21.260779999920487,
+        "mean_ms": 7.788317686664262,
+        "median_ms": 7.642819000011514,
+        "p95_ms": 8.849630999975489,
+        "p99_ms": 12.229442999796447
+      },
+      "observe": {
+        "max_ms": 11.657195000225329,
+        "mean_ms": 2.2807413800016243,
+        "median_ms": 2.006780999863622,
+        "p95_ms": 3.8284100000964827,
+        "p99_ms": 6.00452500020765
+      },
+      "occupancy_bin_build": {
+        "max_ms": 2.0734759996230423,
+        "mean_ms": 0.35155674500250217,
+        "median_ms": 0.31631699994250084,
+        "p95_ms": 0.5233500000940694,
+        "p99_ms": 0.7435019997501513
+      },
+      "occupancy_finalize": {
+        "max_ms": 3.2741049999458482,
+        "mean_ms": 0.17852746333270866,
+        "median_ms": 0.16348200028915016,
+        "p95_ms": 0.2523399998608511,
+        "p99_ms": 0.358840999979293
+      },
+      "occupancy_position_lookup": {
+        "max_ms": 5.022081000333856,
+        "mean_ms": 1.855389941673214,
+        "median_ms": 1.755691999960618,
+        "p95_ms": 2.463514000282885,
+        "p99_ms": 3.7956529995426536
+      },
+      "occupancy_rebuild": {
+        "max_ms": 40.28867200031527,
+        "mean_ms": 18.735889443333537,
+        "median_ms": 18.244571499963058,
+        "p95_ms": 22.5861679996342,
+        "p99_ms": 26.417885999762802
+      },
+      "occupancy_section_mapping": {
+        "max_ms": 16.710752999642864,
+        "mean_ms": 6.477437235006771,
+        "median_ms": 6.175657000085266,
+        "p95_ms": 8.470220000162954,
+        "p99_ms": 10.295282000697625
+      },
+      "post_update": {
+        "max_ms": 0.6379419996846991,
+        "mean_ms": 0.04565280333357199,
+        "median_ms": 0.039705000062895124,
+        "p95_ms": 0.069715999870823,
+        "p99_ms": 0.11859999995067483
+      },
+      "snapshot": {
+        "max_ms": 15.83756700028971,
+        "mean_ms": 5.010857103332758,
+        "median_ms": 4.637181499901999,
+        "p95_ms": 7.550304999767832,
+        "p99_ms": 10.64294899970264
+      },
+      "spawn": {
+        "max_ms": 15.69705400015664,
+        "mean_ms": 0.19686543167381387,
+        "median_ms": 0.08843299997352005,
+        "p95_ms": 0.15647600002921536,
+        "p99_ms": 1.3644279997606645
+      },
+      "total": {
+        "max_ms": 121.78207699980703,
+        "mean_ms": 52.96861183167115,
+        "median_ms": 50.94885150015216,
+        "p95_ms": 65.38590199988903,
+        "p99_ms": 84.82640300007915
+      }
+    }
+  },
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "ramp_increment_cars": 40,
+  "ramp_interval_simulated_seconds": 15.0,
+  "reachable_portal_pairs": 30,
+  "requested_duration_simulated_seconds": 300.0,
+  "route_precompute_seconds_excluded_from_test": 5.762,
+  "spawn_cap_at_end": 200,
+  "spawn_interval_seconds": 0.5,
+  "started_utc": "20261017T202811Z",
+  "status": "complete",
+  "threshold_active_cars": null,
+  "threshold_reached": false,
+  "threshold_rolling_fps": null,
+  "threshold_time_simulated_seconds": null,
+  "total_completed": 13,
+  "total_spawned": 213,
+  "wall_elapsed_seconds": 187.079
+}
