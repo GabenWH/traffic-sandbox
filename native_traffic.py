@@ -59,6 +59,11 @@ class _Profile(C.Structure):
         )]
 
 
+class _SharedVehicle(C.Structure):
+    _fields_ = [('motion', C.POINTER(_Spawn)), ('position', C.POINTER(_Point)),
+                ('heading', C.POINTER(_Point)), ('claim', C.POINTER(C.c_int))]
+
+
 class NativeVehicleView(C.Structure):
     _fields_ = [(x, C.c_int) for x in ('handle', 'state', 'signal', 'claim', 'alive')] + [
         (x, C.c_double) for x in ('distance', 'speed', 'x', 'y', 'hx', 'hy', 'desired', 'dwell', 'entry')] + [
@@ -124,6 +129,9 @@ def _library():
         'nt_profile_read': (C.c_int, [C.c_void_p, C.POINTER(_Profile)]),
         'nt_step': (C.c_int, [C.c_void_p, C.c_double]),
         'nt_states': (C.POINTER(NativeVehicleView), [C.c_void_p, C.POINTER(C.c_int)]),
+        'nt_shared_vehicle': (C.c_int, [C.c_void_p, C.c_int, C.POINTER(_SharedVehicle)]),
+        'nt_shared_text': (C.c_char_p, [C.c_void_p, C.c_int, C.c_int]),
+        'nt_completed': (C.POINTER(NativeVehicleView), [C.c_void_p, C.POINTER(C.c_int)]),
     }
     for name, (result, args) in signatures.items():
         function = getattr(lib, name)
@@ -151,6 +159,7 @@ class NativeTrafficEngine:
         self._keys = {}
         self._intersections = {}
         self._routes = {}
+        self._shared_bindings = {}
 
     def _call(self, name, *args):
         if not self._ptr:
@@ -305,6 +314,9 @@ class NativeTrafficEngine:
 
     def remove(self, vehicle_id):
         handle = self._handles[vehicle_id]
+        binding = self._shared_bindings.get(handle)
+        if binding is not None:
+            binding.detach()
         self._call('nt_remove', handle)
         del self._handles[vehicle_id]
 
@@ -339,6 +351,8 @@ class NativeTrafficEngine:
 
     def close(self):
         if getattr(self, '_ptr', None):
+            for binding in tuple(self._shared_bindings.values()):
+                binding.detach()
             self._lib.nt_destroy(self._ptr)
             self._ptr = None
 

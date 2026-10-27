@@ -20,6 +20,9 @@ struct NTState {
     double distance, speed, x, y, hx, hy, desired, dwell, entry;
     const char *reason, *phantom;
 };
+// Borrow the actual driving fields. Addresses survive admissions and ticks,
+// but expire on removal/completion or engine destruction. Single-thread use.
+struct NTSharedVehicle { const NTSpawn* motion; const NTPoint* position; const NTPoint* heading; const int* claim; };
 struct NTRelation { int first, second, flags; };
 struct NTGraphEdge {
     int source, destination, point_start, point_count, key, kind, connection, incoming;
@@ -58,6 +61,9 @@ int nt_profile_enable(void*, int);
 int nt_profile_read(void*, NTProfile*);
 int nt_step(void*, double);
 const NTState* nt_states(void*, int*);
+int nt_shared_vehicle(void*, int, NTSharedVehicle*);
+const char* nt_shared_text(void*, int, int);
+const NTState* nt_completed(void*, int*);
 int nt_graph(void*, const NTPoint*, int, const NTGraphEdge*, int, const NTPoint*, int,
              const NTEndpoint*, int, const int*, int);
 int nt_rng_set(void*, const uint32_t*, int);

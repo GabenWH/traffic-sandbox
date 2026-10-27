@@ -35,6 +35,7 @@ struct Car {
     std::string id, reason, phantom;
     std::vector<int> claims;
     std::vector<int> signal_occupancy;
+    int latest_claim=-1;
     int yellow_movement=-1;
     bool yellow_go=false;
     double cruise=0;
@@ -102,6 +103,11 @@ public:
     NTProfile profile{};
     explicit Engine(double v):speed(v) { check_finite(v); require(v>0,"speed must be positive"); }
     Car& car(int h) { auto it=cars.find(h); require(it!=cars.end(),"unknown vehicle"); return *it->second; }
+    Car& shared_car(int h) {
+        auto it=cars.find(h);if(it!=cars.end()) return *it->second;
+        for(auto& c:retired) if(c->s.handle==h) return *c;
+        throw std::invalid_argument("unknown shared vehicle");
+    }
     Route& route(Car& c) { return routes.at(static_cast<size_t>(c.s.route)); }
     bool has(Car& c,int m) { return std::find(c.claims.begin(),c.claims.end(),m)!=c.claims.end(); }
     bool occupies_signal(Car& c,int m) {
@@ -110,8 +116,8 @@ public:
     static uint64_t relation_key(int a,int b) {return (uint64_t(uint32_t(a))<<32)|uint32_t(b);}
     bool conflict(int a,int b) { auto it=relations.find(relation_key(a,b));return it!=relations.end() && (it->second&1); }
     bool yields(int a,int b) { auto it=relations.find(relation_key(a,b));return it!=relations.end() && (it->second&2); }
-    void release(Car& c,int m) { c.claims.erase(std::remove(c.claims.begin(),c.claims.end(),m),c.claims.end()); }
-    void claim(Car& c,int m) { if(!has(c,m)) c.claims.push_back(m); arrivals.erase(c.s.handle); }
+    void release(Car& c,int m) { c.claims.erase(std::remove(c.claims.begin(),c.claims.end(),m),c.claims.end()); c.latest_claim=c.claims.empty()?-1:c.claims.back(); }
+    void claim(Car& c,int m) { if(!has(c,m)) c.claims.push_back(m); c.latest_claim=c.claims.back(); arrivals.erase(c.s.handle); }
     bool blocked_by_claims(Car& c,int m) {
         for(auto& pair:cars) if(pair.second.get()!=&c)
             for(int other:pair.second->claims) if(conflict(m,other)) return true;
@@ -552,7 +558,7 @@ public:
         return d;
     }
     NTState state(Car& c,int alive=1) {
-        return {c.s.handle,c.s.state,c.s.signal,c.claims.empty()?-1:c.claims.back(),alive,
+        return {c.s.handle,c.s.state,c.s.signal,c.latest_claim,alive,
             c.s.distance,c.s.speed,c.position.x,c.position.y,c.heading.x,c.heading.y,c.s.desired,c.s.dwell,c.s.entry,c.reason.c_str(),c.phantom.c_str()};
     }
     void tick(double dt) {
@@ -726,7 +732,7 @@ public:
         }
         bool winner_done=std::find(done.begin(),done.end(),winner)!=done.end();
         for(int h:done) {
-            auto& c=car(h);c.claims.clear();
+            auto& c=car(h);c.claims.clear();c.latest_claim=-1;
             for(int movement:c.signal_occupancy) adjust_signal_occupancy(movement,-1);
             c.signal_occupancy.clear();arrivals.erase(h);completed.push_back(state(c,0));
             retired.push_back(std::move(cars.at(h)));cars.erase(h);
@@ -920,6 +926,9 @@ int nt_profile_read(void* p,NTProfile* profile){return guarded([&]{require(profi
 int nt_step(void* p,double dt){return guarded([&]{check_finite(dt);require(dt>=0,"invalid timestep");auto& e=engine(p);e.completed.clear();e.retired.clear();double remaining=dt;
     if(dt<=0.05+1e-9) e.tick(dt);else while(remaining>1e-9){double part=std::min(0.05,remaining);e.tick(part);remaining-=part;}return 0;});}
 const NTState* nt_states(void* p,int* count){try{auto& e=engine(p);e.output.clear();for(auto& pair:e.cars)e.output.push_back(e.state(*pair.second));e.output.insert(e.output.end(),e.completed.begin(),e.completed.end());*count=static_cast<int>(e.output.size());return e.output.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
+int nt_shared_vehicle(void* p,int h,NTSharedVehicle* view){return guarded([&]{require(view!=nullptr,"missing shared view");auto& c=engine(p).car(h);*view={&c.s,&c.position,&c.heading,&c.latest_claim};return 0;});}
+const char* nt_shared_text(void* p,int h,int field){try{require(field==0 || field==1,"unknown text field");auto& c=engine(p).shared_car(h);return field?c.phantom.c_str():c.reason.c_str();}catch(const std::exception& ex){error=ex.what();return nullptr;}}
+const NTState* nt_completed(void* p,int* count){try{auto& e=engine(p);*count=static_cast<int>(e.completed.size());return e.completed.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
 int nt_graph(void* p,const NTPoint* nodes,int nn,const NTGraphEdge* edges,int ne,const NTPoint* points,int np,const NTEndpoint* ends,int nend,const int* ports,int nport){return guarded([&]{
     auto& e=engine(p);require(nn>=0 && ne>=0 && np>=0 && nend>=0 && nport>=0,"invalid graph counts");
     require((!nn || nodes) && (!ne || edges) && (!np || points) && (!nend || ends) && (!nport || ports),"missing graph data");

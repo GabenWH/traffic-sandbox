@@ -93,9 +93,14 @@ class NativeRoadSimulation:
         self.source_ids = []
         self.controls = {}
         self.publishing = False
+        self.shared = simulation.native_output_mode == 'shared'
         try:
             if city is not None:
                 self.bind_city(city)
+            if self.shared:
+                from native_shared import SharedBinding
+                for car in simulation.cars:
+                    SharedBinding(self, car, self.engine._handles[car.id])
         except BaseException:
             self.engine.close()
             raise
@@ -270,6 +275,9 @@ class NativeRoadSimulation:
         sim.occupancy.publish_changes([car])
         e._ids[handle], e._handles[car.id] = car.id, handle
         e._next_handle = max(e._next_handle, handle + 1)
+        if self.shared:
+            from native_shared import SharedBinding
+            SharedBinding(self, car, handle)
 
     def receive_generated(self):
         from traffic_testbed import RoutedRoadVehicle
@@ -421,8 +429,14 @@ class NativeRoadSimulation:
         moved = perf_counter()
         self.publishing = True
         try:
-            completed = e.sync(sim.cars)
+            if self.shared:
+                from native_shared import completed_views
+                completed = completed_views(self)
+            else:
+                completed = e.sync(sim.cars)
+            states_published = perf_counter()
             self.publish_bookkeeping()
+            bookkeeping_published = perf_counter()
             for car in sim.cars:
                 sim._mark_occupancy_changed(car)
             if completed:
@@ -437,6 +451,9 @@ class NativeRoadSimulation:
         finished = perf_counter()
         timings = {'native_configuration': (configured-started)*1000, 'native_spawning': (generated-configured)*1000,
                    'spawn_views': (mirrored-generated)*1000, 'native_movement': (moved-mirrored)*1000,
+                   'vehicle_state_sync': (states_published-moved)*1000,
+                   'bookkeeping_sync': (bookkeeping_published-states_published)*1000,
+                   'occupancy_sync': (finished-bookkeeping_published)*1000,
                    'output_sync': (finished-moved)*1000, 'total': (finished-started)*1000}
         sim.profiler.record_tick(system='test_traffic', simulated_time=sim.elapsed_time, elapsed_seconds=dt,
                                  entity_counts={'cars': len(sim.cars), 'spawned': len(admitted), 'completed': len(completed)},

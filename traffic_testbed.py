@@ -289,6 +289,7 @@ class RoadVehicleSimulation:
         default_factory=SoftDeadlockResolver, repr=False,
     )
     update_mode: str = "legacy"
+    native_output_mode: str = "copy"
     _native_controller: object = field(default=None, init=False, repr=False, compare=False)
 
     colors = ("#ff5b72", "#37e6ff", "#f7d154", "#7fea8c", "#c98cff")
@@ -302,7 +303,7 @@ class RoadVehicleSimulation:
         if name in ("cars", "active_junction_ids") and isinstance(
                 self.__dict__.get(name), _ReadOnlySequence):
             raise AttributeError(f"{name} is read-only; use the simulation mutation APIs")
-        if name == "update_mode" and self.__dict__.get(name) != value and self.__dict__.get("_native_controller") is not None:
+        if name in ("update_mode", "native_output_mode") and self.__dict__.get(name) != value and self.__dict__.get("_native_controller") is not None:
             self._discard_native()
         object.__setattr__(self, name, value)
 
@@ -361,6 +362,8 @@ class RoadVehicleSimulation:
         return False
 
     def _validate_update_mode(self) -> None:
+        if self.native_output_mode not in ("copy", "shared"):
+            raise ValueError("Native output mode must be copy or shared")
         if self.update_mode not in ("legacy", "data_first", "native"):
             raise ValueError("Traffic update mode must be legacy or data_first or native")
 

@@ -29,11 +29,12 @@ from models import ControlDefinition, ControlType
 from traffic_testbed import RoadVehicleSimulation
 
 
-def make_city(scenario: str, seed: int) -> tuple[CityMap, dict[str, FixedTimeSignalController]]:
+def make_city(scenario: str, seed: int, road_length: float = 600) -> tuple[CityMap, dict[str, FixedTimeSignalController]]:
     if scenario == "signalized-crossing":
         city = CityMap(terrain=Terrain(trees=[]))
-        city.add_road([(0, 300), (600, 300)])
-        city.add_road([(300, 0), (300, 600)])
+        middle = road_length / 2
+        city.add_road([(0, middle), (road_length, middle)])
+        city.add_road([(middle, 0), (middle, road_length)])
     else:
         matches = {item.name: item for item in scenario_catalog()}
         if scenario not in matches:
