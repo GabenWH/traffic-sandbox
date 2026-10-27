@@ -9,6 +9,8 @@ from time import perf_counter
 from types import SimpleNamespace
 
 from native_traffic import NativeTrafficEngine, _Connection, _Point, _Spawn, _Section, _Movement, CONTROL
+from intersection_controls import SignalAspect
+from models import ControlType
 
 
 class Relation(C.Structure):
@@ -91,12 +93,29 @@ class NativeRoadSimulation:
         self.source_ids = []
         self.controls = {}
         self.publishing = False
+        self.shared = simulation.native_output_mode == 'shared'
         try:
             if city is not None:
                 self.bind_city(city)
+            simulation.stop_coordinator._on_native_edit = simulation._native_input_changed
+            simulation.deadlock_resolver._on_native_edit = simulation._native_input_changed
+            self.engine.enable_profile(True)
+            for car in simulation.cars:
+                self.watch_edits(car)
+            if self.shared:
+                from native_shared import SharedBinding
+                for car in simulation.cars:
+                    SharedBinding(self, car, self.engine._handles[car.id])
         except BaseException:
             self.engine.close()
             raise
+
+    def watch_edits(self, car):
+        self.sim._watch_native_edits(car)
+
+    def invalidate(self):
+        if not self.publishing:
+            self.sim._discard_native()
 
     def bind_city(self, city):
         if self.city is city:
@@ -134,7 +153,7 @@ class NativeRoadSimulation:
             edges.append(Edge(ids[source], ids[transition.destination], first, len(geometry),
                               -1 if key is None else e._key(key), kind, connection, incoming,
                               transition.cost, offset, control_offset, polyline_length(geometry)))
-        self.junctions = tuple(city.intersections)
+        self.junctions = tuple(self.sim._junction_lookup.get(city).values())
         self.endpoint_ids = {id(j): i for i, j in enumerate(self.junctions)}
         ports, endpoints = [], []
         for junction in self.junctions:
@@ -154,7 +173,6 @@ class NativeRoadSimulation:
 
     def configure(self):
         sim, e = self.sim, self.engine
-        sim._publish_occupancy_changes()
         state = sim.rng.getstate()
         if state[0] != 3 or len(state[1]) != 625 or any(not 0 <= word <= 0xffffffff for word in state[1]):
             raise ValueError('Native traffic requires a valid Python Random version-3 state')
@@ -175,6 +193,21 @@ class NativeRoadSimulation:
             if self.controls.get(id(connection)) != control:
                 e.set_control(connection, connection.control.kind)
                 self.controls[id(connection)] = control
+        aspects = [0] * len(e._connections)
+        codes = {SignalAspect.GREEN: 1, SignalAspect.YELLOW: 2}
+        for controller_id, state in sim._signal_states.items():
+            aspect = codes.get(state.aspect, 0)
+            if not aspect:
+                continue
+            for movement_id in state.movement_ids:
+                index = e._connection_ids_by_name.get(movement_id)
+                if index is None:
+                    continue
+                connection = e._connections[index]
+                if (connection.control.kind is ControlType.SIGNAL
+                        and connection.control.controller_id == controller_id):
+                    aspects[index] = aspect
+        e.set_signal_aspects(aspects)
 
     def publish_random(self):
         e, sim = self.engine, self.sim
@@ -250,9 +283,13 @@ class NativeRoadSimulation:
         with sim._roster_revision.mutate():
             sim._cars.append(car)
         car._on_occupancy_change = sim._mark_occupancy_changed
-        sim.occupancy.publish_changes([car])
+        sim._occupancy_changes[id(car)] = car
+        self.watch_edits(car)
         e._ids[handle], e._handles[car.id] = car.id, handle
         e._next_handle = max(e._next_handle, handle + 1)
+        if self.shared:
+            from native_shared import SharedBinding
+            SharedBinding(self, car, handle)
 
     def receive_generated(self):
         from traffic_testbed import RoutedRoadVehicle
@@ -337,9 +374,11 @@ class NativeRoadSimulation:
         if count.value < 0:
             raise ValueError(e._lib.nt_error().decode())
         coordinator = sim.stop_coordinator
+        previous_claims = dict(coordinator.claims)
         coordinator.arrivals.clear()
         coordinator.claims.clear()
         coordinator._claims_by_car.clear()
+        signal_occupants = []
         resolver = sim.deadlock_resolver
         resolver._waiting_seconds.clear()
         for i in range(count.value):
@@ -349,8 +388,14 @@ class NativeRoadSimulation:
                 coordinator._store_claim(vehicle_id, e._connections[row.connection])
             elif row.kind == 1:
                 coordinator.arrivals[vehicle_id] = StopArrival(vehicle_id, e._connections[row.connection], row.value)
+            elif row.kind == 3:
+                signal_occupants.append((vehicle_id, e._connections[row.connection]))
             else:
                 resolver._waiting_seconds[vehicle_id] = row.value
+        if coordinator.claims != previous_claims:
+            coordinator._record_claim_change({c.intersection_id for c in
+                (*previous_claims.values(), *coordinator.claims.values())})
+        coordinator.observe_signal_occupants(signal_occupants)
         resolver.stall_seconds, resolver.stall_threshold = clock.stall, clock.threshold
         resolver.winner_id = None if clock.winner < 0 else e._ids[clock.winner]
         resolver.winner_movement_id = None if clock.movement < 0 else e._connections[clock.movement].id
@@ -396,27 +441,50 @@ class NativeRoadSimulation:
         admitted = self.receive_generated()
         mirrored = perf_counter()
         sim.elapsed_time += dt
+        before_profile = e.profile_snapshot()
         e.step(dt)
+        after_profile = e.profile_snapshot()
         moved = perf_counter()
         self.publishing = True
         try:
-            completed = e.sync(sim.cars)
+            if self.shared:
+                from native_shared import completed_views
+                completed = completed_views(self)
+            else:
+                completed = e.sync(sim.cars)
+            states_published = perf_counter()
             self.publish_bookkeeping()
-            for car in sim.cars:
-                sim._mark_occupancy_changed(car)
+            bookkeeping_published = perf_counter()
+            sim._occupancy_dirty = True
             if completed:
                 removed = {id(car) for car in completed}
                 with sim._roster_revision.mutate():
                     sim._cars[:] = [car for car in sim.cars if id(car) not in removed]
                 for car in completed:
                     e._handles.pop(car.id, None)
-            sim._publish_occupancy_changes(removed=completed)
+            for car in completed:
+                sim._occupancy_changes.pop(id(car), None)
+                car._on_occupancy_change = None
+                car._on_native_edit = None
+                car.brain._on_native_edit = None
         finally:
             self.publishing = False
         finished = perf_counter()
         timings = {'native_configuration': (configured-started)*1000, 'native_spawning': (generated-configured)*1000,
                    'spawn_views': (mirrored-generated)*1000, 'native_movement': (moved-mirrored)*1000,
+                   'vehicle_state_sync': (states_published-moved)*1000,
+                   'bookkeeping_sync': (bookkeeping_published-states_published)*1000,
+                   'occupancy_sync': (finished-bookkeeping_published)*1000,
                    'output_sync': (finished-moved)*1000, 'total': (finished-started)*1000}
+        phases = {name: after_profile[name] - before_profile[name] for name in
+                  ('preparation_ms', 'control_ms', 'decision_ms', 'arbitration_ms', 'movement_ms')}
+        timings.update(observe=phases['preparation_ms'] + phases['control_ms'],
+                       intent=phases['decision_ms'], decision=phases['decision_ms'],
+                       resolve=phases['arbitration_ms'], apply=phases['movement_ms'],
+                       resolution=phases['arbitration_ms'] + phases['movement_ms'])
+        if sim.occupancy.profile_internal_timings:
+            timings.update(dict.fromkeys(('occupancy_position_lookup', 'occupancy_bin_build',
+                           'occupancy_section_mapping', 'occupancy_finalize'), 0.0))
         sim.profiler.record_tick(system='test_traffic', simulated_time=sim.elapsed_time, elapsed_seconds=dt,
                                  entity_counts={'cars': len(sim.cars), 'spawned': len(admitted), 'completed': len(completed)},
                                  timings_ms=timings)

@@ -1,0 +1,76 @@
+{
+  "cpp": {
+    "ticks": 600,
+    "peak_cars": 46,
+    "calls": []
+  },
+  "reference_data_first": {
+    "ticks": 600,
+    "peak_cars": 44,
+    "calls": [
+      {
+        "method": "is_current",
+        "file": "tests/reference_traffic.py",
+        "function": "_mark_occupancy_changed",
+        "line": 356,
+        "count": 20497
+      },
+      {
+        "method": "lead_car_gap",
+        "file": "tests/reference_traffic.py",
+        "function": "_update_data_first",
+        "line": 1189,
+        "count": 16643
+      },
+      {
+        "method": "lead_from",
+        "file": "traffic_occupancy.py",
+        "function": "lead_car_gap",
+        "line": 501,
+        "count": 16643
+      },
+      {
+        "method": "lead_from",
+        "file": "traffic_occupancy.py",
+        "function": "gap_from",
+        "line": 423,
+        "count": 15740
+      },
+      {
+        "method": "gap_from",
+        "file": "tests/reference_traffic.py",
+        "function": "_update_data_first",
+        "line": 1152,
+        "count": 15396
+      },
+      {
+        "method": "publish_changes",
+        "file": "tests/reference_traffic.py",
+        "function": "_publish_occupancy_changes",
+        "line": 364,
+        "count": 585
+      },
+      {
+        "method": "lead_gap",
+        "file": "tests/reference_traffic.py",
+        "function": "admit_route",
+        "line": 630,
+        "count": 344
+      },
+      {
+        "method": "gap_from",
+        "file": "traffic_occupancy.py",
+        "function": "lead_gap",
+        "line": 493,
+        "count": 344
+      },
+      {
+        "method": "publish_changes",
+        "file": "tests/reference_traffic.py",
+        "function": "admit_route",
+        "line": 637,
+        "count": 50
+      }
+    ]
+  }
+}

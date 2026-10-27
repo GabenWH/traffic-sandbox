@@ -34,6 +34,13 @@ class SoftDeadlockResolver:
     hard_gridlock: bool = False
     _waiting_seconds: dict[str, float] = field(default_factory=dict, repr=False)
 
+    def __setattr__(self, name, value):
+        callback = self.__dict__.get('_on_native_edit')
+        if callback is not None and name in ('stall_seconds', 'stall_threshold',
+                'winner_id', 'winner_movement_id', 'hard_gridlock'):
+            callback()
+        object.__setattr__(self, name, value)
+
     def observe_frame(
         self,
         elapsed_seconds: float,

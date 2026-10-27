@@ -23,6 +23,7 @@ from mobility import (
 )
 from models import (
     Buildable,
+    BuildablePhase,
     CityInspectionProperty,
     CityObject,
     Intersection,
@@ -193,6 +194,24 @@ class CityMap:
             self.rebuild_mobility_network()
             return road
 
+        # A demolition job owns this segment's area, inventory, and workforce
+        # until its final export. Splitting or trimming it would invalidate
+        # that accounting. Check before any existing geometry is changed.
+        for existing in self.roads:
+            if existing.phase is not BuildablePhase.DEMOLISHING:
+                continue
+            if _road_crossings(road, existing) or any(
+                existing in junction.connected_roads
+                and road.distance_to(junction.position) <= junction.radius + max(
+                    road.width / 2, MINIMUM_INTERSECTION_RADIUS,
+                    road.width / 2 + INTERSECTION_CLEARANCE,
+                )
+                and abs(road.elevation_at(junction.position) - junction.elevation)
+                <= ROAD_ELEVATION_TOLERANCE
+                for junction in self.intersections
+            ):
+                raise ValueError("Finish road deconstruction before connecting a new road to this site")
+
         self._trim_existing_cul_de_sac_overruns(road, endpoint_overrun_tolerance)
         short_crossings_by_road = {
             existing.id: [
@@ -322,6 +341,21 @@ class CityMap:
         self.rebuild_mobility_network()
         self._remove_trees_overlapping(road)
         return new_pieces[0]
+
+    def remove_road(self, road: Road) -> None:
+        """Remove an authored segment and rebuild its remaining connections."""
+        if road not in self.roads:
+            raise ValueError("Road must belong to this city")
+        self.roads.remove(road)
+        remaining_ids = {item.id for item in self.roads}
+        self.intersections = [
+            junction for junction in self.intersections
+            if junction.kind is IntersectionKind.CUL_DE_SAC
+            or sum(r.id in remaining_ids for r in junction.connected_roads) >= 2
+        ]
+        # Rebuilding replaces newly exposed two-way ends with turnarounds
+        # and discards cul-de-sacs that no longer touch a road.
+        self.rebuild_mobility_network()
 
     def _trim_existing_cul_de_sac_overruns(
         self, new_road: Road, tolerance: float,

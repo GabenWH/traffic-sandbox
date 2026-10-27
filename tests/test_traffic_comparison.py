@@ -2,7 +2,7 @@
 
 import unittest
 
-from traffic_comparison import compare_traffic_engines
+from tests.reference_comparison import compare_traffic_engines
 
 
 class TrafficComparisonTests(unittest.TestCase):

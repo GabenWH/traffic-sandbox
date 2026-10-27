@@ -1,3 +1,4 @@
+from tests.reference_traffic import as_reference
 """Sustained native-generated traffic, independently simulated in both engines."""
 import copy
 import json
@@ -20,7 +21,7 @@ def twin(reference):
         other.brain = copy.copy(car.brain)
         other._route_cache, other._geometry = RouteState(), RouteGeometry()
         cars.append(other)
-    result = RoadVehicleSimulation(update_mode='native', spawn_interval=reference.spawn_interval,
+    result = RoadVehicleSimulation(update_mode='cpp', spawn_interval=reference.spawn_interval,
                                    max_cars=reference.max_cars, speed_mph=reference.speed_mph,
                                    active_junction_ids=list(reference.active_junction_ids), cars=cars,
                                    _spawn_elapsed=dict(reference._spawn_elapsed))
@@ -37,7 +38,7 @@ def twin(reference):
 class NativeSpawnScenarioTests(unittest.TestCase):
     compare = comparison.NativeSpawningTests.compare
     def run_scenario(self, city, reference):
-        reference.update_mode = 'data_first'
+        as_reference(reference)
         reference.spawn_interval = 1
         junctions = reference.active_junctions(city)
         for i, junction in enumerate(junctions):

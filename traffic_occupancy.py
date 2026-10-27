@@ -10,6 +10,8 @@ from operator import attrgetter
 from time import perf_counter
 from typing import Hashable, Protocol
 
+from models import ControlType
+
 
 OCCUPANCY_CELL_LENGTH = 32.0
 SECTION_CLEARANCE = 22.0
@@ -77,6 +79,16 @@ class _CarOccupancy:
 
     def merge_shadow(self):
         claim = getattr(self.car, "claimed_movement", None)
+        signal_entry = None
+        if claim is None:
+            front = self.car.distance + self.car.length / 2
+            rear = self.car.distance - self.car.length / 2
+            for start, end, connection in getattr(self.car, "signal_merge_movements", ()):
+                if (front > start + 1e-8 and rear < end
+                        and connection.control.kind is ControlType.SIGNAL):
+                    claim = connection
+                    signal_entry = (start, end)
+                    break
         target = getattr(claim, "merge_target", None)
         movements = getattr(self.car, "controlled_movements", ())
         if claim is not self.claim or target != self.target or movements is not self.movements:
@@ -87,7 +99,7 @@ class _CarOccupancy:
                 self.movements = movements
             self.claim, self.target = claim, target
             self.shadow_index = None
-            entry = self.movement_ranges.get(id(claim)) if target is not None else None
+            entry = signal_entry or (self.movement_ranges.get(id(claim)) if target is not None else None)
             if entry is not None:
                 self.entry_start = entry[0]
                 candidate = bisect_left(self.starts, entry[1] - 1e-8)
@@ -141,6 +153,7 @@ class TrafficOccupancyIndex:
         self._publish(cars, removed, complete=False)
 
     def is_current(self, car) -> bool:
+        self._require_snapshot()
         state = self._cars.get(id(car))
         claim = getattr(car, "claimed_movement", None)
         return (self._valid and state is not None
@@ -152,6 +165,13 @@ class TrafficOccupancyIndex:
                 and state.published_target == getattr(claim, "merge_target", None))
 
     def _require_snapshot(self):
+        refresh = getattr(self, '_refresh', None)
+        if refresh is not None and not getattr(self, '_refreshing', False):
+            self._refreshing = True
+            try:
+                refresh()
+            finally:
+                self._refreshing = False
         if self._publishing or not self._valid:
             raise RuntimeError("Occupancy snapshot is unavailable; finish publication or rebuild")
 

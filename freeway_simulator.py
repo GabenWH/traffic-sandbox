@@ -8,7 +8,7 @@ from ui import FreewaySimulator
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--traffic-engine', choices=('legacy', 'data_first', 'native'), default='data_first',
+    parser.add_argument('--traffic-engine', choices=('cpp',), default='cpp',
                         help='Constructed-road vehicle simulation engine')
     return parser.parse_args(argv)
 

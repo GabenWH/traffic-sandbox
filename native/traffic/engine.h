@@ -2,7 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// ABI 2. All distances/speeds use the Python model's feet and feet/second.
+// ABI 4. All distances/speeds use the Python model's feet and feet/second.
 extern "C" {
 struct NTConnection {
     int intersection, control, maneuver, role, target;
@@ -19,7 +19,11 @@ struct NTState {
     int handle, state, signal, claim, alive;
     double distance, speed, x, y, hx, hy, desired, dwell, entry;
     const char *reason, *phantom;
+    int yellow_movement, yellow_go;
 };
+// Borrow the actual driving fields. Addresses survive admissions and ticks,
+// but expire on removal/completion or engine destruction. Single-thread use.
+struct NTSharedVehicle { const NTSpawn* motion; const NTPoint* position; const NTPoint* heading; const int* claim; const int* yellow_movement; const bool* yellow_go; };
 struct NTRelation { int first, second, flags; };
 struct NTGraphEdge {
     int source, destination, point_start, point_count, key, kind, connection, incoming;
@@ -30,6 +34,10 @@ struct NTGenerated { int handle, route, source, destination, color; int64_t numb
 struct NTBookkeeping { int handle, connection, kind; double value; };
 struct NTClock { double time, stall, threshold; int winner, movement, hard; };
 struct NTTrace { int handle, connection, priority, claimed, first_vehicle, vehicle_count, reservations; double distance, speed; };
+struct NTProfile {
+    uint64_t ticks, vehicle_visits;
+    double preparation_ms, control_ms, decision_ms, arbitration_ms, movement_ms;
+};
 int nt_abi();
 const char* nt_error();
 void* nt_create(double speed);
@@ -40,17 +48,25 @@ int nt_route(void*, const NTPoint*, int, const NTSection*, int, const NTMovement
 int nt_connection_key(void*, int, int);
 int nt_spawn(void*, const NTSpawn*, const char*, const char*, const char*);
 int nt_place(void*, int, double);
+int nt_yellow(void*, int, int, int);
 int nt_resize(void*, int, double, double);
 int nt_remove(void*, int);
 int nt_claim(void*, int, int);
+int nt_external_claim(void*, int, int);
 int nt_arrival(void*, int, int, double);
 int nt_clock(void*, double, double, double);
 int nt_waiting(void*, int, double);
 int nt_winner(void*, int, int, int);
 int nt_speed(void*, double);
 int nt_control(void*, int, int);
+int nt_signal_aspects(void*, const unsigned char*, int);
+int nt_profile_enable(void*, int);
+int nt_profile_read(void*, NTProfile*);
 int nt_step(void*, double);
 const NTState* nt_states(void*, int*);
+int nt_shared_vehicle(void*, int, NTSharedVehicle*);
+const char* nt_shared_text(void*, int, int);
+const NTState* nt_completed(void*, int*);
 int nt_graph(void*, const NTPoint*, int, const NTGraphEdge*, int, const NTPoint*, int,
              const NTEndpoint*, int, const int*, int);
 int nt_rng_set(void*, const uint32_t*, int);

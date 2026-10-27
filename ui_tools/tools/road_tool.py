@@ -131,15 +131,20 @@ class RoadTool(CanvasTool):
             self._preview_dirty = True
             return
         details = self.selected_spec.specs
-        road = self.host.city_map.add_road(
-            self.points,
-            elevations=self.elevations or None,
-            name=f"{self.selected_spec.name} {len(self.host.city_map.roads) + 1}",
-            lane_width=float(details["lane_width"]),
-            forward_lane_count=int(details["forward_lane_count"]),
-            reverse_lane_count=int(details["reverse_lane_count"]),
-            buildable_id=self.selected_spec.id,
-        )
+        try:
+            road = self.host.city_map.add_road(
+                self.points,
+                elevations=self.elevations or None,
+                name=f"{self.selected_spec.name} {len(self.host.city_map.roads) + 1}",
+                lane_width=float(details["lane_width"]),
+                forward_lane_count=int(details["forward_lane_count"]),
+                reverse_lane_count=int(details["reverse_lane_count"]),
+                buildable_id=self.selected_spec.id,
+            )
+        except ValueError as error:
+            if self.panel is not None:
+                self.panel.set_message(str(error))
+            return
         self._clear_draft()
         self.host.redraw_world()
         if self.panel is not None:

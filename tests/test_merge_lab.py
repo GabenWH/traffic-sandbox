@@ -126,7 +126,7 @@ class MergeLabTests(unittest.TestCase):
 
     def test_data_first_slip_lane_has_basic_safe_throughput(self):
         report = MergeLab(seed=7).run(
-            "slip-lane-short-link", seconds=20.0, engine="data_first",
+            "slip-lane-short-link", seconds=20.0, engine="cpp",
         )
 
         self.assertEqual(report.overlap_pair_ticks, 0, report.first_overlap)

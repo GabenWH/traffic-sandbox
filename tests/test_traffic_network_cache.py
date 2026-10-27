@@ -48,7 +48,7 @@ class TrafficNetworkCacheTests(unittest.TestCase):
             traffic.reorder_vehicles([leader.id, leader.id])
 
     def test_unchanged_ticks_scan_junctions_only_once_in_each_mode(self):
-        for mode in ("legacy", "data_first"):
+        for mode in ("cpp",):
             with self.subTest(mode=mode):
                 city = small_city()
                 traffic = RoadVehicleSimulation(update_mode=mode, spawn_interval=1000)
@@ -112,7 +112,7 @@ class TrafficNetworkCacheTests(unittest.TestCase):
 
     def test_update_prunes_old_source_ids_when_map_is_replaced(self):
         city = small_city()
-        traffic = RoadVehicleSimulation(update_mode="data_first", spawn_interval=1000)
+        traffic = RoadVehicleSimulation(update_mode="cpp", spawn_interval=1000)
         traffic.toggle_junction(city.intersections[0])
         traffic.update(city, 0.05)
         empty = CityMap(terrain=Terrain(trees=[]))
@@ -124,7 +124,7 @@ class TrafficNetworkCacheTests(unittest.TestCase):
     def test_stale_source_selected_after_lookup_warms_is_pruned(self):
         from types import SimpleNamespace
 
-        for mode in ("legacy", "data_first"):
+        for mode in ("cpp",):
             with self.subTest(mode=mode):
                 city = small_city()
                 traffic = RoadVehicleSimulation(update_mode=mode)
@@ -140,7 +140,7 @@ class TrafficNetworkCacheTests(unittest.TestCase):
 
     def test_source_view_and_spawn_timers_persist_between_unchanged_ticks(self):
         city = small_city()
-        traffic = RoadVehicleSimulation(update_mode="data_first", spawn_interval=1000)
+        traffic = RoadVehicleSimulation(update_mode="cpp", spawn_interval=1000)
         first, second = city.intersections
         traffic.toggle_junction(first)
         traffic.toggle_junction(second)
@@ -157,7 +157,7 @@ class TrafficNetworkCacheTests(unittest.TestCase):
 
     def test_roster_snapshot_changes_on_admission_and_removal_not_motion(self):
         city = small_city()
-        traffic = RoadVehicleSimulation(update_mode="data_first", spawn_interval=1000)
+        traffic = RoadVehicleSimulation(update_mode="cpp", spawn_interval=1000)
         first, second = city.intersections
         empty = traffic._cars_snapshot()
         car = traffic.spawn_car(city, first, second)

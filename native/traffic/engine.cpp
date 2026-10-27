@@ -1,6 +1,7 @@
 #include "engine.h"
 #include "spawning.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <map>
@@ -33,6 +34,10 @@ struct Car {
     NTSpawn s{};
     std::string id, reason, phantom;
     std::vector<int> claims;
+    std::vector<int> signal_occupancy;
+    int latest_claim=-1;
+    int yellow_movement=-1;
+    bool yellow_go=false;
     double cruise=0;
     NTPoint position{}, heading{1,0};
     size_t geometry=0, control_cursor=0, route_cursor=0, round_cursor=0, section_cursor=0;
@@ -49,7 +54,7 @@ struct Merge {
     std::vector<Reservation> reservations;
 };
 struct Choice { double desired=0, entry=0; bool clear=true; std::string reason, phantom; };
-struct Decision { double desired=0, entry=-1; int state=0; bool stop=false, claim=false; std::string reason; };
+struct Decision { double desired=0, entry=-1; int state=0; bool stop=false, claim=false, signal_entry=false; std::string reason; };
 struct Intent {
     Car* car;
     int movement=-1;
@@ -67,9 +72,14 @@ public:
     bool hard=false;
     std::vector<NTConnection> connections;
     std::unordered_map<uint64_t,unsigned char> relations;
+    std::vector<std::vector<int>> signal_blocked_by_occupant;
+    std::vector<std::vector<int>> signal_entry_blocked_by_occupant;
+    std::vector<int> signal_block_counts, signal_entry_block_counts;
+    std::vector<unsigned char> signal_aspects;
     std::vector<Route> routes;
     std::map<int,std::unique_ptr<Car>> cars;
     std::map<int,Arrival> arrivals;
+    std::map<int,std::vector<int>> external_claims;
     std::map<int,double> waiting;
     std::unordered_map<int,std::vector<Entry>> lanes;
     double max_vehicle_length=0;
@@ -90,19 +100,98 @@ public:
     bool trace_enabled=false;
     std::vector<NTTrace> trace;
     std::vector<int> trace_vehicles;
+    bool profile_enabled=false;
+    NTProfile profile{};
     explicit Engine(double v):speed(v) { check_finite(v); require(v>0,"speed must be positive"); }
     Car& car(int h) { auto it=cars.find(h); require(it!=cars.end(),"unknown vehicle"); return *it->second; }
+    Car& shared_car(int h) {
+        auto it=cars.find(h);if(it!=cars.end()) return *it->second;
+        for(auto& c:retired) if(c->s.handle==h) return *c;
+        throw std::invalid_argument("unknown shared vehicle");
+    }
     Route& route(Car& c) { return routes.at(static_cast<size_t>(c.s.route)); }
     bool has(Car& c,int m) { return std::find(c.claims.begin(),c.claims.end(),m)!=c.claims.end(); }
+    bool occupies_signal(Car& c,int m) {
+        return std::find(c.signal_occupancy.begin(),c.signal_occupancy.end(),m)!=c.signal_occupancy.end();
+    }
     static uint64_t relation_key(int a,int b) {return (uint64_t(uint32_t(a))<<32)|uint32_t(b);}
     bool conflict(int a,int b) { auto it=relations.find(relation_key(a,b));return it!=relations.end() && (it->second&1); }
     bool yields(int a,int b) { auto it=relations.find(relation_key(a,b));return it!=relations.end() && (it->second&2); }
-    void release(Car& c,int m) { c.claims.erase(std::remove(c.claims.begin(),c.claims.end(),m),c.claims.end()); }
-    void claim(Car& c,int m) { if(!has(c,m)) c.claims.push_back(m); arrivals.erase(c.s.handle); }
-    bool blocked(Car& c,int m) {
+    void release(Car& c,int m) { c.claims.erase(std::remove(c.claims.begin(),c.claims.end(),m),c.claims.end()); c.latest_claim=c.claims.empty()?-1:c.claims.back(); }
+    void claim(Car& c,int m) { if(!has(c,m)) c.claims.push_back(m); c.latest_claim=c.claims.back(); arrivals.erase(c.s.handle); }
+    bool blocked_by_claims(Car& c,int m) {
+        for(const auto& owner:external_claims)
+            for(int other:owner.second) if(conflict(m,other)) return true;
         for(auto& pair:cars) if(pair.second.get()!=&c)
             for(int other:pair.second->claims) if(conflict(m,other)) return true;
         return false;
+    }
+    bool same_approach(int a,int b) const {
+        const auto& x=connections.at(a);const auto& y=connections.at(b);
+        return x.intersection==y.intersection && std::abs(x.px-y.px)<1e-6 &&
+            std::abs(x.py-y.py)<1e-6 && std::abs(x.hx-y.hx)<1e-6 && std::abs(x.hy-y.hy)<1e-6;
+    }
+    void rebuild_signal_conflicts() {
+        const size_t n=connections.size();
+        signal_blocked_by_occupant.assign(n,{});
+        signal_entry_blocked_by_occupant.assign(n,{});
+        signal_block_counts.assign(n,0);
+        signal_entry_block_counts.assign(n,0);
+        if(signal_aspects.size()!=n) signal_aspects.assign(n,0);
+        for(const auto& relation:relations) {
+            if(!(relation.second&1)) continue;
+            int candidate=static_cast<int>(relation.first>>32);
+            int occupant=static_cast<int>(uint32_t(relation.first));
+            if(occupant<0 || static_cast<size_t>(occupant)>=n ||
+                candidate<0 || static_cast<size_t>(candidate)>=n || connections[occupant].control!=2) continue;
+            signal_blocked_by_occupant[occupant].push_back(candidate);
+            if(!same_approach(candidate,occupant)) signal_entry_blocked_by_occupant[occupant].push_back(candidate);
+        }
+        for(size_t i=0;i<n;++i) if(connections[i].control!=2) signal_aspects[i]=0;
+        for(auto& pair:cars) for(int movement:pair.second->signal_occupancy)
+            for(int blocked:signal_blocked_by_occupant[movement]) ++signal_block_counts[blocked];
+        for(auto& pair:cars) for(int movement:pair.second->signal_occupancy)
+            for(int blocked:signal_entry_blocked_by_occupant[movement]) ++signal_entry_block_counts[blocked];
+    }
+    void adjust_signal_occupancy(int movement,int delta) {
+        if(movement<0 || static_cast<size_t>(movement)>=signal_blocked_by_occupant.size()) return;
+        for(int blocked:signal_blocked_by_occupant[movement]) signal_block_counts[blocked]+=delta;
+        for(int blocked:signal_entry_blocked_by_occupant[movement]) signal_entry_block_counts[blocked]+=delta;
+    }
+    void update_signal_occupancy(Car& c) {
+        const double front=c.s.distance+c.s.length/2,rear=c.s.distance-c.s.length/2;
+        for(size_t i=0;i<c.signal_occupancy.size();) {
+            int occupied=c.signal_occupancy[i];
+            bool overlaps=std::any_of(route(c).movements.begin(),route(c).movements.end(),
+                [occupied,front,rear](const NTMovement& movement) {
+                    return movement.connection==occupied && front>movement.start+1e-8 && rear<movement.end;
+                });
+            if(!overlaps) {
+                adjust_signal_occupancy(occupied,-1);
+                c.signal_occupancy.erase(c.signal_occupancy.begin()+static_cast<std::ptrdiff_t>(i));
+            } else ++i;
+        }
+        for(const auto& m:route(c).movements) {
+            if(connections[m.connection].control==2 && front>m.start+1e-8 && rear<m.end &&
+                !occupies_signal(c,m.connection)) {
+                c.signal_occupancy.push_back(m.connection);
+                adjust_signal_occupancy(m.connection,1);
+            }
+        }
+    }
+    bool blocked(Car& c,int m) {
+        if(blocked_by_claims(c,m)) return true;
+        int own=0;
+        for(int occupied:c.signal_occupancy) if(conflict(m,occupied)) ++own;
+        return signal_block_counts.size()>static_cast<size_t>(m) && signal_block_counts[m]>own;
+    }
+    bool can_enter_signal(Car& c,int m) {
+        if(blocked_by_claims(c,m)) return false;
+        int own=0;
+        for(int occupied:c.signal_occupancy)
+            if(conflict(m,occupied) && !same_approach(m,occupied)) ++own;
+        return signal_entry_block_counts.size()>static_cast<size_t>(m) &&
+            signal_entry_block_counts[m]<=own;
     }
     auto key(Car& c, const Arrival& a) {
         auto& con=connections[a.connection];
@@ -145,7 +234,8 @@ public:
         for(size_t i=c.control_cursor;i<ms.size();++i) {
             auto& m=ms[i]; auto& con=connections[m.connection];
             if(con.role==3 || con.maneuver==3) continue;
-            if(!(has(c,m.connection) && c.s.distance+c.s.length/2>=m.start)) return static_cast<int>(i);
+            bool committed=con.control==2?occupies_signal(c,m.connection):has(c,m.connection);
+            if(!(committed && c.s.distance+c.s.length/2>=m.start)) return static_cast<int>(i);
         }
         return -1;
     }
@@ -212,8 +302,10 @@ public:
             while(c.section_first<ss.size() && ss[c.section_first].end<low) ++c.section_first;
             while(c.section_stop<ss.size() && ss[c.section_stop].start<=high) ++c.section_stop;
             int shadow=-1;
-            if(!c.claims.empty()) {
-                int con=c.claims.back(), target=connections[con].target;
+            int occupied_connection=!c.claims.empty()?c.claims.back():
+                (!c.signal_occupancy.empty()?c.signal_occupancy.back():-1);
+            if(occupied_connection>=0) {
+                int con=occupied_connection, target=connections[con].target;
                 if(target>=0) for(auto& m:route(c).movements) if(m.connection==con) {
                     if(high>=m.start && m.end-22<=high && high<m.end)
                         for(size_t i=c.section_stop;i<ss.size() && ss[i].start<=m.end+1e-8;++i)
@@ -390,11 +482,44 @@ public:
             choice=merge_choice(c,observe_merge(c,route(c).movements[i.movement],order),d.desired);
             d.desired=std::min(d.desired,choice.desired);d.reason=choice.reason;c.phantom=choice.phantom;
         }
-        bool must_stop=i.movement>=0 && !i.claimed && connections[route(c).movements[i.movement].connection].control==1;
-        bool must_yield=i.movement>=0 && !i.claimed && !must_stop;
+        const int movement_connection=i.movement<0?-1:route(c).movements[i.movement].connection;
+        const bool signal_movement=movement_connection>=0 && connections[movement_connection].control==2;
+        const int aspect=signal_movement && static_cast<size_t>(movement_connection)<signal_aspects.size()
+            ?signal_aspects[movement_connection]:0;
+        if(signal_movement && aspect==2) {
+            if(c.yellow_movement!=movement_connection) {
+                c.yellow_movement=movement_connection;
+                double distance=std::max(0.0,i.stop_distance);
+                c.yellow_go=c.s.speed*c.s.speed/36.0>distance;
+            }
+        } else {c.yellow_movement=-1;c.yellow_go=false;}
+        const bool signal_go=signal_movement && (aspect==1 || (aspect==2 && c.yellow_go));
+        const bool signal_stop=signal_movement && !i.claimed && !signal_go;
+        bool must_stop=i.movement>=0 && !i.claimed && connections[movement_connection].control==1;
+        bool must_yield=i.movement>=0 && !i.claimed && !must_stop && !signal_movement;
         bool inside=false;
-        for(auto& m:route(c).movements) if(has(c,m.connection) && m.start<=c.s.distance+c.s.length/2 && c.s.distance-c.s.length/2<m.end) inside=true;
-        if(inside && !(must_stop || must_yield)) {d.state=5;c.s.dwell=0;}
+        for(auto& m:route(c).movements)
+            if((has(c,m.connection) || occupies_signal(c,m.connection)) &&
+                m.start<=c.s.distance+c.s.length/2 && c.s.distance-c.s.length/2<m.end) inside=true;
+        if(signal_stop && i.stop_distance>=0) {
+            c.s.dwell=0;
+            double distance=std::max(0.0,i.stop_distance);
+            d.desired=std::min(d.desired,std::sqrt(36*distance));
+            d.state=3;
+            d.reason=aspect==2?"yellow signal":"red signal";
+        } else if(signal_movement && signal_go && i.stop_distance>=0) {
+            c.s.dwell=0;
+            bool ready=!i.merge || (choice.clear && choice.entry>=std::min(6.0,cruise_speed));
+            if(i.priority && ready) {d.state=4;d.signal_entry=true;}
+            else {
+                d.desired=std::min(d.desired,std::sqrt(36*std::max(0.0,i.stop_distance)));
+                d.state=3;
+                d.reason=i.merge && !choice.clear?choice.reason:
+                    (i.decision.reason=="waiting for intersection priority"?
+                        "waiting for conflicting traffic":i.decision.reason);
+            }
+        }
+        else if(inside && !(must_stop || must_yield)) {d.state=5;c.s.dwell=0;}
         else if(must_yield && i.stop_distance>=0) {
             c.s.dwell=0;
             bool ready=!i.merge || (choice.clear && choice.entry>=std::min(6.0,cruise_speed));
@@ -417,7 +542,7 @@ public:
             } else {d.state=1;d.desired=0;}
         } else c.s.dwell=0;
         if(!following.empty()) d.reason=following;
-        if(c.s.handle==temporary) {d.desired=std::min(physical,3.0);d.state=4;d.reason="breaking soft deadlock";}
+        if(c.s.handle==temporary && !signal_movement) {d.desired=std::min(physical,3.0);d.state=4;d.reason="breaking soft deadlock";}
         if(c.s.handle==winner && temporary<0) {d.desired=0;d.state=3;d.reason="temporary winner path blocked";d.claim=false;}
         d.entry=i.merge?choice.entry:-1;
         if(c.s.handle==temporary && d.claim) d.entry=d.desired;
@@ -436,16 +561,27 @@ public:
         return d;
     }
     NTState state(Car& c,int alive=1) {
-        return {c.s.handle,c.s.state,c.s.signal,c.claims.empty()?-1:c.claims.back(),alive,
-            c.s.distance,c.s.speed,c.position.x,c.position.y,c.heading.x,c.heading.y,c.s.desired,c.s.dwell,c.s.entry,c.reason.c_str(),c.phantom.c_str()};
+        return {c.s.handle,c.s.state,c.s.signal,c.latest_claim,alive,
+            c.s.distance,c.s.speed,c.position.x,c.position.y,c.heading.x,c.heading.y,c.s.desired,c.s.dwell,c.s.entry,c.reason.c_str(),c.phantom.c_str(),c.yellow_movement,int(c.yellow_go)};
     }
     void tick(double dt) {
         trace.clear();trace_vehicles.clear();
         time+=dt;
+        using ProfileClock=std::chrono::steady_clock;
+        auto phase_started=profile_enabled?ProfileClock::now():ProfileClock::time_point{};
+        auto mark_phase=[&](double& target) {
+            if(profile_enabled) {
+                auto now=ProfileClock::now();
+                target+=std::chrono::duration<double,std::milli>(now-phase_started).count();
+                phase_started=now;
+            }
+        };
         std::vector<Car*> order; for(auto& p:cars) order.push_back(p.second.get());
         std::sort(order.begin(),order.end(),[](Car* a,Car* b){return a->id<b->id;});
-        for(Car* c:order) c->cruise=cruise(*c);
+        for(Car* c:order) {update_signal_occupancy(*c);c->cruise=cruise(*c);}
         index(order);
+        mark_phase(profile.preparation_ms);
+        if(profile_enabled) profile.vehicle_visits+=order.size();
         std::map<std::pair<int,int>,std::pair<Car*,int>> heads;
         for(Car* c:order) {
             int mi=next_control(*c);if(mi<0) continue;
@@ -465,7 +601,7 @@ public:
         std::set<int> contenders;std::map<int,Arrival> eligible;
         for(auto& head:heads) {
             Car& c=*head.second.first;auto& m=route(c).movements[head.second.second];auto& con=connections[m.connection];
-            if(con.target>=0) continue;
+            if(con.target>=0 || con.control==2) continue;
             double distance=std::max(0.0,m.start-c.s.length/2-c.s.distance);
             if(!has(c,m.connection)) {
                 if(distance>std::max(10.0,c.s.speed*0.6)) continue;
@@ -485,10 +621,12 @@ public:
             if(c->s.handle!=winner && !wait) continue;
             int mi=next_control(*c);if(mi<0) continue;
             int con=route(*c).movements[mi].connection;
+            if(connections[con].control==2) continue;
             bool clear=(connections[con].target>=0 || contenders.count(c->s.handle)) && c->reason!="following queued car" && path_clear(*c,mi,order);
             candidates.push_back({c,con,clear});
         }
         int temporary=choose(candidates);
+        mark_phase(profile.control_ms);
         std::vector<Intent> intents;
         for(Car* cp:order) {
             auto& c=*cp;Intent i{};i.car=&c;i.movement=next_control(c);i.contender=contenders.count(c.s.handle);
@@ -497,7 +635,11 @@ public:
                 auto& m=route(c).movements[i.movement];auto& con=connections[m.connection];
                 i.claimed=has(c,m.connection);i.merge=con.target>=0;
                 if(!i.claimed) i.stop_distance=std::max(0.0,m.start-c.s.length/2-c.s.distance);
-                i.priority=i.merge?!blocked(c,m.connection):
+                if(con.control==2) {
+                    int aspect=static_cast<size_t>(m.connection)<signal_aspects.size()?signal_aspects[m.connection]:0;
+                    i.priority=(aspect==1 || aspect==2) &&
+                        (i.stop_distance>std::max(10.0,c.s.speed*0.6) || can_enter_signal(c,m.connection));
+                } else i.priority=i.merge?!blocked(c,m.connection):
                     (con.control!=1 && i.stop_distance>std::max(10.0,c.s.speed*0.6)?can_approach(c,m.connection):can_claim(c,m.connection));
                 if(!i.claimed && !i.merge) {
                     if(lead(c,m.end).second<22+c.s.length/2) {i.priority=false;i.decision.reason="waiting for room beyond the junction";}
@@ -516,7 +658,7 @@ public:
             auto leader=lead(c,c.s.distance);i.leader=leader.first;i.lead_gap=leader.second;
             double v=cruise(c);
             if(c.s.entry>=0) for(auto& m:route(c).movements)
-                if(has(c,m.connection) && connections[m.connection].target>=0 && c.s.distance+c.s.length/2>=m.start && c.s.distance-c.s.length/2<m.end) v=std::min(v,c.s.entry);
+                if((has(c,m.connection) || occupies_signal(c,m.connection)) && connections[m.connection].target>=0 && c.s.distance+c.s.length/2>=m.start && c.s.distance-c.s.length/2<m.end) v=std::min(v,c.s.entry);
             i.decision=decide(c,i,dt,v,temporary,order);
             if(trace_enabled) {
                 NTTrace row{c.s.handle,i.movement<0?-1:route(c).movements[i.movement].connection,int(i.priority),int(i.claimed),int(trace_vehicles.size()),0,0,c.s.distance,c.s.speed};
@@ -527,6 +669,7 @@ public:
             }
             intents.push_back(std::move(i));
         }
+        mark_phase(profile.decision_ms);
         std::vector<Intent*> requests;for(auto& i:intents) requests.push_back(&i);
         std::sort(requests.begin(),requests.end(),[&](Intent* a,Intent* b){
             auto priority=[&](Intent* i) {
@@ -547,11 +690,29 @@ public:
                 } else i.claimed=false;
             }
         }
+        for(auto& i:intents) if(i.decision.signal_entry && i.movement>=0) {
+            int con=route(*i.car).movements[i.movement].connection;
+            if(!can_enter_signal(*i.car,con)) {
+                auto& c=*i.car;
+                i.decision.signal_entry=false;
+                i.decision.desired=std::min(i.decision.desired,
+                    std::sqrt(36*std::max(0.0,i.stop_distance)));
+                i.decision.state=3;
+                i.decision.reason="waiting for conflicting traffic";
+                c.s.state=i.decision.state;c.s.desired=i.decision.desired;c.reason=i.decision.reason;
+            } else if(i.merge) {
+                i.car->s.entry=i.decision.entry;
+                i.decision.desired=i.decision.entry;
+                i.car->s.desired=i.decision.desired;
+            }
+        }
+        mark_phase(profile.arbitration_ms);
         std::unordered_map<int,double> travels;
         for(auto& i:intents) {
             auto& c=*i.car;double delta=i.decision.desired-c.s.speed,limit=(delta>0?10:24)*dt;
             i.next_speed=c.s.speed+clamp(delta,-limit,limit);i.travel=i.next_speed*dt;
-            if(i.movement>=0 && !i.claimed) i.travel=std::min(i.travel,std::max(0.0,route(c).movements[i.movement].start-c.s.length/2-c.s.distance));
+            if(i.movement>=0 && !i.claimed && !i.decision.signal_entry)
+                i.travel=std::min(i.travel,std::max(0.0,route(c).movements[i.movement].start-c.s.length/2-c.s.distance));
             travels[c.s.handle]=i.travel;
         }
         for(size_t pass=0;pass<intents.size();++pass) {
@@ -571,13 +732,16 @@ public:
             c.s.distance=std::min(route(c).length,c.s.distance+c.s.speed*(c.s.speed>0?travel/c.s.speed:0));
             if(route(c).length-c.s.distance<1e-8) c.s.distance=route(c).length;
             geometry(c);
+            update_signal_occupancy(c);
             if(c.s.handle==temporary && i.claimed && i.movement>=0 && c.s.distance+c.s.length/2>=route(c).movements[i.movement].start) entered=true;
             for(auto& m:route(c).movements) if(has(c,m.connection) && c.s.distance-c.s.length/2>=m.end) release(c,m.connection);
             if(c.s.distance>=route(c).length) done.push_back(c.s.handle);
         }
         bool winner_done=std::find(done.begin(),done.end(),winner)!=done.end();
         for(int h:done) {
-            auto& c=car(h);c.claims.clear();arrivals.erase(h);completed.push_back(state(c,0));
+            auto& c=car(h);c.claims.clear();c.latest_claim=-1;
+            for(int movement:c.signal_occupancy) adjust_signal_occupancy(movement,-1);
+            c.signal_occupancy.clear();arrivals.erase(h);completed.push_back(state(c,0));
             retired.push_back(std::move(cars.at(h)));cars.erase(h);
         }
         std::set<int> current;for(auto& c:candidates) current.insert(c.car->s.handle);
@@ -585,8 +749,12 @@ public:
         for(int h:current) if(!waiting.count(h)) waiting[h]=dt;
         size_t stopped=0;for(auto& p:cars) if(p.second->s.speed<=0.1) ++stopped;
         bool flowing=!cars.empty() && stopped<0.8*cars.size();
-        if(entered || winner_done || ((flowing || !done.empty()) && winner<0)) {stall=0;winner=winner_connection=-1;hard=false;}else stall+=dt;
+        bool signal_wait=candidates.empty() && std::any_of(connections.begin(),connections.end(),
+            [](const NTConnection& c){return c.control==2;});
+        if(entered || winner_done || ((flowing || !done.empty() || signal_wait) && winner<0)) {stall=0;winner=winner_connection=-1;hard=false;}else stall+=dt;
         index_dirty=true;
+        mark_phase(profile.movement_ms);
+        if(profile_enabled) ++profile.ticks;
     }
     void index_current() {
         if(!index_dirty) return;
@@ -605,7 +773,7 @@ public:
     void insert(const NTSpawn& s,const std::string& id,const char* reason="",const char* phantom="") {
         validate_spawn(s,id);
         auto c=std::make_unique<Car>();c->s=s;c->id=id;c->reason=reason?reason:"";c->phantom=phantom?phantom:"";c->order=admission_order++;
-        geometry(*c);cars.emplace(s.handle,std::move(c));index_dirty=true;
+        c->signal_occupancy.reserve(4);geometry(*c);update_signal_occupancy(*c);cars.emplace(s.handle,std::move(c));index_dirty=true;
     }
     static bool overlaps(const Car& a,const Car& b) {
         double dx=b.position.x-a.position.x,dy=b.position.y-a.position.y;
@@ -704,7 +872,7 @@ Engine& engine(void* p) {require(p!=nullptr,"engine is closed");return *static_c
 template<class F> int guarded(F f) {try {error.clear();return f();}catch(const std::exception& e){error=e.what();return -1;}catch(...){error="native engine failure";return -1;}}
 }
 extern "C" {
-int nt_abi(){return 2;}
+int nt_abi(){return 4;}
 const char* nt_error(){return error.c_str();}
 void* nt_create(double speed){try{error.clear();return new Engine(speed);}catch(const std::exception& e){error=e.what();return nullptr;}}
 void nt_destroy(void* p){delete static_cast<Engine*>(p);}
@@ -713,14 +881,19 @@ int nt_network(void* p,const NTConnection* cs,int n,const unsigned char* conflic
     e.connections.assign(cs,cs+n);e.relations.clear();
     for(int i=0;i<n;++i) for(int j=0;j<n;++j) {int f=conflicts[size_t(i)*n+j]+2*yields[size_t(i)*n+j];if(f) e.relations[e.relation_key(i,j)]=static_cast<unsigned char>(f);}
     // Connection occupancy keys are supplied as a negative incoming code on a synthetic movement? No: target mapping is separate through route registration.
-    e.connection_keys.resize(n,-1);return 0;});}
+    e.connection_keys.resize(n,-1);e.signal_aspects.assign(n,0);e.rebuild_signal_conflicts();
+    for(auto& pair:e.cars) e.update_signal_occupancy(*pair.second);
+    return 0;});}
 int nt_network_sparse(void* p,const NTConnection* cs,int n,const NTRelation* pairs,int count){return guarded([&]{
     auto& e=engine(p);require(n>=0 && count>=0 && (n==0 || cs) && (count==0 || pairs),"invalid network counts");
     std::unordered_map<uint64_t,unsigned char> relations;
     for(int i=0;i<count;++i) {auto row=pairs[i];require(row.first>=0 && row.first<n && row.second>=0 && row.second<n && row.flags>=0 && row.flags<=3,"invalid relationship");relations[e.relation_key(row.first,row.second)]=static_cast<unsigned char>(row.flags);}
     std::vector<NTConnection> connections;if(n) connections.assign(cs,cs+n);
     for(auto& c:connections) {require(c.intersection>=0 && c.control>=0 && c.control<=2,"invalid connection");for(double v:{c.hx,c.hy,c.px,c.py}) check_finite(v);}
-    e.connections=std::move(connections);e.relations=std::move(relations);e.connection_keys.resize(n,-1);return 0;});}
+    e.connections=std::move(connections);e.relations=std::move(relations);e.connection_keys.resize(n,-1);
+    e.signal_aspects.assign(n,0);e.rebuild_signal_conflicts();
+    for(auto& pair:e.cars) e.update_signal_occupancy(*pair.second);
+    return 0;});}
 int nt_route(void* p,const NTPoint* pts,int np,const NTSection* ss,int ns,const NTMovement* ms,int nm){return guarded([&]{
     auto& e=engine(p);require(np>=2 && pts && ns>=0 && (!ns || ss) && nm>=0 && (!nm || ms),"invalid route counts or buffers");Route r;
     for(int i=0;i<np;++i){check_finite(pts[i].x);check_finite(pts[i].y);if(r.points.empty() || std::hypot(pts[i].x-r.points.back().x,pts[i].y-r.points.back().y)>0){
@@ -734,19 +907,43 @@ int nt_route(void* p,const NTPoint* pts,int np,const NTSection* ss,int ns,const 
 int nt_connection_key(void* p,int connection,int key){return guarded([&]{engine(p).connection_keys.at(connection)=key;return 0;});}
 int nt_spawn(void* p,const NTSpawn* s,const char* id,const char* reason,const char* phantom){return guarded([&]{
     auto& e=engine(p);require(s!=nullptr && id!=nullptr,"missing spawn");e.insert(*s,id,reason,phantom);return 0;});}
-int nt_place(void* p,int h,double d){return guarded([&]{check_finite(d);auto& e=engine(p);auto& c=e.car(h);c.s.distance=clamp(d,0,e.route(c).length);c.geometry=c.control_cursor=c.route_cursor=c.round_cursor=c.section_cursor=c.section_first=c.section_stop=0;e.geometry(c);e.index_dirty=true;return 0;});}
-int nt_resize(void* p,int h,double l,double w){return guarded([&]{check_finite(l);check_finite(w);require(l>0 && w>0,"invalid dimensions");auto& e=engine(p);auto& c=e.car(h);c.s.length=l;c.s.width=w;c.section_first=c.section_stop=0;e.index_dirty=true;return 0;});}
-int nt_remove(void* p,int h){return guarded([&]{auto& e=engine(p);e.car(h);e.cars.erase(h);e.arrivals.erase(h);e.waiting.clear();e.stall=0;e.winner=e.winner_connection=-1;e.hard=false;e.index_dirty=true;return 0;});}
+int nt_yellow(void* p,int h,int movement,int go){return guarded([&]{auto& e=engine(p);
+    require(movement>=-1 && (movement<0 || static_cast<size_t>(movement)<e.connections.size()),"unknown yellow movement");
+    require(go==0 || go==1,"invalid yellow commitment");auto& c=e.car(h);c.yellow_movement=movement;c.yellow_go=go!=0;return 0;});}
+int nt_place(void* p,int h,double d){return guarded([&]{check_finite(d);auto& e=engine(p);auto& c=e.car(h);c.s.distance=clamp(d,0,e.route(c).length);c.geometry=c.control_cursor=c.route_cursor=c.round_cursor=c.section_cursor=c.section_first=c.section_stop=0;e.geometry(c);e.update_signal_occupancy(c);e.index_dirty=true;return 0;});}
+int nt_resize(void* p,int h,double l,double w){return guarded([&]{check_finite(l);check_finite(w);require(l>0 && w>0,"invalid dimensions");auto& e=engine(p);auto& c=e.car(h);c.s.length=l;c.s.width=w;c.section_first=c.section_stop=0;e.update_signal_occupancy(c);e.index_dirty=true;return 0;});}
+int nt_remove(void* p,int h){return guarded([&]{auto& e=engine(p);auto& c=e.car(h);for(int movement:c.signal_occupancy)e.adjust_signal_occupancy(movement,-1);e.cars.erase(h);e.arrivals.erase(h);e.waiting.clear();e.stall=0;e.winner=e.winner_connection=-1;e.hard=false;e.index_dirty=true;return 0;});}
+int nt_external_claim(void* p,int h,int con){return guarded([&]{auto& e=engine(p);
+    require(h<0,"external claim handle must be negative");require(con>=0 && static_cast<size_t>(con)<e.connections.size(),"unknown external claim");
+    auto& claims=e.external_claims[h];if(std::find(claims.begin(),claims.end(),con)==claims.end()) claims.push_back(con);return 0;});}
 int nt_claim(void* p,int h,int con){return guarded([&]{auto& e=engine(p);require(con>=0 && static_cast<size_t>(con)<e.connections.size(),"unknown claim");e.claim(e.car(h),con);return 0;});}
 int nt_arrival(void* p,int h,int con,double t){return guarded([&]{auto& e=engine(p);e.car(h);check_finite(t);require(con>=0 && static_cast<size_t>(con)<e.connections.size(),"unknown arrival");e.arrivals[h]={con,t};return 0;});}
 int nt_clock(void* p,double t,double stall,double threshold){return guarded([&]{check_finite(t);check_finite(stall);check_finite(threshold);require(t>=0 && stall>=0 && threshold>=0,"invalid clock");auto& e=engine(p);e.time=t;e.stall=stall;e.threshold=threshold;return 0;});}
 int nt_waiting(void* p,int h,double seconds){return guarded([&]{auto& e=engine(p);e.car(h);check_finite(seconds);require(seconds>=0,"invalid waiting duration");e.waiting[h]=seconds;return 0;});}
 int nt_winner(void* p,int h,int connection,int hard){return guarded([&]{auto& e=engine(p);e.car(h);require(connection>=0 && static_cast<size_t>(connection)<e.connections.size(),"unknown winner movement");require(hard==0 || hard==1,"invalid gridlock state");e.winner=h;e.winner_connection=connection;e.hard=hard;return 0;});}
 int nt_speed(void* p,double v){return guarded([&]{check_finite(v);require(v>0,"invalid cruise speed");engine(p).speed=v;return 0;});}
-int nt_control(void* p,int con,int control){return guarded([&]{require(control>=0 && control<=2,"invalid control");engine(p).connections.at(con).control=control;return 0;});}
+int nt_control(void* p,int con,int control){return guarded([&]{require(control>=0 && control<=2,"invalid control");auto& e=engine(p);auto& current=e.connections.at(con);
+    if(current.control!=control) {current.control=control;e.rebuild_signal_conflicts();for(auto& pair:e.cars)e.update_signal_occupancy(*pair.second);}
+    return 0;});}
+int nt_signal_aspects(void* p,const unsigned char* aspects,int n){return guarded([&]{auto& e=engine(p);
+    require(n==static_cast<int>(e.connections.size()) && (n==0 || aspects),"invalid signal aspect count");
+    std::vector<unsigned char> next(static_cast<size_t>(n),0);
+    for(int i=0;i<n;++i) {require(aspects[i]<=2,"invalid signal aspect");
+        require(e.connections[i].control==2 || aspects[i]==0,"aspect on a non-signal movement");next[i]=aspects[i];}
+    for(int i=0;i<n;++i) if(next[i])
+        for(int conflicting:e.signal_entry_blocked_by_occupant[i])
+            if(next[conflicting])
+                throw std::invalid_argument("conflicting protected signal permissions");
+    e.signal_aspects=std::move(next);return 0;});}
+int nt_profile_enable(void* p,int enabled){return guarded([&]{require(enabled==0 || enabled==1,"invalid profile flag");auto& e=engine(p);
+    e.profile={};e.profile_enabled=enabled!=0;return 0;});}
+int nt_profile_read(void* p,NTProfile* profile){return guarded([&]{require(profile!=nullptr,"missing profile output");*profile=engine(p).profile;return 0;});}
 int nt_step(void* p,double dt){return guarded([&]{check_finite(dt);require(dt>=0,"invalid timestep");auto& e=engine(p);e.completed.clear();e.retired.clear();double remaining=dt;
     if(dt<=0.05+1e-9) e.tick(dt);else while(remaining>1e-9){double part=std::min(0.05,remaining);e.tick(part);remaining-=part;}return 0;});}
 const NTState* nt_states(void* p,int* count){try{auto& e=engine(p);e.output.clear();for(auto& pair:e.cars)e.output.push_back(e.state(*pair.second));e.output.insert(e.output.end(),e.completed.begin(),e.completed.end());*count=static_cast<int>(e.output.size());return e.output.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
+int nt_shared_vehicle(void* p,int h,NTSharedVehicle* view){return guarded([&]{require(view!=nullptr,"missing shared view");auto& c=engine(p).car(h);*view={&c.s,&c.position,&c.heading,&c.latest_claim,&c.yellow_movement,&c.yellow_go};return 0;});}
+const char* nt_shared_text(void* p,int h,int field){try{require(field==0 || field==1,"unknown text field");auto& c=engine(p).shared_car(h);return field?c.phantom.c_str():c.reason.c_str();}catch(const std::exception& ex){error=ex.what();return nullptr;}}
+const NTState* nt_completed(void* p,int* count){try{auto& e=engine(p);*count=static_cast<int>(e.completed.size());return e.completed.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
 int nt_graph(void* p,const NTPoint* nodes,int nn,const NTGraphEdge* edges,int ne,const NTPoint* points,int np,const NTEndpoint* ends,int nend,const int* ports,int nport){return guarded([&]{
     auto& e=engine(p);require(nn>=0 && ne>=0 && np>=0 && nend>=0 && nport>=0,"invalid graph counts");
     require((!nn || nodes) && (!ne || edges) && (!np || points) && (!nend || ends) && (!nport || ports),"missing graph data");
@@ -791,7 +988,11 @@ const NTMovement* nt_route_movements(void* p,int route,int* count){try {auto& ro
 double nt_route_cost(void* p,int route){try{return engine(p).routes.at(route).cost;}catch(const std::exception& ex){error=ex.what();return -1;}}
 int nt_admit(void* p,const NTSpawn* s,const char* id){return guarded([&]{require(s && id,"missing admission");return int(engine(p).admit(*s,id));});}
 const NTBookkeeping* nt_bookkeeping(void* p,int* count,NTClock* clock){try{auto& e=engine(p);e.bookkeeping.clear();
-    for(auto& pair:e.cars) for(int claim:pair.second->claims) e.bookkeeping.push_back({pair.first,claim,0,0});
+    for(auto& pair:e.cars) {
+        for(int claim:pair.second->claims) e.bookkeeping.push_back({pair.first,claim,0,0});
+        for(int occupied:pair.second->signal_occupancy) e.bookkeeping.push_back({pair.first,occupied,3,0});
+    }
+    for(auto& pair:e.external_claims) for(int con:pair.second) e.bookkeeping.push_back({pair.first,con,0,0});
     for(auto& pair:e.arrivals) e.bookkeeping.push_back({pair.first,pair.second.connection,1,pair.second.time});
     for(auto& pair:e.waiting) e.bookkeeping.push_back({pair.first,-1,2,pair.second});
     *clock={e.time,e.stall,e.threshold,e.winner,e.winner_connection,int(e.hard)};*count=int(e.bookkeeping.size());return e.bookkeeping.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}

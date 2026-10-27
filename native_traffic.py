@@ -18,13 +18,13 @@ import sys
 import tempfile
 
 from car_brain import BehaviorState, SignalIntent
-from intersection_controls import movements_conflict, yields_to, StopArrival
+from intersection_controls import movements_conflict, yields_to, StopArrival, SignalAspect
 from models import ControlType, ManeuverType
 from traffic_testbed import _route_state
 
 STATES = tuple(BehaviorState)
 SIGNALS = tuple(SignalIntent)
-CONTROL = {ControlType.STOP: 1}
+CONTROL = {ControlType.STOP: 1, ControlType.SIGNAL: 2}
 MANEUVER = {ManeuverType.LEFT_TURN: 1, ManeuverType.RIGHT_TURN: 2, ManeuverType.U_TURN: 3}
 ROLES = {'entry': 1, 'circulate': 2, 'exit': 3}
 
@@ -52,10 +52,22 @@ class _Spawn(C.Structure):
         (x, C.c_double) for x in ('distance', 'speed', 'length', 'width', 'cap', 'dwell', 'desired', 'entry')]
 
 
+class _Profile(C.Structure):
+    _fields_ = [('ticks', C.c_uint64), ('vehicle_visits', C.c_uint64)] + [
+        (name, C.c_double) for name in (
+            'preparation_ms', 'control_ms', 'decision_ms', 'arbitration_ms', 'movement_ms',
+        )]
+
+
+class _SharedVehicle(C.Structure):
+    _fields_ = [('motion', C.POINTER(_Spawn)), ('position', C.POINTER(_Point)),
+                ('heading', C.POINTER(_Point)), ('claim', C.POINTER(C.c_int)), ('yellow_movement', C.POINTER(C.c_int)), ('yellow_go', C.POINTER(C.c_bool))]
+
+
 class NativeVehicleView(C.Structure):
     _fields_ = [(x, C.c_int) for x in ('handle', 'state', 'signal', 'claim', 'alive')] + [
         (x, C.c_double) for x in ('distance', 'speed', 'x', 'y', 'hx', 'hy', 'desired', 'dwell', 'entry')] + [
-        ('reason', C.c_char_p), ('phantom', C.c_char_p)]
+        ('reason', C.c_char_p), ('phantom', C.c_char_p), ('yellow_movement', C.c_int), ('yellow_go', C.c_int)]
 
 
 @dataclass(frozen=True)
@@ -102,9 +114,11 @@ def _library():
         'nt_route': (C.c_int, [C.c_void_p, C.POINTER(_Point), C.c_int, C.POINTER(_Section), C.c_int, C.POINTER(_Movement), C.c_int]),
         'nt_connection_key': (C.c_int, [C.c_void_p, C.c_int, C.c_int]),
         'nt_spawn': (C.c_int, [C.c_void_p, C.POINTER(_Spawn), C.c_char_p, C.c_char_p, C.c_char_p]),
+        'nt_yellow': (C.c_int, [C.c_void_p, C.c_int, C.c_int, C.c_int]),
         'nt_place': (C.c_int, [C.c_void_p, C.c_int, C.c_double]),
         'nt_resize': (C.c_int, [C.c_void_p, C.c_int, C.c_double, C.c_double]),
         'nt_remove': (C.c_int, [C.c_void_p, C.c_int]),
+        'nt_external_claim': (C.c_int, [C.c_void_p, C.c_int, C.c_int]),
         'nt_claim': (C.c_int, [C.c_void_p, C.c_int, C.c_int]),
         'nt_arrival': (C.c_int, [C.c_void_p, C.c_int, C.c_int, C.c_double]),
         'nt_clock': (C.c_int, [C.c_void_p, C.c_double, C.c_double, C.c_double]),
@@ -112,13 +126,19 @@ def _library():
         'nt_winner': (C.c_int, [C.c_void_p, C.c_int, C.c_int, C.c_int]),
         'nt_speed': (C.c_int, [C.c_void_p, C.c_double]),
         'nt_control': (C.c_int, [C.c_void_p, C.c_int, C.c_int]),
+        'nt_signal_aspects': (C.c_int, [C.c_void_p, C.POINTER(C.c_ubyte), C.c_int]),
+        'nt_profile_enable': (C.c_int, [C.c_void_p, C.c_int]),
+        'nt_profile_read': (C.c_int, [C.c_void_p, C.POINTER(_Profile)]),
         'nt_step': (C.c_int, [C.c_void_p, C.c_double]),
         'nt_states': (C.POINTER(NativeVehicleView), [C.c_void_p, C.POINTER(C.c_int)]),
+        'nt_shared_vehicle': (C.c_int, [C.c_void_p, C.c_int, C.POINTER(_SharedVehicle)]),
+        'nt_shared_text': (C.c_char_p, [C.c_void_p, C.c_int, C.c_int]),
+        'nt_completed': (C.POINTER(NativeVehicleView), [C.c_void_p, C.POINTER(C.c_int)]),
     }
     for name, (result, args) in signatures.items():
         function = getattr(lib, name)
         function.restype, function.argtypes = result, args
-    if lib.nt_abi() != 2:
+    if lib.nt_abi() != 4:
         raise RuntimeError('Incompatible native traffic ABI')
     from native_spawning import bind
     bind(lib)
@@ -136,9 +156,12 @@ class NativeTrafficEngine:
         self._next_handle = 0
         self._connections = []
         self._connection_ids = {}
+        self._connection_ids_by_name = {}
+        self._signal_aspects = None
         self._keys = {}
         self._intersections = {}
         self._routes = {}
+        self._shared_bindings = {}
 
     def _call(self, name, *args):
         if not self._ptr:
@@ -153,12 +176,21 @@ class NativeTrafficEngine:
         engine = cls(traffic.speed_mph)
         try:
             engine.prepare(traffic.cars)
+            engine.prepare_connections(traffic.stop_coordinator.claims.values())
             for car in traffic.cars:
                 engine.spawn(car)
             for car in traffic.cars:
                 for connection in traffic.stop_coordinator.claims_for(car.id):
                     engine._call('nt_claim', engine._handles[car.id], engine._connection_ids[id(connection)])
+            foreign = {}
+            for (owner, _), connection in traffic.stop_coordinator.claims.items():
+                if owner not in engine._handles:
+                    handle = foreign.setdefault(owner, -1-len(foreign))
+                    engine._ids[handle] = owner
+                    engine._call('nt_external_claim', handle, engine._connection_ids[id(connection)])
             for car_id, arrival in traffic.stop_coordinator.arrivals.items():
+                if car_id not in engine._handles:
+                    continue
                 engine._call('nt_arrival', engine._handles[car_id], engine._connection_ids[id(arrival.connection)], arrival.stopped_at)
             resolver = traffic.deadlock_resolver
             engine._call('nt_clock', traffic.elapsed_time, resolver.stall_seconds, resolver.stall_threshold)
@@ -187,6 +219,7 @@ class NativeTrafficEngine:
         for connection in connections:
             if id(connection) not in self._connection_ids:
                 self._connection_ids[id(connection)] = len(self._connections)
+                self._connection_ids_by_name[connection.id] = len(self._connections)
                 self._connections.append(connection)
                 changed = True
         if not changed:
@@ -245,6 +278,9 @@ class NativeTrafficEngine:
                        -1 if car.speed_cap_mph is None else car.speed_cap_mph, car.brain.stopped_elapsed,
                        car.brain.desired_speed, -1 if car._merge_entry_speed is None else car._merge_entry_speed)
         self._call('nt_spawn', C.byref(spawn), car.id.encode(), car.brain.wait_reason.encode(), car.brain.phantom_target.encode())
+        yellow = self._connection_ids_by_name.get(car.brain._yellow_movement_id, -1)
+        if yellow >= 0:
+            self._call('nt_yellow', handle, yellow, int(car.brain._yellow_go))
         self._ids[handle], self._handles[car.id] = car.id, handle
         self._next_handle += 1
 
@@ -273,13 +309,15 @@ class NativeTrafficEngine:
         completed = []
         for s in self.vehicle_views():
             car = by_id[self._ids[s.handle]]
-            car.distance, car.speed = s.distance, s.speed
-            car.position, car.heading = (s.x, s.y), (s.hx, s.hy)
-            car.brain.state, car.brain.signal_intent = STATES[s.state], SIGNALS[s.signal]
-            car.brain.wait_reason, car.brain.phantom_target = s.reason.decode(), s.phantom.decode()
-            car.brain.desired_speed, car.brain.stopped_elapsed = s.desired, s.dwell
-            car._merge_entry_speed = None if s.entry < 0 else s.entry
-            car._claimed_movement = None if s.claim < 0 else self._connections[s.claim]
+            car.__dict__.update(distance=s.distance, speed=s.speed,
+                position=(s.x, s.y), heading=(s.hx, s.hy),
+                _merge_entry_speed=None if s.entry < 0 else s.entry,
+                _claimed_movement=None if s.claim < 0 else self._connections[s.claim])
+            car.brain.__dict__.update(state=STATES[s.state], signal_intent=SIGNALS[s.signal],
+                wait_reason=s.reason.decode(), phantom_target=s.phantom.decode(),
+                desired_speed=s.desired, stopped_elapsed=s.dwell,
+                _yellow_movement_id=None if s.yellow_movement < 0 else self._connections[s.yellow_movement].id,
+                _yellow_go=bool(s.yellow_go))
             if not s.alive:
                 completed.append(car)
         return completed
@@ -292,6 +330,9 @@ class NativeTrafficEngine:
 
     def remove(self, vehicle_id):
         handle = self._handles[vehicle_id]
+        binding = self._shared_bindings.get(handle)
+        if binding is not None:
+            binding.detach()
         self._call('nt_remove', handle)
         del self._handles[vehicle_id]
 
@@ -301,8 +342,33 @@ class NativeTrafficEngine:
     def set_control(self, connection, kind):
         self._call('nt_control', self._connection_ids[id(connection)], CONTROL.get(kind, 0))
 
+    def set_signal_aspects(self, aspects):
+        aspects = tuple(aspects)
+        if aspects != self._signal_aspects:
+            values = (C.c_ubyte * len(aspects))(*aspects)
+            self._call('nt_signal_aspects', values, len(aspects))
+            self._signal_aspects = aspects
+
+    def enable_profile(self, enabled=True):
+        self._call('nt_profile_enable', int(enabled))
+
+    def profile_snapshot(self):
+        profile = _Profile()
+        self._call('nt_profile_read', C.byref(profile))
+        return {
+            'ticks': profile.ticks,
+            'vehicle_visits': profile.vehicle_visits,
+            'preparation_ms': profile.preparation_ms,
+            'control_ms': profile.control_ms,
+            'decision_ms': profile.decision_ms,
+            'arbitration_ms': profile.arbitration_ms,
+            'movement_ms': profile.movement_ms,
+        }
+
     def close(self):
         if getattr(self, '_ptr', None):
+            for binding in tuple(self._shared_bindings.values()):
+                binding.detach()
             self._lib.nt_destroy(self._ptr)
             self._ptr = None
 

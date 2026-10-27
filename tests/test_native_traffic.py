@@ -1,3 +1,4 @@
+from tests.reference_traffic import as_reference
 """Differential tests run an actual C++ driver, not saved Python decisions."""
 import os
 import unittest
@@ -10,7 +11,7 @@ class NativeTrafficTests(unittest.TestCase):
     def test_native_runs_without_python_driving_callbacks(self):
         scenario = next(s for s in scenario_catalog() if s.name == 'roundabout-clear-entry')
         city, reference = scenario.build(3)
-        reference.update_mode = 'data_first'
+        as_reference(reference)
         native = NativeTrafficEngine.from_simulation(reference)
         initial = {c.id: c.distance for c in reference.cars}
         with native:
@@ -44,7 +45,7 @@ class NativeScenarioParityTests(unittest.TestCase):
         for scenario in scenarios:
             with self.subTest(scenario=scenario.name):
                 city, reference = scenario.build(seed)
-                reference.update_mode = 'data_first'
+                as_reference(reference)
                 with NativeTrafficEngine.from_simulation(reference) as native:
                     original_spawn = reference.spawn_car
                     def spawn(*args, **kwargs):

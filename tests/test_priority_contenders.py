@@ -36,7 +36,7 @@ class PriorityContenderTests(unittest.TestCase):
         return city, traffic, queue
 
     def test_queued_followers_do_not_join_intersection_priority(self):
-        for mode in ("legacy", "data_first"):
+        for mode in ("cpp",):
             with self.subTest(mode=mode):
                 city, traffic, queue = self.make_queue(mode)
                 # A previously registered follower must also be removed.
@@ -50,14 +50,14 @@ class PriorityContenderTests(unittest.TestCase):
                 ))
 
     def test_distant_approach_does_not_join_intersection_priority(self):
-        for mode in ("legacy", "data_first"):
+        for mode in ("cpp",):
             with self.subTest(mode=mode):
                 city, traffic, queue = self.make_queue(mode, distances=(90.0,))
                 traffic.update(city, 0)
                 self.assertNotIn(queue[0].id, traffic.stop_coordinator.arrivals)
 
     def test_follower_becomes_contender_when_it_reaches_the_front(self):
-        for mode in ("legacy", "data_first"):
+        for mode in ("cpp",):
             with self.subTest(mode=mode):
                 city, traffic, queue = self.make_queue(mode)
                 traffic.update(city, 0)
@@ -70,7 +70,7 @@ class PriorityContenderTests(unittest.TestCase):
                 self.assertEqual(set(traffic.stop_coordinator.arrivals), {follower.id})
 
     def test_entry_ready_arrival_keeps_its_waiting_time(self):
-        for mode in ("legacy", "data_first"):
+        for mode in ("cpp",):
             with self.subTest(mode=mode):
                 city, traffic, queue = self.make_queue(mode)
                 traffic.update(city, 0.05)
@@ -81,7 +81,7 @@ class PriorityContenderTests(unittest.TestCase):
                 )
 
     def test_distant_car_rolls_toward_an_empty_intersection(self):
-        for mode in ("legacy", "data_first"):
+        for mode in ("cpp",):
             with self.subTest(mode=mode):
                 city, traffic, queue = self.make_queue(mode, distances=(35.0,))
                 traffic.stop_coordinator.forget_car("crossing-car")
@@ -91,7 +91,7 @@ class PriorityContenderTests(unittest.TestCase):
                 self.assertNotIn(queue[0].id, traffic.stop_coordinator.arrivals)
 
     def test_distant_car_still_brakes_for_an_active_crossing(self):
-        for mode in ("legacy", "data_first"):
+        for mode in ("cpp",):
             with self.subTest(mode=mode):
                 city, traffic, queue = self.make_queue(mode, distances=(35.0,))
                 speed = queue[0].speed = traffic.speed_mph * 22 / 15
@@ -99,7 +99,7 @@ class PriorityContenderTests(unittest.TestCase):
                 self.assertLess(queue[0].brain.desired_speed, speed)
 
     def test_fast_follower_cannot_replace_a_front_car_outside_its_entry_zone(self):
-        for mode in ("legacy", "data_first"):
+        for mode in ("cpp",):
             with self.subTest(mode=mode):
                 city, traffic, queue = self.make_queue(mode, distances=(11.0, 31.0))
                 queue[1].speed = 60.0
@@ -108,7 +108,7 @@ class PriorityContenderTests(unittest.TestCase):
 
     def test_front_car_shields_a_follower_taking_a_different_turn(self):
         city, traffic, queue = self.make_queue(
-            "data_first", distances=(0.0, 20.0),
+            "cpp", distances=(0.0, 20.0),
             destinations=((300, 600), (600, 300)),
         )
         queue[1].speed = 40.0
@@ -117,7 +117,7 @@ class PriorityContenderTests(unittest.TestCase):
 
     def test_merge_leader_still_shields_a_queued_crossing_car(self):
         city, traffic, queue = self.make_queue(
-            "data_first", distances=(0.0, 20.0),
+            "cpp", distances=(0.0, 20.0),
             destinations=((300, 600), (600, 300)),
         )
         leader, follower = queue
@@ -151,7 +151,7 @@ class PriorityContenderTests(unittest.TestCase):
         self.assertEqual(set(traffic.stop_coordinator.arrivals), {"lane-0", "lane-1"})
 
     def test_committed_stop_winner_can_keep_clearing_the_entry(self):
-        for mode in ("legacy", "data_first"):
+        for mode in ("cpp",):
             with self.subTest(mode=mode):
                 city, traffic, queue = self.make_queue(mode, distances=(5.0,))
                 car = queue[0]

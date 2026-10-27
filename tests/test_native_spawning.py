@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from city import CityMap, Terrain
 from traffic_testbed import RoadVehicleSimulation, RoutedRoadVehicle
+from tests.reference_traffic import RoadVehicleSimulation as ReferenceSimulation
 
 
 class NativeSpawningTests(unittest.TestCase):
@@ -35,10 +36,10 @@ class NativeSpawningTests(unittest.TestCase):
         city = CityMap(terrain=Terrain(trees=[]))
         city.add_road([(0, 100), (500, 100)])
         city.add_road([(250, -150), (250, 100)])
-        reference = RoadVehicleSimulation(update_mode='data_first', rng=random.Random(42),
+        reference = ReferenceSimulation(update_mode='data_first', rng=random.Random(42),
                                           max_cars=cap, spawn_interval=interval)
         try:
-            native = RoadVehicleSimulation(update_mode='native', rng=random.Random(42),
+            native = RoadVehicleSimulation(update_mode='cpp', rng=random.Random(42),
                                            max_cars=cap, spawn_interval=interval)
         except ValueError as exc:
             self.fail('Native spawning mode is missing: ' + str(exc))
@@ -182,7 +183,7 @@ class NativeSpawningTests(unittest.TestCase):
         from native_traffic import _Section, _Movement
         for filename in ('slip_lanes.json', 'roundabout_test.json'):
             city = world_from_dict(json.loads((Path(__file__).parent / 'fixtures' / filename).read_text())).city_map
-            native = RoadVehicleSimulation(update_mode='native')
+            native = RoadVehicleSimulation(update_mode='cpp')
             backend = native._native_backend(city)
             lib, ptr = backend.engine._lib, backend.engine._ptr
             self.assertTrue(hasattr(lib, 'nt_route_sections'), 'Native route metadata view is missing')
@@ -225,14 +226,14 @@ class NativeSpawningTests(unittest.TestCase):
                 reference.update(city, 0)
                 native.update(city, 0)
                 source, destination = city.cul_de_sacs[:2]
-                native.update_mode = 'data_first'
+                native._discard_native()
                 for sim in (reference, native):
                     if generated:
                         sim.spawn_car(city, source, destination)
                     else:
                         sim.admit_route(city.find_vehicle_route_between(source, destination), vehicle_id='delivery',
                                         source_id=source.id, destination_id=destination.id)
-                native.update_mode = 'native'
+                native._discard_native()
                 self.compare(reference, native, reference.update(city, .05), native.update(city, .05))
                 self.assertIsNotNone(native.remove_vehicle(native.cars[0].id))
 
@@ -277,7 +278,7 @@ class NativeSpawningTests(unittest.TestCase):
         building = Building('Project', Parcel(120, 112, 50, 30), phase=BuildablePhase.UNDER_CONSTRUCTION,
                             construction_needs={'stone': 5})
         city.buildings.append(building)
-        native = RoadVehicleSimulation(update_mode='native', spawn_interval=1000)
+        native = RoadVehicleSimulation(update_mode='cpp', spawn_interval=1000)
         construction = ConstructionSimulation({'stone': ResourceSpec('stone', 'Stone', 't', 500, 1)},
                                                {'material': TruckSpec('material', 2500, 10, 0, 18, 8)},
                                                UnlimitedConstructionProvider(), truck_speed=10,

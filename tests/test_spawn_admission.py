@@ -91,7 +91,7 @@ class SpawnAdmissionTests(unittest.TestCase):
             for _ in range(4):
                 self.assertIsNone(self.traffic.spawn_car(self.city, self.west, self.east))
         self.assertIsNotNone(first)
-        self.assertEqual(calls_to(profiler, CityMap.find_vehicle_route_between), 1)
+        self.assertEqual(calls_to(profiler, CityMap.find_vehicle_route_between), 0)
 
         self.city.rebuild_mobility_network()
         replacement = self.traffic.spawn_car(self.city, self.west, self.east)

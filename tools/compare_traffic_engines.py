@@ -17,7 +17,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from traffic_comparison import compare_traffic_engines
+from tests.reference_comparison import compare_traffic_engines
 
 
 def main() -> None:

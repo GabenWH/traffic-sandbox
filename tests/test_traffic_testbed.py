@@ -140,7 +140,7 @@ class TrafficTestbedTests(unittest.TestCase):
             spawn_interval=1000.0,
             rng=random.Random(41),
             debugger=None,
-            update_mode="data_first",
+            update_mode="cpp",
         )
         self.assertIsNotNone(traffic.spawn_car(self.city, self.west, self.east))
 
@@ -148,53 +148,14 @@ class TrafficTestbedTests(unittest.TestCase):
 
         self.assertEqual(len(traffic.profiler.samples), 3)
         sample = traffic.profiler.samples[-1]
-        self.assertEqual(sample.system, "routed_traffic")
+        self.assertEqual(sample.system, "test_traffic")
         self.assertEqual(sample.entity_counts["cars"], 1)
         self.assertAlmostEqual(sample.elapsed_seconds, 0.02)
-        self.assertTrue({
-            "spawn",
-            "snapshot",
-            "observe",
-            "intent_generation",
-            "intent_route_lookup",
-            "intent_control_state",
-            "intent_control_claim_lookup",
-            "intent_control_inside_scan",
-            "intent_control_stop_distance",
-            "intent_merge_observation",
-            "intent_priority_query",
-            "intent_exit_gap",
-            "intent_chain_check",
-            "intent_leader_lookup",
-            "intent_speed_target",
-            "intent_brain_decision",
-            "intent_packaging",
-            "conflict_resolution",
-            "movement_apply",
-            "occupancy_rebuild",
-            "post_update",
-            "total",
-        }.issubset(sample.timings_ms))
-        intent_subphases = (
-            "intent_route_lookup",
-            "intent_control_claim_lookup",
-            "intent_control_inside_scan",
-            "intent_control_stop_distance",
-            "intent_merge_observation",
-            "intent_priority_query",
-            "intent_exit_gap",
-            "intent_chain_check",
-            "intent_leader_lookup",
-            "intent_speed_target",
-            "intent_brain_decision",
-            "intent_packaging",
-        )
-        self.assertTrue(all(sample.timings_ms[name] >= 0 for name in intent_subphases))
-        self.assertLessEqual(
-            sum(sample.timings_ms[name] for name in intent_subphases),
-            sample.timings_ms["intent_generation"] + 0.01,
-        )
-        self.assertNotIn("decision", sample.timings_ms)
+        self.assertTrue({'native_configuration', 'native_spawning', 'spawn_views',
+                         'native_movement', 'vehicle_state_sync', 'bookkeeping_sync',
+                         'occupancy_sync', 'observe', 'intent', 'resolve', 'apply',
+                         'total'}.issubset(sample.timings_ms))
+        self.assertTrue(all(value >= 0 for value in sample.timings_ms.values()))
 
     def test_canvas_tool_click_toggles_the_clicked_junction(self) -> None:
         traffic = TrafficTestbed(rng=random.Random(5))

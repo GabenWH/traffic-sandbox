@@ -274,14 +274,14 @@ class MergeLab:
         *,
         seconds: float = 30.0,
         dt: float = 0.05,
-        engine: str = "legacy",
+        engine: str = "cpp",
         trace: bool = True,
         window_seconds: float = 60.0,
     ) -> MergeLabReport:
         if seconds <= 0 or not 0 < dt <= 0.05:
             raise ValueError("Use positive seconds and 0 < dt <= 0.05")
-        if engine not in ("legacy", "data_first"):
-            raise ValueError("Traffic engine must be legacy or data_first")
+        if engine != "cpp":
+            raise ValueError("Traffic engine must be cpp")
         if window_seconds <= 0:
             raise ValueError("Traffic window duration must be positive")
         scenarios = {scenario.name: scenario for scenario in scenario_catalog()}

@@ -12,7 +12,7 @@ from unittest.mock import patch
 from city import CityMap, Terrain
 from native_traffic import NativeTrafficEngine
 from persistence import world_from_dict
-from traffic_testbed import TestTrafficSimulation
+from tests.reference_traffic import TestTrafficSimulation, as_reference
 
 
 class NativeExtendedParityTests(unittest.TestCase):
@@ -39,7 +39,7 @@ class NativeExtendedParityTests(unittest.TestCase):
                 self.assertEqual(getattr(state, field), value, where + field)
 
     def drive(self, city, traffic, ticks, *, edit=None, dt=0.05):
-        traffic.update_mode = 'data_first'
+        as_reference(traffic)
         traffic.debugger = None
         completed_count = 0
         with NativeTrafficEngine.from_simulation(traffic) as native:
@@ -81,7 +81,7 @@ class NativeExtendedParityTests(unittest.TestCase):
         for checkpoint in (90, 140, 200):
             with self.subTest(checkpoint=checkpoint):
                 city, traffic = self.cross(True)
-                traffic.update_mode = 'data_first'
+                as_reference(traffic)
                 for _ in range(checkpoint):
                     traffic.update(city, 0.05)
                 self.drive(city, traffic, 300)

@@ -30,7 +30,7 @@ def single_lane_pair(*, reverse: bool = False):
         rng=random.Random(1),
         occupancy=occupancy,
     )
-    traffic.update_mode = "data_first"
+    traffic.update_mode = "cpp"
 
     leader = traffic.spawn_car(city, west, east)
     assert leader is not None
@@ -99,16 +99,19 @@ class DataFirstPipelineTests(unittest.TestCase):
         self.assertIs(leader.brain, original_brain)
 
     def test_update_mode_is_validated(self):
-        with self.assertRaisesRegex(ValueError, "legacy or data_first"):
+        with self.assertRaisesRegex(ValueError, "cpp"):
             TestTrafficSimulation(update_mode="unknown")
 
         city, traffic, *_ = single_lane_pair()
         traffic.update_mode = "typo"
-        with self.assertRaisesRegex(ValueError, "legacy or data_first"):
+        with self.assertRaisesRegex(ValueError, "cpp"):
             traffic.update(city, 0.05)
 
     def test_duplicate_preloaded_car_ids_are_rejected(self):
         _city, _traffic, leader, follower, _occupancy = single_lane_pair()
+        import copy
+        follower = copy.copy(follower)
+        follower._on_native_edit = None
         follower.id = leader.id
 
         with self.assertRaisesRegex(ValueError, "unique IDs"):
@@ -125,7 +128,7 @@ class DataFirstPipelineTests(unittest.TestCase):
 
     def test_legacy_tick_also_avoids_full_roster_rebuilds(self):
         city, traffic, _leader, _follower, occupancy = single_lane_pair()
-        traffic.update_mode = "legacy"
+        traffic.update_mode = "cpp"
         traffic.update(city, 0.05)
         self.assertEqual(occupancy.rebuild_calls, 0)
 
@@ -181,7 +184,7 @@ class DataFirstPipelineTests(unittest.TestCase):
         ):
             self.assertIn(name, sample.timings_ms)
             self.assertGreaterEqual(sample.timings_ms[name], 0.0)
-        self.assertIn("intent_route_lookup", sample.timings_ms)
+        self.assertIn("native_movement", sample.timings_ms)
 
     def test_empty_tick_does_not_report_previous_publication_timings(self):
         city, traffic, *_ = single_lane_pair()
@@ -213,13 +216,13 @@ class DataFirstPipelineTests(unittest.TestCase):
         from merge_lab import MergeLab
 
         first = MergeLab(seed=7).run(
-            "roundabout-simultaneous-entry", seconds=2.0, engine="data_first",
+            "roundabout-simultaneous-entry", seconds=2.0, engine="cpp",
         )
         second = MergeLab(seed=7).run(
-            "roundabout-simultaneous-entry", seconds=2.0, engine="data_first",
+            "roundabout-simultaneous-entry", seconds=2.0, engine="cpp",
         )
 
-        self.assertEqual(first.engine, "data_first")
+        self.assertEqual(first.engine, "cpp")
         self.assertEqual(first.overlap_pair_ticks, 0, first.first_overlap)
         self.assertEqual(first.state_digest, second.state_digest)
         self.assertIn("intent", first.timing_summary_ms)

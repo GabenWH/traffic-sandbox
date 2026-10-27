@@ -5,7 +5,7 @@ import test_spawn_admission as reference_cases
 class NativeSpawnAdmissionTests(reference_cases.SpawnAdmissionTests):
     def setUp(self):
         super().setUp()
-        self.traffic.update_mode = 'native'
+        self.traffic.update_mode = 'cpp'
 
     def test_blocked_retries_reuse_route_until_network_changes(self):
         first = self.traffic.spawn_car(self.city, self.west, self.east)

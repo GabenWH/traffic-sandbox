@@ -27,6 +27,7 @@ class ConstructionCatalogTests(unittest.TestCase):
                 "lumber": ("m³", 500.0, 1.0),
                 "stone": ("t", 1000.0, 0.5),
                 "steel": ("t", 1000.0, 1.0),
+                "deconstruction_materials": ("ft²", 20.0, 0.01),
             },
         )
         material = trucks["material_truck"]

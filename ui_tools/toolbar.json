@@ -24,6 +24,10 @@
     "enabled": true
   },
   {
+    "id": "deconstruct_road",
+    "enabled": true
+  },
+  {
     "id": "route_test",
     "enabled": true
   },

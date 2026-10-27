@@ -509,7 +509,7 @@ def run_benchmark(args: argparse.Namespace) -> Path:
         spawn_interval=args.spawn_interval,
         max_cars=initial_cap,
         rng=random.Random(args.seed),
-        update_mode="data_first",
+        update_mode="cpp",
     )
     traffic.occupancy.profile_internal_timings = True
     for portal in portals:

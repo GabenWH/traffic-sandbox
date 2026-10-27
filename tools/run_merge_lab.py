@@ -25,7 +25,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--seconds", type=float, default=30.0)
     parser.add_argument("--dt", type=float, default=0.05)
-    parser.add_argument("--engine", choices=("legacy", "data_first"), default="legacy")
+    parser.add_argument("--engine", choices=("cpp",), default="cpp")
     parser.add_argument("--window-seconds", type=float, default=60.0)
     parser.add_argument("--list", action="store_true", help="List scenarios and exit")
     parser.add_argument("--trace", type=Path, help="Write the complete frame trace as JSON")

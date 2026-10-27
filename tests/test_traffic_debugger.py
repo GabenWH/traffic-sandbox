@@ -58,7 +58,7 @@ class TrafficDebuggerTests(unittest.TestCase):
             spawn_interval=1000,
             rng=random.Random(3),
             debugger=debugger,
-            update_mode="data_first",
+            update_mode="cpp",
         )
         traffic.spawn_car(self.city, self.ends[0], self.ends[1])
 

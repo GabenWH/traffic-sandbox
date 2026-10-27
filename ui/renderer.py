@@ -350,6 +350,8 @@ class RendererMixin:
                         dash=(max(1, round(12 * self.camera_zoom)), max(1, round(8 * self.camera_zoom))),
                         capstyle=tk.ROUND, joinstyle=tk.ROUND, tags=STATIC_TAG,
                     )
+                if road.phase is BuildablePhase.DEMOLISHING:
+                    self._draw_deconstruction_road(points, road_width)
             self._draw_junction_surfaces()
             return
         self._draw_ground_work()
@@ -402,7 +404,17 @@ class RendererMixin:
                     ),
                     capstyle=tk.ROUND, joinstyle=tk.ROUND, tags=STATIC_TAG,
                 )
+            if road.phase is BuildablePhase.DEMOLISHING:
+                self._draw_deconstruction_road(points, _road_width)
         self._draw_junction_surfaces()
+
+    def _draw_deconstruction_road(self, points: list[float], road_width: int) -> None:
+        """Keep scheduled road work visible at both city detail levels."""
+        self.canvas.create_line(
+            *points, fill="#ffb000", width=max(2, road_width // 3),
+            dash=(5, 4), capstyle=tk.ROUND, joinstyle=tk.ROUND, tags=STATIC_TAG,
+        )
+
     def _draw_ground_work(self)->None:
         for intersection in self.city_map.intersections:
             if intersection.kind is not IntersectionKind.ROUNDABOUT:

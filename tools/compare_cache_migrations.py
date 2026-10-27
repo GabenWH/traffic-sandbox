@@ -97,7 +97,7 @@ def run(args):
         sources = list(city.cul_de_sacs)
     steps = round(args.seconds / .05)
     interval = .12 if args.network == "gauntlet" else .5
-    before = baseline.RoadVehicleSimulation(update_mode=args.mode, spawn_interval=interval,
+    before = baseline.RoadVehicleSimulation(update_mode="data_first", spawn_interval=interval,
                                            max_cars=100, rng=random.Random(20261017))
     after = RoadVehicleSimulation(update_mode=args.mode, spawn_interval=interval,
                                   max_cars=100, rng=random.Random(20261017))
@@ -178,7 +178,7 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="6fe1084")
-    parser.add_argument("--mode", choices=("legacy", "data_first"), default="data_first")
+    parser.add_argument("--mode", choices=("cpp",), default="cpp")
     parser.add_argument("--network", choices=("arcata", "slip_lanes", "gauntlet"), default="arcata")
     parser.add_argument("--seconds", type=float, default=300)
     parser.add_argument("--output", type=Path)
