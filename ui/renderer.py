@@ -226,8 +226,10 @@ class RendererMixin:
         appearance = vehicle.appearance
         if appearance.shape not in ("material_truck", "crew_truck"):
             return
-        length = max(10.0, vehicle.length * self.camera_zoom)
-        width = max(5.0, vehicle.width * self.camera_zoom)
+        # Keep trucks at their model dimensions at every zoom. A fixed pixel
+        # floor made them grow relative to cars as the map zoomed out.
+        length = vehicle.length * self.camera_zoom
+        width = vehicle.width * self.camera_zoom
         kind = "crew" if appearance.shape == "crew_truck" else "material"
         payload_key = appearance.cargo_key or "crew"
         load_fraction = appearance.load_fraction

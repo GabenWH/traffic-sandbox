@@ -507,13 +507,21 @@ class InspectTool(CanvasTool):
 
         # ``place`` anchors the panel to the visible canvas instead of world
         # coordinates, so panning and zooming never move the UI overlay.
+        parent = (
+            self.host.sidebar
+            if getattr(self.host, "view3d_active", False)
+            else self.host.canvas
+        )
         self.panel = tk.Frame(
-            self.host.canvas, bg="#e8edf2", highlightthickness=1,
+            parent, bg="#e8edf2", highlightthickness=1,
             highlightbackground="#7b8792",
         )
-        self.panel.place(
-            x=12, rely=1.0, y=-12, anchor="sw", width=430, height=365,
-        )
+        if parent is self.host.canvas:
+            self.panel.place(
+                x=12, rely=1.0, y=-12, anchor="sw", width=430, height=365,
+            )
+        else:
+            self.panel.pack(fill="both", expand=True, padx=10, pady=10)
 
         header = tk.Frame(self.panel, bg="#e8edf2")
         header.pack(fill="x", padx=12, pady=(10, 6))

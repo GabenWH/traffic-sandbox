@@ -170,10 +170,6 @@ class FreewaySimulator(
         self.canvas.bind("<Configure>", lambda _event: self.redraw_world())
 
     def select_tool(self, tool: CanvasTool) -> None:
-        if self.view3d_active:
-            from ui_tools.tools.road_tool import RoadTool
-            if not isinstance(tool, RoadTool):
-                self.toggle_3d_view()
         if self.active_tool is tool:
             self.deactivate_tool(tool)
             return
@@ -286,6 +282,14 @@ class FreewaySimulator(
         if self.view3d_active and self.view3d is not None:
             return self.view3d.point_at_screen(event.x, event.y, elevation)
         return self.screen_to_world((event.x, event.y))
+
+    def screen_to_world(self, point: tuple[float, float]) -> tuple[float, float]:
+        """Use the active view's camera when a shared tool receives a click."""
+        if self.view3d_active and self.view3d is not None:
+            projected = self.view3d.point_at_screen(point[0], point[1], 0.0)
+            if projected is not None:
+                return projected
+        return ViewportMixin.screen_to_world(self, point)
 
     def road_endpoint_from_event(
         self, event: object,
