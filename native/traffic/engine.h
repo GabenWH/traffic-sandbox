@@ -9,6 +9,8 @@ struct NTConnection {
     double hx, hy, px, py;
 };
 struct NTPoint { double x, y; };
+// Pedestrian-only paths and active walkers share the same native clock as cars.
+struct NTPedestrianState { int id, lane, waiting; double distance, x, y; };
 struct NTSection { double start, end, offset; int key; };
 struct NTMovement { double start, end, signal_start; int connection, incoming; };
 struct NTSpawn {
@@ -58,11 +60,17 @@ int nt_clock(void*, double, double, double);
 int nt_waiting(void*, int, double);
 int nt_winner(void*, int, int, int);
 int nt_speed(void*, double);
+int nt_key_speed(void*, int, double);
 int nt_control(void*, int, int);
 int nt_signal_aspects(void*, const unsigned char*, int);
 int nt_profile_enable(void*, int);
 int nt_profile_read(void*, NTProfile*);
 int nt_step(void*, double);
+int nt_pedestrian_lane(void*, const NTPoint*, int, double);
+int nt_pedestrian_spawn(void*, int, int, double);
+int nt_pedestrian_waits(void*);
+const NTPedestrianState* nt_pedestrian_states(void*, int*);
+const NTPedestrianState* nt_pedestrian_completed(void*, int*);
 const NTState* nt_states(void*, int*);
 int nt_shared_vehicle(void*, int, NTSharedVehicle*);
 const char* nt_shared_text(void*, int, int);

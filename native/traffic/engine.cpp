@@ -30,6 +30,19 @@ struct Route {
     std::vector<int> edge_ids;
     double cost=0;
 };
+struct PedestrianLane {
+    std::vector<NTPoint> points;
+    std::vector<double> ends;
+    double length=0, crossing=-1;
+    NTPoint crossing_point{};
+};
+struct Pedestrian {
+    int id=0, lane=0;
+    size_t segment=0;
+    double distance=0, speed=0;
+    NTPoint position{};
+    bool passed=false, waiting=false;
+};
 struct Car {
     NTSpawn s{};
     std::string id, reason, phantom;
@@ -77,6 +90,11 @@ public:
     std::vector<int> signal_block_counts, signal_entry_block_counts;
     std::vector<unsigned char> signal_aspects;
     std::vector<Route> routes;
+    std::vector<PedestrianLane> pedestrian_lanes;
+    std::vector<Pedestrian> pedestrians;
+    std::unordered_map<int,size_t> pedestrian_indices;
+    std::vector<NTPedestrianState> pedestrian_output, pedestrian_completed;
+    int pedestrian_waits=0;
     std::map<int,std::unique_ptr<Car>> cars;
     std::map<int,Arrival> arrivals;
     std::map<int,std::vector<int>> external_claims;
@@ -244,8 +262,22 @@ public:
         while(c.route_cursor<ms.size() && ms[c.route_cursor].end<=c.s.distance) ++c.route_cursor;
         return c.route_cursor<ms.size()?static_cast<int>(c.route_cursor):-1;
     }
+    std::unordered_map<int,double> key_speeds;
     double cruise(Car& c) {
         double mph=c.s.cap<0?speed:std::min(speed,c.s.cap), v=mph*22/15;
+        auto& sections=route(c).sections;
+        // Road limits share the canonical occupancy keys for all vehicle types.
+        auto first=std::upper_bound(sections.begin(),sections.end(),c.s.distance,
+            [](double distance,const NTSection& section){return distance<section.end;});
+        for(auto it=first;it!=sections.end();++it) {
+            auto& section=*it;
+            if(section.start-c.s.distance>v*v/48) break;
+            auto limit=key_speeds.find(section.key);
+            if(limit==key_speeds.end()) continue;
+            double road=limit->second*22/15;
+            double ahead=std::max(0.0,section.start-c.s.distance);
+            v=std::min(v,std::sqrt(road*road+48*ahead));
+        }
         auto& ms=route(c).movements;
         while(c.round_cursor<ms.size() && ms[c.round_cursor].end<=c.s.distance-c.s.length/2) ++c.round_cursor;
         for(size_t i=c.round_cursor;i<ms.size();++i) {
@@ -564,6 +596,53 @@ public:
         return {c.s.handle,c.s.state,c.s.signal,c.latest_claim,alive,
             c.s.distance,c.s.speed,c.position.x,c.position.y,c.heading.x,c.heading.y,c.s.desired,c.s.dwell,c.s.entry,c.reason.c_str(),c.phantom.c_str(),c.yellow_movement,int(c.yellow_go)};
     }
+    static uint64_t cell_key(int x,int y) {return (uint64_t(uint32_t(x))<<32)|uint32_t(y);}
+    static NTPedestrianState pedestrian_state(const Pedestrian& p) {
+        return {p.id,p.lane,int(p.waiting),p.distance,p.position.x,p.position.y};
+    }
+    static void pedestrian_position(Pedestrian& p,const PedestrianLane& lane) {
+        while(p.segment+1<lane.ends.size() && p.distance>=lane.ends[p.segment]) ++p.segment;
+        double start=p.segment?lane.ends[p.segment-1]:0.0;
+        double length=lane.ends[p.segment]-start;
+        double t=length>0?clamp((p.distance-start)/length,0,1):0;
+        auto a=lane.points[p.segment],b=lane.points[p.segment+1];
+        p.position={a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t};
+    }
+    void advance_pedestrians(double dt) {
+        if(pedestrians.empty()) return;
+        constexpr double cell=100.0,radius=60.0;
+        std::unordered_map<uint64_t,std::vector<NTPoint>> traffic_grid;
+        for(const auto& pair:cars) {
+            NTPoint position=pair.second->position;
+            traffic_grid[cell_key(int(std::floor(position.x/cell)),int(std::floor(position.y/cell)))].push_back(position);
+        }
+        // A lane's crossing is shared. Inspect nearby vehicles at most once
+        // per lane per tick, not once per waiting pedestrian.
+        std::vector<signed char> crossing_blocked(pedestrian_lanes.size(),-1);
+        for(size_t i=0;i<pedestrians.size();) {
+            auto& p=pedestrians[i];const auto& lane=pedestrian_lanes[size_t(p.lane)];
+            double next=std::min(lane.length,p.distance+p.speed*dt);
+            bool previously_waiting=p.waiting;p.waiting=false;
+            if(!p.passed && lane.crossing>=0 && next>=lane.crossing) {
+                signed char& cached=crossing_blocked[size_t(p.lane)];
+                if(cached<0) {
+                    bool blocked=false;int cx=int(std::floor(lane.crossing_point.x/cell)),cy=int(std::floor(lane.crossing_point.y/cell));
+                    for(int dx=-1;dx<=1 && !blocked;++dx) for(int dy=-1;dy<=1 && !blocked;++dy) {
+                        auto found=traffic_grid.find(cell_key(cx+dx,cy+dy));if(found==traffic_grid.end()) continue;
+                        for(auto v:found->second) if(std::hypot(v.x-lane.crossing_point.x,v.y-lane.crossing_point.y)<=radius) {blocked=true;break;}
+                    }
+                    cached=blocked?1:0;
+                }
+                if(cached){next=lane.crossing;p.waiting=true;if(!previously_waiting)++pedestrian_waits;}else p.passed=true;
+            }
+            p.distance=next;pedestrian_position(p,lane);
+            if(p.distance+1e-9>=lane.length && !p.waiting) {
+                pedestrian_completed.push_back(pedestrian_state(p));pedestrian_indices.erase(p.id);
+                if(i+1<pedestrians.size()){pedestrians[i]=pedestrians.back();pedestrian_indices[pedestrians[i].id]=i;}
+                pedestrians.pop_back();
+            } else ++i;
+        }
+    }
     void tick(double dt) {
         trace.clear();trace_vehicles.clear();
         time+=dt;
@@ -744,6 +823,7 @@ public:
             c.signal_occupancy.clear();arrivals.erase(h);completed.push_back(state(c,0));
             retired.push_back(std::move(cars.at(h)));cars.erase(h);
         }
+        advance_pedestrians(dt);
         std::set<int> current;for(auto& c:candidates) current.insert(c.car->s.handle);
         for(auto it=waiting.begin();it!=waiting.end();) if(!current.count(it->first)) it=waiting.erase(it);else {it->second+=dt;++it;}
         for(int h:current) if(!waiting.count(h)) waiting[h]=dt;
@@ -791,10 +871,11 @@ public:
         if(routes[s.route].length<=0) return false;
         validate_spawn(s,id);
         Car candidate;candidate.s=s;geometry(candidate);
+        if(!key_speeds.empty()) candidate.s.speed=std::min(candidate.s.speed,cruise(candidate));
         for(auto& pair:cars) if(overlaps(candidate,*pair.second)) return false;
         index_current();
         if(lead(candidate,s.distance,22+s.length).second<22) return false;
-        insert(s,id);return true;
+        insert(candidate.s,id);return true;
     }
     int compile_path(const SpawnPath& path) {
         if(!path.found) return -1;
@@ -938,8 +1019,26 @@ int nt_signal_aspects(void* p,const unsigned char* aspects,int n){return guarded
 int nt_profile_enable(void* p,int enabled){return guarded([&]{require(enabled==0 || enabled==1,"invalid profile flag");auto& e=engine(p);
     e.profile={};e.profile_enabled=enabled!=0;return 0;});}
 int nt_profile_read(void* p,NTProfile* profile){return guarded([&]{require(profile!=nullptr,"missing profile output");*profile=engine(p).profile;return 0;});}
-int nt_step(void* p,double dt){return guarded([&]{check_finite(dt);require(dt>=0,"invalid timestep");auto& e=engine(p);e.completed.clear();e.retired.clear();double remaining=dt;
+int nt_step(void* p,double dt){return guarded([&]{check_finite(dt);require(dt>=0,"invalid timestep");auto& e=engine(p);e.completed.clear();e.retired.clear();e.pedestrian_completed.clear();double remaining=dt;
     if(dt<=0.05+1e-9) e.tick(dt);else while(remaining>1e-9){double part=std::min(0.05,remaining);e.tick(part);remaining-=part;}return 0;});}
+int nt_pedestrian_lane(void* p,const NTPoint* points,int n,double crossing_fraction){return guarded([&]{
+    auto& e=engine(p);check_finite(crossing_fraction);require(n>=2 && points && crossing_fraction>=-1 && crossing_fraction<=1,"invalid pedestrian lane");PedestrianLane lane;
+    for(int i=0;i<n;++i){check_finite(points[i].x);check_finite(points[i].y);if(lane.points.empty() || std::hypot(points[i].x-lane.points.back().x,points[i].y-lane.points.back().y)>0){
+        if(!lane.points.empty()){lane.length+=std::hypot(points[i].x-lane.points.back().x,points[i].y-lane.points.back().y);lane.ends.push_back(lane.length);}lane.points.push_back(points[i]);}}
+    require(lane.length>0,"degenerate pedestrian lane");
+    if(crossing_fraction>=0){lane.crossing=lane.length*crossing_fraction;Pedestrian p{};p.distance=lane.crossing;Engine::pedestrian_position(p,lane);lane.crossing_point=p.position;}
+    e.pedestrian_lanes.push_back(std::move(lane));return int(e.pedestrian_lanes.size()-1);});}
+int nt_pedestrian_spawn(void* p,int id,int lane,double speed){return guarded([&]{auto& e=engine(p);check_finite(speed);
+    require(id>=0 && lane>=0 && size_t(lane)<e.pedestrian_lanes.size() && speed>0,"invalid pedestrian spawn");require(!e.pedestrian_indices.count(id),"duplicate pedestrian ID");
+    Pedestrian walker{};walker.id=id;walker.lane=lane;walker.speed=speed;walker.position=e.pedestrian_lanes[size_t(lane)].points.front();
+    e.pedestrian_indices[id]=e.pedestrians.size();e.pedestrians.push_back(walker);return 0;});}
+int nt_pedestrian_waits(void* p){return guarded([&]{return engine(p).pedestrian_waits;});}
+const NTPedestrianState* nt_pedestrian_states(void* p,int* count){try{auto& e=engine(p);e.pedestrian_output.clear();e.pedestrian_output.reserve(e.pedestrians.size());
+    for(const auto& person:e.pedestrians){e.pedestrian_output.push_back(Engine::pedestrian_state(person));}
+    *count=int(e.pedestrian_output.size());return e.pedestrian_output.data();
+    }catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
+const NTPedestrianState* nt_pedestrian_completed(void* p,int* count){try{auto& e=engine(p);*count=int(e.pedestrian_completed.size());return e.pedestrian_completed.data();
+    }catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
 const NTState* nt_states(void* p,int* count){try{auto& e=engine(p);e.output.clear();for(auto& pair:e.cars)e.output.push_back(e.state(*pair.second));e.output.insert(e.output.end(),e.completed.begin(),e.completed.end());*count=static_cast<int>(e.output.size());return e.output.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
 int nt_shared_vehicle(void* p,int h,NTSharedVehicle* view){return guarded([&]{require(view!=nullptr,"missing shared view");auto& c=engine(p).car(h);*view={&c.s,&c.position,&c.heading,&c.latest_claim,&c.yellow_movement,&c.yellow_go};return 0;});}
 const char* nt_shared_text(void* p,int h,int field){try{require(field==0 || field==1,"unknown text field");auto& c=engine(p).shared_car(h);return field?c.phantom.c_str():c.reason.c_str();}catch(const std::exception& ex){error=ex.what();return nullptr;}}
@@ -1000,3 +1099,5 @@ int nt_trace_enable(void* p,int enabled){return guarded([&]{engine(p).trace_enab
 const NTTrace* nt_trace(void* p,int* count){try{auto& e=engine(p);*count=int(e.trace.size());return e.trace.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
 const int* nt_trace_vehicles(void* p,int* count){try{auto& e=engine(p);*count=int(e.trace_vehicles.size());return e.trace_vehicles.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
 }
+
+int nt_key_speed(void* p,int key,double mph){return guarded([&]{check_finite(mph);require(mph>0,"invalid road speed");engine(p).key_speeds[key]=mph;return 0;});}

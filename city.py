@@ -32,6 +32,7 @@ from models import (
     Point,
     Road,
 )
+from pedestrian_mobility import PedestrianNetwork
 from pathfinding import Path
 from roundabouts import validate_roundabout_dimensions
 
@@ -132,6 +133,7 @@ class CityMap:
     buildings: list[Building] = field(default_factory=list)
     mobility: MobilityNetwork = field(default_factory=MobilityNetwork, init=False, repr=False)
     mobility_revision: int = field(default=0, init=False, repr=False)
+    pedestrian_network: PedestrianNetwork = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.rebuild_mobility_network()
@@ -164,6 +166,9 @@ class CityMap:
         lane_width: float = 12.0,
         forward_lane_count: int = 1,
         reverse_lane_count: int = 1,
+        speed_limit_mph: float | None = None,
+        pedestrian_sides: tuple[str, ...] | None = None,
+        pedestrian_offset: float = 3.0,
         buildable_id: str | None = None,
         lane_metadata: list[dict[str, object]] | None = None,
         create_intersections: bool = True,
@@ -186,6 +191,9 @@ class CityMap:
             lane_width=float(lane_width),
             forward_lane_count=int(forward_lane_count),
             reverse_lane_count=int(reverse_lane_count),
+            speed_limit_mph=speed_limit_mph,
+            pedestrian_sides=pedestrian_sides,
+            pedestrian_offset=pedestrian_offset,
             buildable_id=buildable_id,
         )
         road.rebuild_lanes(lane_metadata)
@@ -341,6 +349,33 @@ class CityMap:
         self.rebuild_mobility_network()
         self._remove_trees_overlapping(road)
         return new_pieces[0]
+
+    def add_pedestrian_path(
+        self,
+        centerline: list[Point],
+        *,
+        name: str | None = None,
+        width: float = 6.0,
+        elevations: list[float] | None = None,
+        road_id: str | None = None,
+        create_intersections: bool = True,
+        endpoint_overrun_tolerance: float = DEFAULT_ENDPOINT_OVERRUN_TOLERANCE,
+    ) -> Road:
+        """Add a pedestrian-only segment to the same authored network as roads.
+
+        Intersections split and connect paths at the same elevation. No vehicle
+        lanes or vehicle ports are generated for this segment.
+        """
+        from math import isfinite
+        if isinstance(width, bool) or not isfinite(width) or width <= 0:
+            raise ValueError("Path width must be finite and positive")
+        return self.add_road(
+            centerline, name=name, road_id=road_id, elevations=elevations,
+            lane_width=width, forward_lane_count=0, reverse_lane_count=0,
+            pedestrian_sides=('center',), pedestrian_offset=0.0,
+            create_intersections=create_intersections,
+            endpoint_overrun_tolerance=endpoint_overrun_tolerance,
+        )
 
     def remove_road(self, road: Road) -> None:
         """Remove an authored segment and rebuild its remaining connections."""
@@ -585,6 +620,13 @@ class CityMap:
             VEHICLE_LAYER,
             build_vehicle_layer(self.roads, self.intersections),
         )
+        self.pedestrian_network = PedestrianNetwork(self.roads, self.intersections)
+        self.mobility.set_layer('pedestrians', self.pedestrian_network.layer)
+
+    def find_pedestrian_route(self, start: Point, destination: Point):
+        """Route between points on current road-owned walkways, in either direction."""
+        return self.pedestrian_network.route(start, destination)
+
 
     def find_vehicle_route(
         self,

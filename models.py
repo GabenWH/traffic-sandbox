@@ -385,6 +385,7 @@ class Lane:
     road_id: str | None = None
     direction: str = "forward"
     lane_index: int = 0
+    speed_limit_mph: float | None = None
 
     @property
     def id(self) -> str:
@@ -437,6 +438,19 @@ def offset_polyline(points: list[Point], offset: float) -> list[Point]:
     return result
 
 
+@dataclass(frozen=True)
+class PedestrianLane:
+    """A bidirectional, pedestrian-only child of a road."""
+
+    road_id: str
+    side: str
+    points: tuple[Point, ...]
+
+    @property
+    def id(self) -> str:
+        return f"{self.road_id}:pedestrian:{self.side}"
+
+
 @dataclass
 class Road(Buildable):
     """An authored centreline with generated child lanes."""
@@ -450,9 +464,22 @@ class Road(Buildable):
     reverse_lane_count: int = 1
     buildable_id: str | None = None
     lanes: list[Lane] = field(default_factory=list)
+    speed_limit_mph: float | None = None
+    pedestrian_sides: tuple[str, ...] | None = None
+    pedestrian_offset: float = 3.0
+    pedestrian_lanes: list[PedestrianLane] = field(default_factory=list, init=False)
     inspection_title = "Road"
 
     def __post_init__(self) -> None:
+        if self.pedestrian_sides is None:
+            # Legacy Arcata imports encode the road class in the name. New
+            # callers can specify sides explicitly, including no walkways.
+            freeway = self.name.lower().endswith(('[motorway]', '[motorway_link]'))
+            self.pedestrian_sides = (('center',) if self.forward_lane_count + self.reverse_lane_count == 0
+                                     else () if freeway else ('left', 'right'))
+        self._validate_pedestrian_configuration()
+        if self.speed_limit_mph is not None and (isinstance(self.speed_limit_mph,bool) or not isfinite(self.speed_limit_mph) or self.speed_limit_mph <= 0):
+            raise ValueError("Road speed limit must be positive and finite")
         if not self.elevations:
             self.elevations = [0.0] * len(self.centerline)
         if len(self.elevations) != len(self.centerline):
@@ -482,7 +509,7 @@ class Road(Buildable):
 
     @property
     def width(self) -> float:
-        return self.lane_width * (self.forward_lane_count + self.reverse_lane_count)
+        return self.lane_width * max(1, self.forward_lane_count + self.reverse_lane_count)
 
     @property
     def route_inputs(self) -> tuple[RoadPort, ...]:
@@ -613,6 +640,9 @@ class Road(Buildable):
             lane_width=self.lane_width,
             forward_lane_count=self.forward_lane_count,
             reverse_lane_count=self.reverse_lane_count,
+            speed_limit_mph=self.speed_limit_mph,
+            pedestrian_sides=self.pedestrian_sides,
+            pedestrian_offset=self.pedestrian_offset,
             buildable_id=self.buildable_id,
             phase=self.phase,
             inventory=self.inventory.scaled(first_fraction),
@@ -638,6 +668,9 @@ class Road(Buildable):
             lane_width=self.lane_width,
             forward_lane_count=self.forward_lane_count,
             reverse_lane_count=self.reverse_lane_count,
+            speed_limit_mph=self.speed_limit_mph,
+            pedestrian_sides=self.pedestrian_sides,
+            pedestrian_offset=self.pedestrian_offset,
             buildable_id=self.buildable_id,
             phase=self.phase,
             inventory=self.inventory.scaled(second_fraction),
@@ -686,8 +719,8 @@ class Road(Buildable):
         if self.forward_lane_count < 0 or self.reverse_lane_count < 0:
             raise ValueError("Lane counts cannot be negative")
         total = self.forward_lane_count + self.reverse_lane_count
-        if total < 1:
-            raise ValueError("A road needs at least one lane")
+        if total < 1 and self.pedestrian_sides != ('center',):
+            raise ValueError("A segment needs vehicle lanes or a center pedestrian path")
         if self.lane_width <= 0:
             raise ValueError("Lane width must be positive")
 
@@ -726,8 +759,34 @@ class Road(Buildable):
                     road_id=self.id,
                     direction=direction,
                     lane_index=lane_index,
+                    speed_limit_mph=self.speed_limit_mph,
                 ))
         self.lanes = lanes
+        self._validate_pedestrian_configuration()
+        self.pedestrian_lanes = [
+            PedestrianLane(
+                self.id, side,
+                (tuple(self.centerline) if side == "center" else
+                 tuple(offset_polyline(self.centerline, sign * (self.width / 2 + self.pedestrian_offset)))),
+            )
+            for side, sign in (('left', 1), ('right', -1), ('center', 0))
+            if side in self.pedestrian_sides
+        ]
+
+    def _validate_pedestrian_configuration(self) -> None:
+        sides = self.pedestrian_sides
+        if (not isinstance(sides, (tuple, list))
+                or any(side not in ('left', 'right', 'center') for side in sides)
+                or len(set(sides)) != len(sides)):
+            raise ValueError("Pedestrian sides must contain left, right or center once")
+        if ("center" in sides and (len(sides) != 1
+                or self.forward_lane_count + self.reverse_lane_count != 0)):
+            raise ValueError("A center pedestrian path requires zero vehicle lanes")
+        self.pedestrian_sides = tuple(sides)
+        if (isinstance(self.pedestrian_offset, bool)
+                or not isinstance(self.pedestrian_offset, (int, float))
+                or not isfinite(self.pedestrian_offset) or self.pedestrian_offset < 0):
+            raise ValueError("Pedestrian offset must be finite and nonnegative")
 
 
 @dataclass(frozen=True, eq=False)

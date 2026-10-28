@@ -141,8 +141,12 @@ class NativeRoadSimulation:
             connection, incoming, offset, control_offset = -1, -1, 0.0, 0.0
             if link.kind == 'lane':
                 key, kind = ('lane', value.id), 1
+                if value.speed_limit_mph is not None:
+                    e._call('nt_key_speed', e._key(key), value.speed_limit_mph)
             elif link.kind == 'road_port':
                 key, kind = ('road_port', value.port.id, value.lane.id), 2
+                if value.lane.speed_limit_mph is not None:
+                    e._call('nt_key_speed', e._key(key), value.lane.speed_limit_mph)
             elif link.kind == 'lane_connection':
                 key, kind = ('lane_connection', value.id), 3
                 connection = e._connection_ids[id(value)]
@@ -341,7 +345,7 @@ class NativeRoadSimulation:
             return None
         retained = self.external_routes.get(id(route))
         if retained is None:
-            proxy = SimpleNamespace(points=points, controlled_movements=_controlled_movement_ranges(route),
+            proxy = SimpleNamespace(route=route, points=points, controlled_movements=_controlled_movement_ranges(route),
                                     route_segments=_route_occupancy_segments(route), _route_cache=RouteState())
             native_route = e.register_route(proxy)
             self.external_routes[id(route)] = (route, native_route)

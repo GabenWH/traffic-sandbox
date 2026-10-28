@@ -384,6 +384,17 @@ def build_city(paths: list[Path], boundary_path: Path) -> tuple[CityMap, list[st
     return city, portal_ids, metadata
 
 
+def posted_speed_mph(tags):
+    """Read numeric OSM maxspeed; unknown textual signs use engine fallback."""
+    import re
+    raw=str(tags.get('maxspeed','')).strip().lower()
+    match=re.fullmatch(r'(\d+(?:\.\d+)?)\s*(mph|km/h|kph)?',raw)
+    if not match:return None
+    value=float(match[1])
+    if match[2]!='mph':value/=1.609344
+    return value if value>0 else None
+
+
 def add_piece(
     way_id: str, tags: dict[str, str], points: list[GeoPoint], piece_index: int,
     roads: list[Road], endpoint_position: dict[tuple[object, ...], tuple[float, float]],
@@ -407,6 +418,7 @@ def add_piece(
         id=road_id, name=name,
         centerline=[to_feet((point.lon, point.lat)) for point in cleaned],
         forward_lane_count=forward, reverse_lane_count=reverse,
+        speed_limit_mph=posted_speed_mph(tags),
     )
     roads.append(road)
     for point in (cleaned[0], cleaned[-1]):

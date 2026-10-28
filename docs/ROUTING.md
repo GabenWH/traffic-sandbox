@@ -43,9 +43,9 @@ geometric `ManeuverDefinition` from its `ControlDefinition`, allowing driving
 systems to interpret turns, merges, yields, stops, or signals without putting
 that behavior inside A*.
 
-`CityMap.rebuild_mobility_network()` replaces only the generated vehicle layer,
-so future authored pedestrian, transit, and transfer layers can remain intact
-when roads change. `CityMap.find_vehicle_route()` is a convenience for searching
+`CityMap.rebuild_mobility_network()` replaces the generated vehicle and
+pedestrian layers. Other named layers, such as transit and transfers, remain
+intact when roads change. `CityMap.find_vehicle_route()` is a convenience for searching
 from the beginning of one lane to the end of another.
 `CityMap.find_vehicle_route_between()` accepts precise `LanePosition` values,
 adds temporary partial-lane edges to the query graph, and can therefore start or
@@ -86,3 +86,82 @@ The car brain also derives turn-signal intent from the next route-carried
 movement, U-turns use the left signal, and through movements do not signal.
 Intent remains owned by the brain and is merely rendered by the UI; junctions
 do not control vehicle indicators.
+
+
+## Road-owned pedestrian network
+
+`Road.pedestrian_sides` configures left, right, both, or no walkways.
+`Road.pedestrian_offset` is the distance from the carriageway edge to the
+walkway centerline, in world feet. `Road.rebuild_lanes()` regenerates both
+vehicle lanes and separate `Road.pedestrian_lanes`; vehicle consumers continue
+using `Road.lanes` exclusively. Each pedestrian lane has a structural identity
+`<road id>:pedestrian:<side>` and supports walking in both directions even on
+a one-way road. Road splits copy the configuration to both resulting roads.
+Persistence saves the configuration and regenerates the geometry on load.
+
+For compatibility, a road with unspecified sides defaults to both walkways,
+except legacy Arcata road names ending in `[motorway]` or `[motorway_link]`,
+which default to neither. This default is an assumption, not mapped sidewalk
+data. Supplying `pedestrian_sides=()` explicitly disables walkways on any road.
+
+`PedestrianNetwork` compiles the exact road-owned lane objects into the
+`pedestrians` mobility layer. It does not generate a second set of lane
+geometry. `CityMap.find_pedestrian_route(start, destination)` snaps a query to
+those walkways and runs A* with distance costs and a Euclidean heuristic.
+Temporary partial-lane query edges allow arbitrary positions without adding
+per-building nodes to the persistent graph. The route's flattened points can
+be passed to `NativeTrafficEngine.register_pedestrian_lane()` for C++ movement.
+Road ownership and graph compilation remain in Python; active walkers advance
+inside the native engine. Rebuilding roads does not migrate walkers already
+registered with that engine; their paths must be replaced by the caller.
+
+Junction connectors are still inferred straight links between walkway ends.
+They are not authored crosswalks or accessibility rules. The current native
+walker prototype checks only its first crossing and waits for vehicles; this
+change does not add vehicle yielding, crowd collisions, transit, or active
+pedestrian save/load. Walking cannot be routed on a city with no walkways.
+
+Example:
+
+```python
+road = city.add_road(
+    [(0, 0), (300, 0)],
+    pedestrian_sides=("left", "right"),
+    pedestrian_offset=3.0,
+)
+route = city.find_pedestrian_route((20, 15), (240, 15))
+assert city.pedestrian_network.lanes[0] is road.pedestrian_lanes[0]
+```
+
+
+### Pedestrian-only paths
+
+A standalone walkway is a segment of the same authored road network with zero
+vehicle lanes and exactly one `center` pedestrian lane. Its geometry follows
+the authored centerline directly, rather than generating sidewalks on either
+side of an imaginary carriageway. `Road.width` returns its physical path width;
+for a street it continues to return the carriageway width.
+
+```python
+campus_walk = city.add_pedestrian_path(
+    [(300, 0), (300, 500)], name="Campus walk", width=6.0,
+    endpoint_overrun_tolerance=0,
+)
+assert campus_walk.lanes == []
+assert campus_walk.pedestrian_sides == ("center",)
+```
+
+The helper uses `CityMap.add_road()` with zero forward/reverse vehicle lanes,
+so splitting, same-elevation junction attachment, editing, deletion and
+persistence use the existing lifecycle. The pedestrian layer includes its
+center lane, while the vehicle layer gets no lane or road-port nodes from it.
+A path can connect two streets for pedestrians without giving cars a shortcut.
+Crossings at distinct elevations remain disconnected. Elevation is authored
+per segment: the point-based route query still snaps in 2D, so overlapping
+levels cannot yet be selected explicitly by a query.
+
+These are generic authored paths; no campus, trail or OpenStreetMap footway
+dataset is imported by this change. Access permissions beyond pedestrian versus
+vehicle, path surfaces, stairs, wheelchair access and bicycle rules are not yet
+represented. Path junction links still use the inferred pedestrian connectors
+described above.

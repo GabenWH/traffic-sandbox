@@ -38,6 +38,11 @@ class _Point(C.Structure):
     _fields_ = [('x', C.c_double), ('y', C.c_double)]
 
 
+class NativePedestrianState(C.Structure):
+    _fields_ = [('id', C.c_int), ('lane', C.c_int), ('waiting', C.c_int),
+                ('distance', C.c_double), ('x', C.c_double), ('y', C.c_double)]
+
+
 class _Section(C.Structure):
     _fields_ = [(x, C.c_double) for x in ('start', 'end', 'offset')] + [('key', C.c_int)]
 
@@ -124,12 +129,18 @@ def _library():
         'nt_clock': (C.c_int, [C.c_void_p, C.c_double, C.c_double, C.c_double]),
         'nt_waiting': (C.c_int, [C.c_void_p, C.c_int, C.c_double]),
         'nt_winner': (C.c_int, [C.c_void_p, C.c_int, C.c_int, C.c_int]),
+        'nt_key_speed': (C.c_int, [C.c_void_p, C.c_int, C.c_double]),
         'nt_speed': (C.c_int, [C.c_void_p, C.c_double]),
         'nt_control': (C.c_int, [C.c_void_p, C.c_int, C.c_int]),
         'nt_signal_aspects': (C.c_int, [C.c_void_p, C.POINTER(C.c_ubyte), C.c_int]),
         'nt_profile_enable': (C.c_int, [C.c_void_p, C.c_int]),
         'nt_profile_read': (C.c_int, [C.c_void_p, C.POINTER(_Profile)]),
         'nt_step': (C.c_int, [C.c_void_p, C.c_double]),
+        'nt_pedestrian_lane': (C.c_int, [C.c_void_p, C.POINTER(_Point), C.c_int, C.c_double]),
+        'nt_pedestrian_spawn': (C.c_int, [C.c_void_p, C.c_int, C.c_int, C.c_double]),
+        'nt_pedestrian_waits': (C.c_int, [C.c_void_p]),
+        'nt_pedestrian_states': (C.POINTER(NativePedestrianState), [C.c_void_p, C.POINTER(C.c_int)]),
+        'nt_pedestrian_completed': (C.POINTER(NativePedestrianState), [C.c_void_p, C.POINTER(C.c_int)]),
         'nt_states': (C.POINTER(NativeVehicleView), [C.c_void_p, C.POINTER(C.c_int)]),
         'nt_shared_vehicle': (C.c_int, [C.c_void_p, C.c_int, C.POINTER(_SharedVehicle)]),
         'nt_shared_text': (C.c_char_p, [C.c_void_p, C.c_int, C.c_int]),
@@ -249,6 +260,12 @@ class NativeTrafficEngine:
 
     def register_route(self, car):
         self.prepare((car,))
+        for link in getattr(getattr(car, 'route', None), 'edges', ()):
+            lane = getattr(link.value, 'lane', None) if hasattr(link, 'value') else None
+            if getattr(link, 'kind', None) == 'lane' and lane is None:
+                lane = link.value
+            if lane is not None and lane.speed_limit_mph is not None:
+                self._call('nt_key_speed', self._key(('lane', lane.id)), lane.speed_limit_mph)
         signature = (id(car.points), id(car.route_segments), id(car.controlled_movements))
         route = self._routes.get(signature)
         if route is None:
@@ -286,6 +303,34 @@ class NativeTrafficEngine:
 
     def step(self, dt):
         self._call('nt_step', dt)
+
+    def register_pedestrian_lane(self, points, crossing_fraction=-1.0):
+        """Register a separate pedestrian-only route once; points are world feet."""
+        points = tuple(points)
+        array = (_Point * len(points))(*(_Point(*point) for point in points))
+        return self._call('nt_pedestrian_lane', array, len(points), crossing_fraction)
+
+    def spawn_pedestrian(self, person_id, lane_id, speed):
+        """Admit an active walker; movement occurs inside subsequent nt_step calls."""
+        self._call('nt_pedestrian_spawn', person_id, lane_id, speed)
+
+    def _pedestrian_rows(self, function):
+        if not self._ptr:
+            raise RuntimeError('Native traffic engine is closed')
+        count = C.c_int()
+        pointer = getattr(self._lib, function)(self._ptr, C.byref(count))
+        if count.value < 0:
+            raise RuntimeError(self._lib.nt_error().decode())
+        return [NativePedestrianState.from_buffer_copy(pointer[i]) for i in range(count.value)]
+
+    def pedestrian_states(self):
+        return self._pedestrian_rows('nt_pedestrian_states')
+
+    def completed_pedestrians(self):
+        return self._pedestrian_rows('nt_pedestrian_completed')
+
+    def pedestrian_waits(self):
+        return self._call('nt_pedestrian_waits')
 
     def vehicle_views(self):
         """Borrow native records; do not retain them across engine calls."""

@@ -73,6 +73,9 @@ def world_to_dict(
                     "lane_width": road.lane_width,
                     "forward_lane_count": road.forward_lane_count,
                     "reverse_lane_count": road.reverse_lane_count,
+                    "speed_limit_mph": road.speed_limit_mph,
+                    "pedestrian_sides": list(road.pedestrian_sides),
+                    "pedestrian_offset": road.pedestrian_offset,
                     "buildable_id": road.buildable_id,
                     "buildable_state": _buildable_state_to_dict(road),
                     "lanes": [
@@ -238,6 +241,9 @@ def world_from_dict(data: object) -> LoadedWorld:
                 lane_width=_positive_number(road_data.get("lane_width"), f"{path}.lane_width"),
                 forward_lane_count=forward_lane_count,
                 reverse_lane_count=reverse_lane_count,
+                speed_limit_mph=road_data.get("speed_limit_mph"),
+                pedestrian_sides=road_data.get("pedestrian_sides"),
+                pedestrian_offset=road_data.get("pedestrian_offset", 3.0),
                 buildable_id=(
                     None
                     if road_data.get("buildable_id") is None
