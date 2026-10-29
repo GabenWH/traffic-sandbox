@@ -1032,6 +1032,14 @@ int nt_pedestrian_spawn(void* p,int id,int lane,double speed){return guarded([&]
     require(id>=0 && lane>=0 && size_t(lane)<e.pedestrian_lanes.size() && speed>0,"invalid pedestrian spawn");require(!e.pedestrian_indices.count(id),"duplicate pedestrian ID");
     Pedestrian walker{};walker.id=id;walker.lane=lane;walker.speed=speed;walker.position=e.pedestrian_lanes[size_t(lane)].points.front();
     e.pedestrian_indices[id]=e.pedestrians.size();e.pedestrians.push_back(walker);return 0;});}
+int nt_pedestrian_place(void* ptr,int id,double distance,int waiting){return guarded([&]{
+    auto& e=engine(ptr);check_finite(distance);auto found=e.pedestrian_indices.find(id);
+    require(found!=e.pedestrian_indices.end(),"unknown pedestrian ID");auto& p=e.pedestrians[found->second];
+    const auto& lane=e.pedestrian_lanes[size_t(p.lane)];require(distance>=0 && distance<=lane.length,"invalid pedestrian distance");
+    p.distance=distance;p.waiting=waiting!=0;p.segment=0;
+    p.passed=lane.crossing<0 || distance>lane.crossing || (distance==lane.crossing && !p.waiting);
+    e.pedestrian_position(p,lane);return 0;});}
+int nt_pedestrian_count(void* p){return guarded([&]{return int(engine(p).pedestrians.size());});}
 int nt_pedestrian_waits(void* p){return guarded([&]{return engine(p).pedestrian_waits;});}
 const NTPedestrianState* nt_pedestrian_states(void* p,int* count){try{auto& e=engine(p);e.pedestrian_output.clear();e.pedestrian_output.reserve(e.pedestrians.size());
     for(const auto& person:e.pedestrians){e.pedestrian_output.push_back(Engine::pedestrian_state(person));}

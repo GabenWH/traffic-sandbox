@@ -87,5 +87,18 @@ class TransitTests(unittest.TestCase):
         self.assertGreaterEqual(departures[1]['time']-departures[0]['time'], 300)
 
 
+class TerminalFairnessTests(unittest.TestCase):
+    def test_second_bus_gets_departure_when_first_returns_before_headway(self):
+        from dataclasses import replace
+        sim=TransitTests().system(capacity=1)
+        sim.lines['L']=replace(sim.lines['L'],headway_seconds=1200)
+        sim.add_bus(Bus('bus-2','L',capacity=1,service_at=30))
+        sim.request_trip(1,(100,15),(5740,15));sim.update(60)
+        sim.request_trip(2,(100,15),(5740,15));sim.update(1250)
+        departures=[e for e in sim.events if e['event']=='depart' and e['bus']=='bus-2']
+        self.assertTrue(departures)
+        self.assertEqual(departures[0]['passengers'],1)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -109,19 +109,18 @@ class FileActionsMixin:
         )
         if not path:
             return
-        state = world_to_dict(
-            self.city_map,
-            unit_system=self.unit_system,
-            camera_x=self.camera_x,
-            camera_y=self.camera_y,
-            camera_zoom=self.camera_zoom,
-            camera_3d=self.camera_3d_state(),
-        )
         try:
+            if getattr(self,"city_simulation",None) is not None:
+                self.city_simulation.sync_network()
+            state = world_to_dict(
+                self.city_map, unit_system=self.unit_system,
+                camera_x=self.camera_x, camera_y=self.camera_y, camera_zoom=self.camera_zoom,
+                camera_3d=self.camera_3d_state(),
+            )
             with open(path, "w", encoding="utf-8") as output:
-                json.dump(state, output, indent=2)
+                json.dump(state, output, indent=2, allow_nan=False)
                 output.write("\n")
-        except OSError as error:
+        except (OSError,ValueError,RuntimeError) as error:
             messagebox.showerror(
                 "Save world", f"Could not save the world:\n{error}", parent=self.root,
             )
@@ -136,6 +135,8 @@ class FileActionsMixin:
         self.simulation = TrafficSimulation()
         self.city_map = CityMap()
         ensure_western_land_port(self.city_map)
+        if getattr(self,"city_simulation",None) is not None:
+            self.install_city_runtime(self.prepare_city_runtime(self.city_map))
         self.restore_3d_camera(None)
         self.blank_map = True
         self.select_lane(self.simulation.lanes[0])
@@ -151,6 +152,10 @@ class FileActionsMixin:
         try:
             with open(path, encoding="utf-8") as source:
                 loaded = world_from_dict(json.load(source))
+            prepared = None
+            if getattr(self,"city_simulation",None) is not None:
+                ensure_western_land_port(loaded.city_map)
+                prepared = self.prepare_city_runtime(loaded.city_map)
         except (OSError, json.JSONDecodeError, WorldFormatError, ValueError) as error:
             messagebox.showerror(
                 "Load world", f"Could not load the world:\n{error}", parent=self.root,
@@ -163,6 +168,8 @@ class FileActionsMixin:
         self.construction_simulation.clear_trips()
         self.simulation = TrafficSimulation()
         self.city_map = loaded.city_map
+        if prepared is not None:
+            self.install_city_runtime(prepared)
         ensure_western_land_port(self.city_map)
         self.blank_map = True
         self.unit_system = loaded.unit_system

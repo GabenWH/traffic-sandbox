@@ -29,10 +29,10 @@ class Resident:
 
 
 class TownSimulation:
-    def __init__(self, city, sites, residents, *, work_start=27000, work_end=57600):
+    def __init__(self, city, sites, residents, *, work_start=27000, work_end=57600, traffic=None):
         self.city, self.sites = city, sites
         self.residents = {p.id:p for p in residents}
-        self.transit = TransitSimulation(city)
+        self.transit = TransitSimulation(city, traffic)
         self.fleet = PersistentFleet(self.transit, sites)
         self.work_start, self.work_end = work_start, work_end
         self.events = []

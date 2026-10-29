@@ -348,6 +348,28 @@ class ConstructionSimulation:
             self._depart_next_trip_if_ready()
         return tuple(completed)
 
+    def observe_arrivals(self, vehicles):
+        """Apply shared native completion events without advancing its clock."""
+        self.completed_road_vehicles.extend(vehicles)
+        for vehicle in vehicles:
+            trip = self._trips_by_vehicle_id.pop(vehicle.id, None)
+            if trip is not None:
+                self._apply_delivery(trip)
+                self.trips.remove(trip)
+
+    def update_external(self, city_map, elapsed_seconds):
+        """Coarse construction coordination when the city owns road movement."""
+        if not isfinite(elapsed_seconds) or elapsed_seconds < 0:
+            raise ValueError('Construction elapsed time must be finite and nonnegative')
+        self._city_map = city_map
+        self.sync_network(city_map)
+        self._restore_road_deconstruction_jobs(city_map)
+        self._advance_work(city_map, elapsed_seconds)
+        self._seconds_until_next_departure = max(0, self._seconds_until_next_departure-elapsed_seconds)
+        self._start_ready_work(city_map)
+        self._queue_outstanding_demand(city_map)
+        self._depart_next_trip_if_ready()
+
     def _restore_road_deconstruction_jobs(self, city_map: CityMap) -> None:
         """Resume saved work orders and salvage that has not reached export."""
         for road in city_map.roads:

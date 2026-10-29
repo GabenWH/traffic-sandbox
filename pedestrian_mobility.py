@@ -88,10 +88,12 @@ class PedestrianNetwork:
         path = graph.find_path(source, target, lambda node: dist(positions[node], end.point))
         if path is None:
             raise ValueError('No walking route')
+        links = (WalkLink('access', (tuple(start_point), start.point)), *path.edges,
+                 WalkLink('access', (end.point, tuple(destination_point))))
         points = []
         first_crossing = None
         distance = 0.0
-        for link in path.edges:
+        for link in links:
             for point in link.points:
                 if points and dist(points[-1], point) < 1e-8:
                     continue
@@ -105,4 +107,4 @@ class PedestrianNetwork:
         if len(points) < 2 or distance <= 0:
             raise ValueError('Walking route has zero length')
         crossing_fraction = -1.0 if first_crossing is None else first_crossing / distance
-        return WalkingRoute(tuple(points), path.edges, distance, crossing_fraction)
+        return WalkingRoute(tuple(points), links, distance, crossing_fraction)

@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from math import isfinite
 from mobility import nearest_lane_position, vehicle_route_points
 from models import polyline_length
+from vehicle import VehicleAppearance
 
 
 @dataclass
@@ -44,20 +45,28 @@ class PersistentFleet:
         return sum(v.site == site and v.phase != 'driving' and v.phase != 'waiting_for_parking'
                    for v in self.vehicles.values())
 
-    def dispatch(self, vehicle_id, destination):
+    def dispatch(self, vehicle_id, destination, *, origin_point=None):
         v = self.vehicles[vehicle_id]
         if v.phase != 'parked' or destination not in self.sites:
             return False
-        if destination == v.site:
+        if self.sites[destination]['road_position'] is None or self.sites[v.site]['road_position'] is None:
+            return False
+        if destination == v.site and origin_point is None:
             raise ValueError('Vehicle already at destination')
-        key = (v.site, destination)
+        key = (v.site, destination, None if origin_point is None else tuple(origin_point))
         if key not in self.routes:
             def accesses(site):
                 authored = self.sites[site]['road_position']
                 road = next(r for r in self.transit.city.roads if r.id == authored.lane.road_id)
                 return [nearest_lane_position(lane, authored.point)[0] for lane in road.lanes]
+            origins = accesses(v.site)
+            if origin_point is not None:
+                positions = [(nearest_lane_position(lane, origin_point), road) for road in self.transit.city.roads for lane in road.lanes]
+                if not positions:return False
+                nearest = min(positions, key=lambda x:x[0][1])[1]
+                origins = [nearest_lane_position(lane,origin_point)[0] for lane in nearest.lanes]
             candidates = [self.transit.city.find_vehicle_route_between(a, b)
-                          for a in accesses(v.site) for b in accesses(destination)]
+                          for a in origins for b in accesses(destination)]
             candidates = [r for r in candidates if r is not None]
             self.routes[key] = min(candidates, key=lambda r:r.cost, default=None)
         route = self.routes[key]
@@ -70,6 +79,8 @@ class PersistentFleet:
             raise ValueError('Vehicle cargo exceeds capacity')
         actor = self.transit.traffic.admit_route(route, vehicle_id=v.id, source_id=v.site,
                    destination_id=destination, source_type=v.kind,
+                   appearance=VehicleAppearance(kind=v.kind,shape='material_truck' if v.kind=='truck' else 'car',
+                        cargo_key=next(iter(v.cargo),None),load_fraction=min(1,sum(v.cargo.values())/v.capacity) if v.capacity else 0),
                    length=v.length, width=v.width, speed_cap_mph=None)
         if actor is None:
             return False

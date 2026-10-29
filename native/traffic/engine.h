@@ -68,6 +68,8 @@ int nt_profile_read(void*, NTProfile*);
 int nt_step(void*, double);
 int nt_pedestrian_lane(void*, const NTPoint*, int, double);
 int nt_pedestrian_spawn(void*, int, int, double);
+int nt_pedestrian_place(void*, int, double, int);
+int nt_pedestrian_count(void*);
 int nt_pedestrian_waits(void*);
 const NTPedestrianState* nt_pedestrian_states(void*, int*);
 const NTPedestrianState* nt_pedestrian_completed(void*, int*);

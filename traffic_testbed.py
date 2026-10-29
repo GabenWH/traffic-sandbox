@@ -431,6 +431,9 @@ class RoadVehicleSimulation:
 
     def _discard_native(self):
         if self._native_controller is not None:
+            callback = getattr(self, "_before_native_discard", None)
+            if callback is not None:
+                callback()
             self._native_controller.close()
             self._native_controller = None
 

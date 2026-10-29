@@ -39,6 +39,13 @@ class InteractionMixin:
             for item in car.detail_items:
                 self.canvas.delete(item)
         self.simulation.cars.clear()
+        runtime = getattr(self, "city_simulation", None)
+        if runtime is not None:
+            for vehicle in self.road_vehicles.clear_test_traffic():
+                if vehicle.item is not None:self.canvas.delete(vehicle.item)
+            runtime.sync_network()
+            self.simulation.record_event("cleared test traffic")
+            return
         construction = getattr(self, "construction_simulation", None)
         if construction is not None:
             construction.clear_trips()

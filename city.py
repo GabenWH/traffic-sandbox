@@ -102,6 +102,8 @@ class Building(Buildable):
     buildable_id: str | None = None
     color: str = "#8b8580"
     id: str = field(default_factory=lambda: str(uuid4()))
+    operation: dict = field(default_factory=dict)
+    occupants: int = field(default=0, init=False)
     inspection_title = "Building"
 
     def contains(self, position: Point) -> bool:
@@ -113,7 +115,9 @@ class Building(Buildable):
             *super().inspection_properties(),
             CityInspectionProperty("Template", self.buildable_id or "custom"),
             CityInspectionProperty("Zone", self.parcel.zone.value if self.parcel.zone else "unassigned"),
-            CityInspectionProperty("Residents", self.residents),
+            CityInspectionProperty("Housing capacity", self.residents),
+            CityInspectionProperty("Occupants", self.occupants),
+            CityInspectionProperty("Use", self.operation.get("role", "home" if self.residents else "workplace")),
             CityInspectionProperty("Jobs", self.jobs),
             CityInspectionProperty("Width", self.parcel.width, "distance"),
             CityInspectionProperty("Height", self.parcel.height, "distance"),
@@ -134,6 +138,8 @@ class CityMap:
     mobility: MobilityNetwork = field(default_factory=MobilityNetwork, init=False, repr=False)
     mobility_revision: int = field(default=0, init=False, repr=False)
     pedestrian_network: PedestrianNetwork = field(init=False, repr=False)
+
+    gameplay_state: dict | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         self.rebuild_mobility_network()

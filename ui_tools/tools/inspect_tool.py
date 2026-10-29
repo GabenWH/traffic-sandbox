@@ -353,6 +353,18 @@ def inspection_rows(host: Any, selected: object | None) -> tuple[str, list[Inspe
                 )
             rows.append(InspectionRow(item.label, str(value), target=item.target))
         if isinstance(selected, Building):
+            runtime=getattr(host,'city_simulation',None)
+            if runtime is not None:
+                rows.append(InspectionRow('Simulation day',str(int(runtime.time//86400)+1)))
+                rows.append(InspectionRow('Staff present',str(runtime.staff[selected.id])))
+                if selected.id in runtime._homes:
+                    rows.append(InspectionRow('Vacant spaces',str(runtime.vacancy(selected.id))))
+                    for household in runtime.households.values():
+                        if household.home==selected.id:
+                            rows.append(InspectionRow(household.id,
+                                f'IDs {household.members} · desirability {household.last_score:.1f} · moving buffer {household.memory.value_at(runtime.time):.1f}'))
+                for resource,amount in selected.inventory.amounts.items():
+                    rows.append(InspectionRow('Stock: '+resource,f'{amount:.2f}'))
             resources = getattr(
                 getattr(host, "construction_simulation", None), "resources", {},
             )

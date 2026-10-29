@@ -34,5 +34,9 @@
   {
     "id": "test_traffic",
     "enabled": true
+  },
+  {
+    "id": "bus_route",
+    "enabled": true
   }
 ]

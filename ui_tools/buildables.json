@@ -46,9 +46,15 @@
         "residents": 4,
         "jobs": 0,
         "color": "#d9b38c",
-        "construction_needs": {"lumber": 20, "stone": 10},
+        "construction_needs": {
+          "lumber": 20,
+          "stone": 10
+        },
         "construction_workers": 2,
-        "construction_work": 180
+        "construction_work": 180,
+        "operation": {
+          "role": "home"
+        }
       }
     },
     {
@@ -63,9 +69,16 @@
         "residents": 24,
         "jobs": 2,
         "color": "#c9936f",
-        "construction_needs": {"lumber": 80, "stone": 50, "steel": 20},
+        "construction_needs": {
+          "lumber": 80,
+          "stone": 50,
+          "steel": 20
+        },
         "construction_workers": 4,
-        "construction_work": 960
+        "construction_work": 960,
+        "operation": {
+          "role": "home"
+        }
       }
     },
     {
@@ -80,9 +93,16 @@
         "residents": 0,
         "jobs": 8,
         "color": "#70a8c9",
-        "construction_needs": {"lumber": 60, "stone": 40, "steel": 15},
+        "construction_needs": {
+          "lumber": 60,
+          "stone": 40,
+          "steel": 15
+        },
         "construction_workers": 3,
-        "construction_work": 450
+        "construction_work": 450,
+        "operation": {
+          "role": "market"
+        }
       }
     },
     {
@@ -97,9 +117,16 @@
         "residents": 0,
         "jobs": 60,
         "color": "#658aa8",
-        "construction_needs": {"lumber": 150, "stone": 120, "steel": 100},
+        "construction_needs": {
+          "lumber": 150,
+          "stone": 120,
+          "steel": 100
+        },
         "construction_workers": 6,
-        "construction_work": 2400
+        "construction_work": 2400,
+        "operation": {
+          "role": "workplace"
+        }
       }
     },
     {
@@ -114,9 +141,191 @@
         "residents": 0,
         "jobs": 45,
         "color": "#8b8580",
-        "construction_needs": {"stone": 180, "steel": 160},
+        "construction_needs": {
+          "stone": 180,
+          "steel": 160
+        },
         "construction_workers": 6,
-        "construction_work": 3600
+        "construction_work": 3600,
+        "operation": {
+          "role": "workplace"
+        }
+      }
+    },
+    {
+      "id": "cafe",
+      "kind": "building",
+      "name": "Cafe",
+      "description": "Build a cafe connected to the city simulation.",
+      "specs": {
+        "width": 60,
+        "height": 44,
+        "zone": "commercial",
+        "residents": 0,
+        "jobs": 8,
+        "color": "#70a8c9",
+        "construction_needs": {
+          "lumber": 20,
+          "stone": 10
+        },
+        "construction_workers": 2,
+        "construction_work": 120,
+        "operation": {
+          "role": "cafe",
+          "output": null,
+          "inputs": {},
+          "rate": 0,
+          "targets": {
+            "food": 80
+          }
+        }
+      }
+    },
+    {
+      "id": "bakery",
+      "kind": "building",
+      "name": "Bakery",
+      "description": "Build a bakery connected to the city simulation.",
+      "specs": {
+        "width": 60,
+        "height": 44,
+        "zone": "commercial",
+        "residents": 0,
+        "jobs": 10,
+        "color": "#70a8c9",
+        "construction_needs": {
+          "lumber": 20,
+          "stone": 10
+        },
+        "construction_workers": 2,
+        "construction_work": 120,
+        "operation": {
+          "role": "bakery",
+          "output": "food",
+          "inputs": {
+            "grain": 1
+          },
+          "rate": 6,
+          "targets": {
+            "grain": 200
+          }
+        }
+      }
+    },
+    {
+      "id": "farm",
+      "kind": "building",
+      "name": "Farm",
+      "description": "Build a farm connected to the city simulation.",
+      "specs": {
+        "width": 60,
+        "height": 44,
+        "zone": "industrial",
+        "residents": 0,
+        "jobs": 12,
+        "color": "#70a8c9",
+        "construction_needs": {
+          "lumber": 20,
+          "stone": 10
+        },
+        "construction_workers": 2,
+        "construction_work": 120,
+        "operation": {
+          "role": "farm",
+          "output": "grain",
+          "inputs": {
+            "seed": 1
+          },
+          "rate": 8,
+          "targets": {
+            "seed": 400
+          }
+        }
+      }
+    },
+    {
+      "id": "market",
+      "kind": "building",
+      "name": "Food market",
+      "description": "Build a food market connected to the city simulation.",
+      "specs": {
+        "width": 60,
+        "height": 44,
+        "zone": "commercial",
+        "residents": 0,
+        "jobs": 8,
+        "color": "#70a8c9",
+        "construction_needs": {
+          "lumber": 20,
+          "stone": 10
+        },
+        "construction_workers": 2,
+        "construction_work": 120,
+        "operation": {
+          "role": "market",
+          "output": null,
+          "inputs": {},
+          "rate": 0,
+          "targets": {
+            "food": 300
+          }
+        }
+      }
+    },
+    {
+      "id": "clinic",
+      "kind": "building",
+      "name": "Clinic",
+      "description": "Build a clinic connected to the city simulation.",
+      "specs": {
+        "width": 60,
+        "height": 44,
+        "zone": "civic",
+        "residents": 0,
+        "jobs": 12,
+        "color": "#70a8c9",
+        "construction_needs": {
+          "lumber": 20,
+          "stone": 10
+        },
+        "construction_workers": 2,
+        "construction_work": 120,
+        "operation": {
+          "role": "clinic",
+          "output": null,
+          "inputs": {},
+          "rate": 0,
+          "targets": {
+            "medicine": 80
+          }
+        }
+      }
+    },
+    {
+      "id": "bus_stop",
+      "kind": "building",
+      "name": "Bus stop",
+      "description": "Build a bus stop connected to the city simulation.",
+      "specs": {
+        "width": 18,
+        "height": 16,
+        "zone": "civic",
+        "residents": 0,
+        "jobs": 0,
+        "color": "#d4a744",
+        "construction_needs": {
+          "lumber": 20,
+          "stone": 10
+        },
+        "construction_workers": 2,
+        "construction_work": 120,
+        "operation": {
+          "role": "bus_stop",
+          "output": null,
+          "inputs": {},
+          "rate": 0,
+          "targets": {}
+        }
       }
     }
   ]

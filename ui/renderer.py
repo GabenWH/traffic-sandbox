@@ -214,7 +214,9 @@ class RendererMixin:
 
     def draw_road_vehicle(self, vehicle: Vehicle) -> None:
         """Draw any app vehicle through its shared presentation contract."""
-        if isinstance(vehicle, Car):
+        if getattr(vehicle,"source_type",None)=="bus" and hasattr(self,"draw_passenger_bus"):
+            self.draw_passenger_bus(vehicle)
+        elif isinstance(vehicle, Car):
             self.draw_car(vehicle)
         elif vehicle.appearance.shape == "car":
             self.draw_road_car(vehicle)

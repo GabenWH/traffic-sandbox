@@ -297,6 +297,7 @@ class BuildingTool(CanvasTool):
             jobs=int(details["jobs"]),
             buildable_id=self.selected_spec.id,
             color=str(details["color"]),
+            operation=dict(details["operation"]),
             construction_needs=dict(details.get("construction_needs", {})),
             construction_workers=int(details["construction_workers"]),
             construction_work=float(details["construction_work"]),

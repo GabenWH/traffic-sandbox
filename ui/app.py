@@ -22,6 +22,8 @@ from units import validate_unit_system
 from .base import SPEED_LIMIT_TAG
 from .dashboards import DashboardMixin
 from .files import FileActionsMixin
+from .gameplay import CityGameplayMixin
+from city_simulation import CitySimulation
 from .interactions import InteractionMixin
 from .renderer import (
     RendererMixin,
@@ -38,6 +40,7 @@ PERFORMANCE_REFRESH_SECONDS = 0.25
 
 class FreewaySimulator(
     FileActionsMixin,
+    CityGameplayMixin,
     DashboardMixin,
     InteractionMixin,
     RendererMixin,
@@ -71,6 +74,7 @@ class FreewaySimulator(
             UnlimitedConstructionProvider(),
             road_vehicles=self.road_vehicles,
         )
+        self.city_simulation = CitySimulation(self.city_map,self.road_vehicles,self.construction_simulation)
         self.blank_map = True
         self.viewport = Viewport(*city_builder_viewport_origin(self.city_map.height))
         self._pan_anchor: tuple[int, int] | None = None
@@ -322,6 +326,8 @@ class FreewaySimulator(
 
     def redraw_world(self) -> None:
         FreewaySimulator._sync_road_network(self)
+        if getattr(self,"city_simulation",None) is not None:
+            self.city_simulation.sync_buildings()
         RendererMixin.redraw_world(self)
         if self.view3d_active and self.view3d is not None:
             self.view3d.show_city(self.city_map)
@@ -337,6 +343,10 @@ class FreewaySimulator(
 
     def _sync_road_network(self) -> None:
         """Remove canvas items for actors invalidated by a lane-graph rebuild."""
+        runtime = getattr(self, "city_simulation", None)
+        if runtime is not None:
+            runtime.sync_network()
+            return
         sync_network = getattr(self.construction_simulation, "sync_network", None)
         if callable(sync_network):
             for car in sync_network(self.city_map):
@@ -347,6 +357,16 @@ class FreewaySimulator(
 
     def _update_construction(self, elapsed_seconds: float) -> None:
         """Advance construction demand and refresh its runtime truck markers."""
+        runtime = getattr(self, "city_simulation", None)
+        if runtime is not None:
+            revision = runtime.scene_revision
+            if self.running:
+                runtime.update(elapsed_seconds*self.simulation_speed)
+            if runtime.scene_revision != revision:
+                self.redraw_world()
+            self.draw_road_vehicles()
+            self.draw_city_activity()
+            return
         FreewaySimulator._sync_road_network(self)
         if self.running:
             phases = {

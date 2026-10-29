@@ -24,10 +24,17 @@ class ServiceTown(TownSimulation):
         self.care_queue=deque();self.care_tasks=[];self.visits={}
         self.meal_queues={b.site:deque() for b in businesses if b.kind=='cafe'}
         self.meal_credit=Counter()
+        self.meal_capacity=Counter()
         self.harvested=self.medical_sinks=0.0
         self.treated=self.meals_served=0
         self.requests=[]
         self.staff=Counter()
+
+    def _record_production(self, business, amount):
+        pass
+
+    def _resident_count(self, site):
+        return self.sites[site]["building"].residents
 
     def request_visit(self,person_id,site,purpose):
         p=self.residents[person_id]
@@ -50,10 +57,12 @@ class ServiceTown(TownSimulation):
         service=[];regular=[]
         while self._events and self._events[0][0]<=self.time+1e-7:
             event=heapq.heappop(self._events)
-            (service if event[2]=='service_visit' else regular).append(event)
+            (service if event[2] in ('service_visit','service_return') else regular).append(event)
         for event in regular:heapq.heappush(self._events,event)
         super()._process_events()
-        for _,_,_,(pid,site,purpose) in service:
+        for _,_,kind,value in service:
+            if kind=='service_return':self._leave_service(value);continue
+            pid,site,purpose=value
             if not self.request_visit(pid,site,purpose) and self.time<self.work_end:
                 self.schedule(self.time+60,'service_visit',(pid,site,purpose))
 
@@ -80,9 +89,9 @@ class ServiceTown(TownSimulation):
         if p.state=='visiting_return':
             visit=self.visits.pop(p.id)
             p.state=visit['previous']
+            if p.state=='work':self._worker_resumed(p)
             if p.return_due and p.state=='work':
-                if not self._depart(p,True):
-                    self.schedule(self.time+5,'retry_return',p.id)
+                self._return_after_visit(p)
             return
         super()._arrive_person(p)
 
@@ -90,8 +99,22 @@ class ServiceTown(TownSimulation):
         if pid not in self.visits:
             return
         p=self.residents[pid];visit=self.visits[pid]
-        self.transit.request_trip(pid,self.sites[visit['site']]['walk_point'],self.sites[visit['origin']]['walk_point'])
+        p.state='service_return_pending'
+        try:
+            self.transit.request_trip(pid,self.sites[visit['site']]['walk_point'],self.sites[visit['origin']]['walk_point'])
+        except (ValueError,RuntimeError):
+            self._defer_service_return(pid)
+            return
         p.state='visiting_return'
+
+    def _worker_resumed(self,person):
+        pass
+
+    def _defer_service_return(self,pid):
+        self.schedule(self.time+60,'service_return',pid)
+
+    def _return_after_visit(self,person):
+        if not self._depart(person,True):self.schedule(self.time+5,'retry_return',person.id)
 
     def _economy(self,dt):
         self.staff=Counter(p.workplace for p in self.residents.values() if p.state=='work')
@@ -104,10 +127,11 @@ class ServiceTown(TownSimulation):
                 for resource,quantity in b.inputs.items():
                     inv[resource]=inv.get(resource,0)-amount*quantity
                 inv[b.output]=inv.get(b.output,0)+amount
+                self._record_production(b,amount)
                 if b.output=='food':self.produced+=amount
                 elif b.output=='grain':self.harvested+=amount
         for sid,site in self.sites.items():
-            n=site['building'].residents
+            n=self._resident_count(sid)
             if not n:continue
             inv=site['building'].inventory.amounts
             wanted=n*3*dt/86400
@@ -117,21 +141,26 @@ class ServiceTown(TownSimulation):
             self.consumed+=used;self.unmet+=wanted-used
         for site,queue in self.meal_queues.items():
             inv=self.sites[site]['building'].inventory.amounts
-            for _ in range(min(len(queue),self.staff[site])):
+            self.meal_capacity[site]=min(self.staff[site],self.meal_capacity[site]+self.staff[site]*dt/60)
+            for _ in range(min(len(queue),int(self.meal_capacity[site]+1e-9))):
                 if inv.get('food',0)<1:break
                 pid=queue.popleft();inv['food']-=1
+                self.meal_capacity[site]=max(0,self.meal_capacity[site]-1)
                 self.meals_served+=1;self.consumed+=1
                 self.meal_credit[self.residents[pid].home]+=1
                 self._note('meal_served',person=pid,site=site)
                 self._leave_service(pid)
-        clinic=next((b.site for b in self.businesses.values() if b.kind=='clinic'),None)
-        if clinic:
+        for clinic in (b.site for b in self.businesses.values() if b.kind=='clinic'):
             inv=self.sites[clinic]['building'].inventory.amounts
             slots=min(4,self.staff[clinic])
-            while self.care_queue and len(self.care_tasks)<slots and inv.get('medicine',0)>=1:
-                pid=self.care_queue.popleft();inv['medicine']-=1;self.medical_sinks+=1
-                self.care_tasks.append(dict(person=pid,remaining=120.0))
-            for task in list(self.care_tasks)[:slots]:
+            active=[t for t in self.care_tasks if t.get('site',clinic)==clinic]
+            for pid in list(self.care_queue):
+                if len(active)>=slots or inv.get('medicine',0)<1:break
+                if self.visits.get(pid,{}).get('site',clinic)!=clinic:continue
+                self.care_queue.remove(pid);inv['medicine']-=1;self.medical_sinks+=1
+                task=dict(person=pid,site=clinic,remaining=120.0)
+                self.care_tasks.append(task);active.append(task)
+            for task in active[:slots]:
                 task['remaining']-=dt
                 if task['remaining']<=0:
                     self.care_tasks.remove(task);self.treated+=1
@@ -173,7 +202,7 @@ class ServiceTown(TownSimulation):
         requests=[]
         outstanding={(j['destination'],j['resource']) for j in self.jobs.values()}
         for sid,site in self.sites.items():
-            targets=({'food':site['building'].residents*3} if site['building'].residents else {})
+            targets=({'food':self._resident_count(sid)*3} if self._resident_count(sid) else {})
             if sid in self.businesses:targets.update(self.businesses[sid].targets)
             for resource,target in targets.items():
                 available=site['building'].inventory.amounts.get(resource,0)
@@ -188,7 +217,7 @@ class ServiceTown(TownSimulation):
                 suppliers=[b.site for b in self.businesses.values() if b.site!=req['site'] and (
                     b.output==req['resource'] or (req['resource']=='food' and b.kind=='market'))
                     and self.sites[b.site]['building'].inventory.amounts.get(req['resource'],0)>0]
-                if req['site'].startswith('home-'):
+                if self._resident_count(req['site']):
                     suppliers=[s for s in suppliers if self.businesses[s].kind=='market']
                 if not suppliers:continue
                 source=max(suppliers,key=lambda s:self.sites[s]['building'].inventory.amounts.get(req['resource'],0))
@@ -230,7 +259,7 @@ class ServiceTown(TownSimulation):
             raise ValueError('Service checkpoint requires completed visits')
         result=super().checkpoint()
         result['service_model']=dict(businesses=[asdict(b) for b in self.businesses.values()],
-                                    meal_credit=dict(self.meal_credit),requests=self.requests,medical_sinks=self.medical_sinks,
+                                    meal_credit=dict(self.meal_credit),meal_capacity=dict(self.meal_capacity),requests=self.requests,medical_sinks=self.medical_sinks,
                                     harvested=self.harvested,treated=self.treated,meals_served=self.meals_served)
         return result
 
@@ -239,6 +268,7 @@ class ServiceTown(TownSimulation):
         town=TownSimulation.from_checkpoint(data);town.__class__=cls
         model=data['service_model'];town.configure_services([Business(**b) for b in model['businesses']])
         town.meal_credit.update(model['meal_credit'])
+        town.meal_capacity.update(model.get('meal_capacity',{}))
         town.requests=model.get('requests',[])
         for k in ('medical_sinks','harvested','treated','meals_served'):setattr(town,k,model[k])
         return town

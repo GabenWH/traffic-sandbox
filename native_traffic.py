@@ -138,6 +138,8 @@ def _library():
         'nt_step': (C.c_int, [C.c_void_p, C.c_double]),
         'nt_pedestrian_lane': (C.c_int, [C.c_void_p, C.POINTER(_Point), C.c_int, C.c_double]),
         'nt_pedestrian_spawn': (C.c_int, [C.c_void_p, C.c_int, C.c_int, C.c_double]),
+        'nt_pedestrian_count': (C.c_int, [C.c_void_p]),
+        'nt_pedestrian_place': (C.c_int, [C.c_void_p, C.c_int, C.c_double, C.c_int]),
         'nt_pedestrian_waits': (C.c_int, [C.c_void_p]),
         'nt_pedestrian_states': (C.POINTER(NativePedestrianState), [C.c_void_p, C.POINTER(C.c_int)]),
         'nt_pedestrian_completed': (C.POINTER(NativePedestrianState), [C.c_void_p, C.POINTER(C.c_int)]),
@@ -314,6 +316,9 @@ class NativeTrafficEngine:
         """Admit an active walker; movement occurs inside subsequent nt_step calls."""
         self._call('nt_pedestrian_spawn', person_id, lane_id, speed)
 
+    def place_pedestrian(self, person_id, distance, waiting=False):
+        self._call("nt_pedestrian_place", person_id, distance, int(waiting))
+
     def _pedestrian_rows(self, function):
         if not self._ptr:
             raise RuntimeError('Native traffic engine is closed')
@@ -322,6 +327,9 @@ class NativeTrafficEngine:
         if count.value < 0:
             raise RuntimeError(self._lib.nt_error().decode())
         return [NativePedestrianState.from_buffer_copy(pointer[i]) for i in range(count.value)]
+
+    def pedestrian_count(self):
+        return self._call("nt_pedestrian_count")
 
     def pedestrian_states(self):
         return self._pedestrian_rows('nt_pedestrian_states')

@@ -91,12 +91,15 @@ class TransitSimulation:
         self.time = self.traffic.elapsed_time
         self.stops, self.lines, self.buses, self.people = {}, {}, {}, {}
         self.legs, self.leg_lengths, self.queues = {}, {}, {}
+        self.line_plans = {}
         self._next_departure = {}
         self.events = []
         self._walk_routes = {}
         self._walk_cache = {}
         self.vehicle_arrivals = deque()
         self.person_arrivals = deque()
+        self.arrival_observer = None
+        self.arrivals_listener = None
 
     def _check_network(self):
         if self.city.mobility_revision != self.revision:
@@ -139,6 +142,7 @@ class TransitSimulation:
             routes.append(route)
             lengths.append(length)
         self.lines[line.id] = line
+        self.line_plans[line.id] = line
         self._next_departure[line.id] = self.time
         self.legs[line.id], self.leg_lengths[line.id] = routes, lengths
         for stop in line.stop_ids:
@@ -179,6 +183,28 @@ class TransitSimulation:
             raise ValueError('An existing passenger must finish before departing from that destination')
         if any(len(p) != 2 or not all(isfinite(v) for v in p) for p in (origin, destination)):
             raise ValueError('Trip points must be finite 2D positions')
+        path = self.journey_path(origin, destination, allow_bus=allow_bus)
+        legs=[];first=last=None;boarding=None
+        for kind,value in path.edges:
+            if kind in ('first','direct'):first=value
+            elif kind=='last':last=value
+            elif kind=='board':boarding=value
+            elif kind=='alight' and boarding is not None:
+                legs.append(dict(line=boarding[0],board=boarding[1],alight=value))
+                boarding=None
+        person = previous or Passenger(person_id, tuple(origin), tuple(destination))
+        person.origin, person.destination = tuple(origin), tuple(destination)
+        person.phase, person.arrived_at = 'planned', None
+        person.line_id = person.board_stop = person.alight_stop = person.bus_id = person.final_walk = None
+        person.itinerary,person.leg_index=legs,0
+        person.final_walk=last
+        if legs:
+            person.line_id,person.board_stop,person.alight_stop=legs[0]['line'],legs[0]['board'],legs[0]['alight']
+        self.people[person.id] = person
+        self._start_walk(person, first, 'walking_to_stop' if legs else 'walking_direct')
+        return person
+
+    def journey_path(self, origin, destination, *, allow_bus=True):
         from pathfinding import DirectedGraph
         graph=DirectedGraph()
         start,goal=('journey','origin'),('journey','destination')
@@ -214,25 +240,7 @@ class TransitSimulation:
         path=graph.find_path(start,goal)
         if path is None:
             raise ValueError('No walking or transit journey')
-        legs=[];first=last=None;boarding=None
-        for kind,value in path.edges:
-            if kind in ('first','direct'):first=value
-            elif kind=='last':last=value
-            elif kind=='board':boarding=value
-            elif kind=='alight' and boarding is not None:
-                legs.append(dict(line=boarding[0],board=boarding[1],alight=value))
-                boarding=None
-        person = previous or Passenger(person_id, tuple(origin), tuple(destination))
-        person.origin, person.destination = tuple(origin), tuple(destination)
-        person.phase, person.arrived_at = 'planned', None
-        person.line_id = person.board_stop = person.alight_stop = person.bus_id = person.final_walk = None
-        person.itinerary,person.leg_index=legs,0
-        person.final_walk=last
-        if legs:
-            person.line_id,person.board_stop,person.alight_stop=legs[0]['line'],legs[0]['board'],legs[0]['alight']
-        self.people[person.id] = person
-        self._start_walk(person, first, 'walking_to_stop' if legs else 'walking_direct')
-        return person
+        return path
 
     def _start_walk(self, person, route, phase):
         person.phase = phase
@@ -282,6 +290,14 @@ class TransitSimulation:
             return
         line = self.lines[bus.line_id]
         stop = line.stop_ids[bus.stop_index]
+        # Reserve terminal order at arrival, including boarding time. Otherwise
+        # an empty or returning bus can repeatedly steal an older bus's slot.
+        if bus.stop_index == 0:
+            order=(bus.service_at,bus.id)
+            if any(other is not bus and other.line_id==bus.line_id and other.phase=='docked'
+                   and other.stop_index==0 and other.service_at<=self.time<other.service_until
+                   and (other.service_at,other.id)<order for other in self.buses.values()):
+                return
         queue = self.queues[(bus.line_id, stop)]
         while queue and len(bus.passengers) < bus.capacity:
             person = self.people[queue.popleft()]
@@ -320,7 +336,7 @@ class TransitSimulation:
                 self._service(bus)
             # With no moving actors or generated traffic, advance to the next
             # bus service event without Python per-tick work during the night.
-            if not self.traffic.cars and not self.traffic.active_junction_ids and not self.engine.pedestrian_states():
+            if not self.traffic.cars and not self.traffic.active_junction_ids and not self.engine.pedestrian_count():
                 deadlines = [max(b.service_at, b.ready_at,
                                  self._next_departure[b.line_id] if b.stop_index == 0 else self.time)
                              for b in self.buses.values() if b.phase == 'docked' and self.time < b.service_until]
@@ -334,6 +350,8 @@ class TransitSimulation:
                     continue
             dt = min(.05, remaining)
             arrivals = self.traffic.update(self.city, dt)
+            if arrivals and self.arrival_observer is not None:
+                self.arrival_observer(arrivals)
             completed = {car.id for car in arrivals}
             self.vehicle_arrivals.extend(car for car in arrivals if car.id not in self.buses)
             self.time = self.traffic.elapsed_time
@@ -352,4 +370,6 @@ class TransitSimulation:
                     bus._car = None
                     bus.stop_index = (bus.stop_index+1) % len(self.lines[bus.line_id].stop_ids)
                     self._dock(bus)
+            if self.arrivals_listener is not None and (self.person_arrivals or self.vehicle_arrivals):
+                self.arrivals_listener(self.time)
             remaining -= dt

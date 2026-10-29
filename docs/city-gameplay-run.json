@@ -1,0 +1,54 @@
+{
+  "scenario": "Authored buildings, persistent households and services",
+  "construction_completed_seconds": 2220.0,
+  "completed_buildings": 11,
+  "buses": 4,
+  "bus_capacity": 60,
+  "snapshot_accounting_matches": true,
+  "report": {
+    "time": 86400.0,
+    "population": 32,
+    "at_home": 32,
+    "at_work": 0,
+    "commuting": 0,
+    "workers_arrived": 16,
+    "produced_food": 49.76741666659952,
+    "consumed_food": 93.46888889043089,
+    "unmet_food": 0.0,
+    "deliveries": 2,
+    "vehicles": 9,
+    "active_road_vehicles": 2,
+    "fuel_liters": 534.2148603533758,
+    "resource_balance_error": 8.387956995647983e-12,
+    "fuel_used_liters": 215.7851396466242,
+    "at_services": 0,
+    "treated": 4,
+    "clinic_waiting": 0,
+    "meals_served": 31,
+    "harvested": 65.06866666660368,
+    "outstanding_requests": 1,
+    "households": 8,
+    "relocating_households": 0
+  },
+  "scheduling_counters": {
+    "economy": 1498,
+    "housing": 0,
+    "jobs": 19,
+    "construction": 2167
+  },
+  "empty_city_three_years_wall_ms": 0.01378000001750479,
+  "empty_city_decision_events": {
+    "economy": 0,
+    "housing": 0,
+    "jobs": 1,
+    "construction": 0
+  },
+  "moving_buffer_after_two_years": 28.393972058572118,
+  "wall_seconds": 184.95878328299997,
+  "assumptions": [
+    "Synthetic layout, stocks, staffing choices and service rates.",
+    "Building entrances and off-road stop bays are inferred.",
+    "Drivers and loaders are assumed available; care does not model health.",
+    "Construction traffic requeues after load using its existing persistence behavior."
+  ]
+}

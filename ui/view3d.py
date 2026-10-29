@@ -41,6 +41,8 @@ class PandaWorldView:
         self.preview_root = attach_map_root(self.base.render, "preview-layer")
         self.vehicle_root = attach_map_root(self.base.render, "vehicles")
         self.vehicle_nodes = {}
+        self.pedestrian_root = attach_map_root(self.base.render,"pedestrians")
+        self.pedestrian_nodes = {}
         self.scene.register(TerrainFeature, draw_terrain)
         self.scene.register(Road, draw_road)
         self.scene.register(Intersection, draw_intersection)
@@ -201,6 +203,19 @@ class PandaWorldView:
             self.vehicle_nodes,
             simulation.elapsed_time,
         )
+
+    def update_pedestrians(self,states):
+        from .scene3d import quad_geom, _box_quads
+        alive={p.id for p in states}
+        for pid in list(self.pedestrian_nodes):
+            if pid not in alive:self.pedestrian_nodes.pop(pid).removeNode()
+        for p in states:
+            node=self.pedestrian_nodes.get(p.id)
+            if node is None:
+                node=self.pedestrian_root.attachNewNode(quad_geom(_box_quads(-1,-1,0,1,1,5),'person'))
+                self.pedestrian_nodes[p.id]=node
+            node.setPos(p.x,p.y,1)
+            node.setColor(*panda_rgba('#e5a833' if p.waiting else '#8c31bc'))
 
     def _apply_camera(self) -> None:
         if self.base.camera is None or self.base.camera.isEmpty():

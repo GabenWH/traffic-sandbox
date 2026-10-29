@@ -27,7 +27,7 @@ from roundabouts import validate_roundabout_dimensions
 
 
 WORLD_FORMAT = "lanesimulator.world"
-WORLD_VERSION = 7
+WORLD_VERSION = 8
 
 
 class WorldFormatError(ValueError):
@@ -57,6 +57,8 @@ def world_to_dict(
     return {
         "format": WORLD_FORMAT,
         "version": WORLD_VERSION,
+        "gameplay": (city_map.gameplay.snapshot() if getattr(city_map, "gameplay", None) is not None
+                     else city_map.gameplay_state),
         "world": {
             "width": city_map.width,
             "height": city_map.height,
@@ -140,6 +142,7 @@ def world_to_dict(
                 {
                     "id": building.id,
                     "name": building.name,
+                    "operation": dict(building.operation),
                     "parcel_id": building.parcel.id,
                     "residents": building.residents,
                     "jobs": building.jobs,
@@ -164,7 +167,7 @@ def world_from_dict(data: object) -> LoadedWorld:
     if root.get("format") != WORLD_FORMAT:
         raise WorldFormatError("This is not a city-builder world save.")
     version = root.get("version")
-    if version not in (4, 5, 6, WORLD_VERSION):
+    if version not in (4, 5, 6, 7, WORLD_VERSION):
         raise WorldFormatError(f"Unsupported world-save version: {root.get('version')!r}.")
 
     world = _mapping(root.get("world"), "world")
@@ -455,7 +458,7 @@ def world_from_dict(data: object) -> LoadedWorld:
         buildable_state = _buildable_state_from_dict(
             building_data.get("buildable_state"), f"{path}.buildable_state",
         )
-        if version < WORLD_VERSION and buildable_id is not None:
+        if version < 7 and buildable_id is not None:
             if legacy_templates is None:
                 from ui_tools.buildables import load_buildables
 
@@ -469,6 +472,7 @@ def world_from_dict(data: object) -> LoadedWorld:
             )
         city_map.buildings.append(Building(
             name=_string(building_data.get("name"), f"{path}.name"),
+            operation=_operation_from_dict(building_data.get("operation")),
             parcel=parcel,
             residents=_nonnegative_int(building_data.get("residents"), f"{path}.residents"),
             jobs=_nonnegative_int(building_data.get("jobs"), f"{path}.jobs"),
@@ -478,6 +482,11 @@ def world_from_dict(data: object) -> LoadedWorld:
             **buildable_state,
         ))
 
+    gameplay = root.get("gameplay")
+    if gameplay is not None:
+        if not isinstance(gameplay, dict) or gameplay.get("schema") != "city.gameplay.v1":
+            raise WorldFormatError("Unsupported city gameplay state")
+        city_map.gameplay_state = gameplay
     view = _mapping(root.get("view", {}), "view")
     camera = _mapping(view.get("camera", {}), "view.camera")
     camera_3d: dict[str, object] | None = None
@@ -758,3 +767,13 @@ def _points(value: object, path: str) -> list[tuple[float, float]]:
             raise WorldFormatError(f"{path}[{index}] must contain exactly two numbers.")
         result.append((_number(point[0], f"{path}[{index}][0]"), _number(point[1], f"{path}[{index}][1]")))
     return result
+
+
+def _operation_from_dict(value):
+    if value is None or value == {}:
+        return {}
+    from building_operations import validate_operation
+    try:
+        return validate_operation(value)
+    except ValueError as error:
+        raise WorldFormatError(str(error)) from error

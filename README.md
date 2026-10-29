@@ -137,3 +137,7 @@ For an intentionally long soak, increase `--seconds` to `600` or `1800`; dense
 paired runs can take substantially longer than simulated time.
 Use `--repeats 1` only for scouting: a single ordered pair cannot evaluate
 determinism or eliminate engine-order bias from its performance gate.
+
+## City gameplay
+
+Placed homes and service buildings can participate in the persistent town simulation. See [the gameplay guide](docs/GAMEPLAY.md) for construction, household invitations, food supply, worker assignments, bus lines, saving and housing desirability. Run `python tools/run_city_gameplay.py` for the authored-city integration scenario.

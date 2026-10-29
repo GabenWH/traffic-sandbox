@@ -110,6 +110,12 @@ def _validate_road_specs(specs: dict[str, object], path: str) -> None:
 
 
 def _validate_building_specs(specs: dict[str, object], path: str) -> None:
+    from building_operations import validate_operation
+    try:
+        specs["operation"] = validate_operation(specs.get("operation", {
+            "role": "home" if specs.get("residents", 0) else "workplace"}))
+    except ValueError as error:
+        raise BuildableCatalogError(f"{path}.operation: {error}") from error
     specs["width"] = _positive_number(specs.get("width"), f"{path}.specs.width")
     specs["height"] = _positive_number(specs.get("height"), f"{path}.specs.height")
     specs["construction_workers"] = _positive_int(

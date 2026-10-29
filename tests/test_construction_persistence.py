@@ -55,7 +55,7 @@ class ConstructionPersistenceTests(unittest.TestCase):
         loaded = world_from_dict(json.loads(json.dumps(encoded))).city_map
         loaded_partial, loaded_active = loaded.buildings
 
-        self.assertEqual(WORLD_VERSION, 7)
+        self.assertEqual(WORLD_VERSION, 8)
         self.assertEqual(loaded_partial.construction_workers, 3)
         self.assertEqual(loaded_partial.construction_work, 100)
         self.assertEqual(loaded_partial.construction_delivered, {"lumber": 5.0})
