@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "resources": [
+    {"id":"lumber","name":"Lumber","unit":"m³","kind":"cargo","mass_kg_per_unit":500,"volume_m3_per_unit":1},
+    {"id":"stone","name":"Stone","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":0.5},
+    {"id":"steel","name":"Steel","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":1},
+    {"id":"deconstruction_materials","name":"Deconstruction materials","unit":"ft²","kind":"cargo","mass_kg_per_unit":20,"volume_m3_per_unit":0.01},
+    {"id":"concrete","name":"Concrete","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":0.5},
+    {"id":"glass","name":"Glass","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":0.5},
+    {"id":"bricks","name":"Bricks","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":0.65},
+    {"id":"timber","name":"Timber","unit":"m³","kind":"cargo","mass_kg_per_unit":700,"volume_m3_per_unit":1},
+    {"id":"gravel","name":"Gravel","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":0.65},
+    {"id":"sand","name":"Sand","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":0.65},
+    {"id":"cement","name":"Cement","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":0.8},
+    {"id":"limestone","name":"Limestone","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":0.5},
+    {"id":"clay","name":"Clay","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":0.7},
+    {"id":"iron_ore","name":"Iron ore","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":0.5},
+    {"id":"grain","name":"Grain","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":1.3},
+    {"id":"seed","name":"Seed","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":1.4},
+    {"id":"vegetables","name":"Vegetables","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":1.6},
+    {"id":"fruit","name":"Fruit","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":1.6},
+    {"id":"food","name":"Food","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":1.6},
+    {"id":"medicine","name":"Medicine","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":2},
+    {"id":"machinery","name":"Machinery","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":2},
+    {"id":"fuel","name":"Fuel","unit":"L","kind":"cargo","mass_kg_per_unit":0.8,"volume_m3_per_unit":0.001},
+    {"id":"garbage","name":"Garbage","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":4},
+    {"id":"scrap_metal","name":"Scrap metal","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":1.2},
+    {"id":"construction_waste","name":"Construction waste","unit":"t","kind":"cargo","mass_kg_per_unit":1000,"volume_m3_per_unit":2},
+    {"id":"electricity","name":"Electricity","unit":"kWh","kind":"utility"},
+    {"id":"potable_water","name":"Potable water","unit":"m³","kind":"utility"},
+    {"id":"wastewater","name":"Wastewater","unit":"m³","kind":"utility"},
+    {"id":"air_pollution","name":"Air pollution","unit":"kg","kind":"emission"},
+    {"id":"carbon_emissions","name":"Carbon emissions","unit":"kg CO₂e","kind":"emission"}
+  ],
+  "recipes": [
+    {"id":"timber_growth","inputs":{},"outputs":{"timber":1}},
+    {"id":"sawmill","inputs":{"timber":1,"electricity":20},"outputs":{"lumber":0.8,"construction_waste":0.15,"air_pollution":0.05}},
+    {"id":"concrete_batch","inputs":{"gravel":1,"sand":0.5,"cement":0.3,"potable_water":0.2,"electricity":30},"outputs":{"concrete":1.6,"construction_waste":0.1,"wastewater":0.05,"air_pollution":0.2}},
+    {"id":"grain_harvest","inputs":{"seed":0.1,"potable_water":1,"electricity":5},"outputs":{"grain":2,"construction_waste":0.02,"wastewater":0.1}},
+    {"id":"bake_food","inputs":{"grain":0.6,"potable_water":0.1,"electricity":10},"outputs":{"food":0.55,"garbage":0.04,"air_pollution":0.01}},
+    {"id":"diesel_generator","inputs":{"fuel":10},"outputs":{"electricity":35,"air_pollution":0.2,"carbon_emissions":26}}
+  ]
+}
