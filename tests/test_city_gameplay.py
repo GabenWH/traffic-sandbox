@@ -274,7 +274,7 @@ class GameplayLifecycleTests(unittest.TestCase):
             c=placed(runtime.city,'clinic',x);c.phase=BuildablePhase.OPERATIONAL;clinics.append(c)
         runtime.sync_buildings();h=runtime.invite_household(target.id,4)
         for i,c in enumerate(clinics):
-            p=runtime.residents[h.members[i]];p.workplace=c.id;p.state='work'
+            p=runtime.residents[h.members[i]];p.workplace=c.id;p.state='commuting';runtime._arrive_person(p)
             runtime.import_resources(c.id,'medicine',1)
             runtime.request_visit(h.members[2+i],c.id,'care')
         runtime.update(500)
@@ -299,7 +299,7 @@ class GameplayLifecycleTests(unittest.TestCase):
     def test_recipe_conversion_is_accounted_separately_from_construction(self):
         runtime,home,target,cafe,bakery,*_=neighborhood()
         h=runtime.invite_household(target.id,1)
-        p=runtime.residents[h.members[0]];p.workplace=bakery.id;p.state='work'
+        p=runtime.residents[h.members[0]];p.workplace=bakery.id;p.state='commuting';runtime._arrive_person(p)
         bakery.operation['inputs']={'grain':2};runtime.sync_buildings()
         runtime.import_resources(bakery.id,'grain',20)
         runtime.import_resources(home.id,'food',10)

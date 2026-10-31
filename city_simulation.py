@@ -25,6 +25,12 @@ class CitySimulation(ServiceTown):
         self.configure_services([])
         self.time = self.transit.time
         self.construction = construction
+        self._resident_construction_started = bool(construction and construction.resident_workforce)
+        self._workplaces = {}
+        self._attendance = {}
+        self._construction_sites = {}
+        self._available_builders = set()
+        self._construction_commitments = Counter()
         self.households = {}
         self._suspended_walkers = {}
         self._resuming_vehicles = {}
@@ -45,7 +51,7 @@ class CitySimulation(ServiceTown):
         self.counters = Counter(economy=0, housing=0, jobs=0, construction=0)
         self.imported_resources = 0.0
         self.resource_journal = Counter()
-        self._last_economy = self._last_construction = self.time
+        self._last_economy = self._last_construction = self._last_construction_work = self.time
         self._construction_arrivals = []
         self._bind_arrivals()
         self.sync_buildings()
@@ -92,6 +98,9 @@ class CitySimulation(ServiceTown):
         previous = set(self.businesses)
         lanes = [l for road in self.city.roads for l in road.lanes]
         self._homes = []
+        self._workplaces = {}
+        self._construction_sites = {}
+        self._sync_workforce_mode()
         for b in self.city.buildings:
             role = operation_for(b)
             center = (b.parcel.x+b.parcel.width/2, b.parcel.y+b.parcel.height/2)
@@ -99,8 +108,12 @@ class CitySimulation(ServiceTown):
             site = dict(building=b,road_position=position,walk_point=center,parking_capacity=max(4,b.jobs+b.residents+4))
             self.sites[b.id] = site
             self.handling.setdefault(b.id,deque())
+            if b.phase == BuildablePhase.UNDER_CONSTRUCTION and self.construction:
+                self._construction_sites[b.id]=b.construction_workers
+                if self.construction.resident_workforce:b.assigned_workers=self.staff[b.id]
             if b.phase != BuildablePhase.OPERATIONAL:
                 continue
+            if b.jobs:self._workplaces[b.id]=b.jobs
             if role['role'] == 'home' and b.residents:
                 self._homes.append(b.id)
             elif role['role'] != 'bus_stop':
@@ -127,6 +140,10 @@ class CitySimulation(ServiceTown):
                 self._leave_service(pid)
         self._access_times.clear()
         self.assign_jobs()
+        for p in self.residents.values():
+            if p.worksite and p.state=='work' and (p.worksite not in self._construction_sites or p.workplace not in self._workplaces):
+                self._safe_depart(p,True)
+        if self._available_builders:self._once('builders',self.time,'builders')
         for hid in self.households:
             self._once('changed:'+hid, self.time+60+(int(hid.split('-')[-1])%60), 'assess_changed', hid)
         self._refresh_occupancy()
@@ -134,6 +151,16 @@ class CitySimulation(ServiceTown):
         if self.construction and (any(b.phase == BuildablePhase.UNDER_CONSTRUCTION for b in self.city.buildings)
                                   or self.construction.road_deconstruction_jobs):
             self._once('construction',self.time+1,'construction')
+
+    def _sync_workforce_mode(self):
+        if self.construction is None:return
+        self._resident_construction_started = self._resident_construction_started or (bool(self.residents) and any(b.phase==BuildablePhase.OPERATIONAL and operation_for(b)['role']=='construction_company' for b in self.city.buildings))
+        enabled=self._resident_construction_started
+        if enabled and not self.construction.resident_workforce:
+            for building in self.city.buildings:
+                if building.phase==BuildablePhase.UNDER_CONSTRUCTION:
+                    building.assigned_workers=self.staff[building.id]
+        self.construction.resident_workforce=enabled
 
     def _resident_count(self, site):
         return self._demand_counts[site]
@@ -173,6 +200,7 @@ class CitySimulation(ServiceTown):
             else:
                 self.fleet.add(FleetVehicle(p.car_id,'car',home,driver=p.id))
                 self.initial_fuel+=self.fleet.vehicles[p.car_id].fuel_liters
+        self._sync_workforce_mode()
         self._refresh_occupancy();self.assign_jobs();self._wake_economy()
         h.last_score=self.desirability(h,home)
         self._once('care:'+hid,self.time+MONTH+(len(self.households)%3600),'choose_care',h.members[0])
@@ -182,10 +210,10 @@ class CitySimulation(ServiceTown):
 
     def assign_jobs(self):
         self.counters['jobs']+=1
-        assigned=Counter(p.workplace for p in self.residents.values() if p.workplace in self.businesses)
+        assigned=Counter(p.workplace for p in self.residents.values() if p.workplace in self._workplaces)
         for p in self.residents.values():
             if not p.worker:continue
-            if p.workplace not in self.businesses:
+            if p.workplace not in self._workplaces:
                 if p.state=='work' and p.workplace in self.sites:
                     p.return_due=True;self._safe_depart(p,True)
                     continue
@@ -194,7 +222,7 @@ class CitySimulation(ServiceTown):
                     continue
                 p.workplace=None
             if p.workplace is None:
-                options=[sid for sid in self.businesses if assigned[sid]<self.sites[sid]['building'].jobs]
+                options=[sid for sid in self._workplaces if assigned[sid]<self._workplaces[sid]]
                 options.sort(key=lambda sid:self.travel_seconds(self.sites[p.home]['walk_point'],self.sites[sid]['walk_point']))
                 if options and isfinite(self.travel_seconds(self.sites[p.home]['walk_point'],self.sites[options[0]]['walk_point'])):
                     p.workplace=options[0];assigned[p.workplace]+=1
@@ -303,18 +331,65 @@ class CitySimulation(ServiceTown):
                 for pid in h.members:self.residents[pid].home=h.home;self.residents[pid].state='home'
                 self._refresh_occupancy();self._note('relocation_completed',household=h.id,home=h.home)
             return
+        if p.state=='returning_company':
+            p.worksite=None;p.state='work'
+            if p.return_due or p.workplace not in self._workplaces:
+                self._safe_depart(p,True)
+            else:self._set_attendance(p,True)
+            return
+        if p.state=='commuting_site':
+            p.state='work'
+            if p.return_due or p.worksite not in self._construction_sites or p.workplace not in self._workplaces:
+                self._safe_depart(p,True)
+            else:self._set_attendance(p,True)
+            return
         if p.state=='commuting':
-            p.state='work';self.staff[p.workplace]+=1;self.workers_arrived+=1;self._note('worker_arrived',person=p.id,site=p.workplace)
+            p.state='work';self._set_attendance(p,not p.return_due);self.workers_arrived+=1;self._note('worker_arrived',person=p.id,site=p.workplace)
             if p.return_due:self._safe_depart(p,True)
             return
         if p.state=='returning':
             p.state='home';p.return_due=False
-            if p.workplace not in self.businesses:p.workplace=None
+            if p.workplace not in self._workplaces:p.workplace=None
             return
-        if p.state=='visiting' and self.visits.get(p.id,{}).get('cancelled'):
+        if p.state=='visiting' and self.visits.get(p.id,{}).get('cancelled') and self.visits[p.id]['purpose']!='shopping':
             self._leave_service(p.id)
             return
         super()._arrive_person(p)
+        if p.state=='home' and p.worker and p.workplace in self._workplaces:
+            self._schedule_shift(p)
+        elif p.state=='work' and p.worksite and (p.worksite not in self._construction_sites or p.workplace not in self._workplaces):
+            self._safe_depart(p,True)
+
+    def _depart(self,p,returning=False):
+        if returning and p.worksite and p.id not in self.visits:
+            self.transit.request_trip(p.id,self.sites[p.worksite]['walk_point'],self.sites[p.workplace]['walk_point'])
+            self._construction_commitments[p.worksite]=max(0,self._construction_commitments[p.worksite]-1)
+            p.state='returning_company'
+            if self._available_builders:self._once('builders',self.time,'builders')
+            return True
+        return super()._depart(p,returning)
+
+    def _dispatch_builders(self):
+        if not self._available_builders or not self.construction:return
+        committed=self._construction_commitments
+        retry_needed=False
+        for pid in tuple(self._available_builders):
+            p=self.residents[pid]
+            if p.state!='work' or p.return_due or p.worksite:
+                self._available_builders.discard(pid);continue
+            origin=self.sites[p.workplace]['walk_point']
+            options=[sid for sid,slots in self._construction_sites.items() if committed[sid]<slots]
+            options.sort(key=lambda sid:self.travel_seconds(origin,self.sites[sid]['walk_point']))
+            for sid in options:
+                try:self.transit.request_trip(pid,origin,self.sites[sid]['walk_point'])
+                except (ValueError,RuntimeError):continue
+                self._set_attendance(p,False)
+                p.worksite=sid;p.state='commuting_site';committed[sid]+=1
+                self._note('builder_dispatched',person=pid,company=p.workplace,site=sid)
+                break
+            else:
+                retry_needed=retry_needed or bool(options)
+        if retry_needed:self._once('builders',self.time+60,'builders')
 
     def _safe_depart(self,p,returning=False):
         self._settle_economy(self.time)
@@ -323,12 +398,14 @@ class CitySimulation(ServiceTown):
         was_work=p.state=='work'
         try:success=self._depart(p,returning)
         except (ValueError,RuntimeError,KeyError):success=False
-        if success and was_work:self.staff[p.workplace]=max(0,self.staff[p.workplace]-1)
-        if not success:self._once(('retry_return:' if returning else 'retry_leave:')+str(p.id),self.time+60,'retry_return' if returning else 'retry_leave',p.id)
+        if (success and was_work) or returning:self._set_attendance(p,False)
+        if not success:
+            retry='retry_site_return' if returning and p.worksite and not p.return_due else ('retry_return' if returning else 'retry_leave')
+            self._once(retry+':'+str(p.id),self.time+60,retry,p.id)
         return success
 
     def _worker_resumed(self,person):
-        self.staff[person.workplace]+=1
+        self._set_attendance(person,not person.return_due)
 
     def _return_after_visit(self,person):
         self._safe_depart(person,True)
@@ -336,18 +413,61 @@ class CitySimulation(ServiceTown):
     def _defer_service_return(self,pid):
         self._once('service_return:'+str(pid),self.time+60,'service_return',pid)
 
+    def _settle_construction(self,time):
+        elapsed=time-self._last_construction_work
+        if self.construction and elapsed>1e-8:
+            self.construction._advance_work(self.city,elapsed)
+            self._last_construction_work=time
+
+    def _set_attendance(self,person,present):
+        self._settle_construction(self.time)
+        self._available_builders.discard(person.id)
+        old=self._attendance.pop(person.id,None)
+        if old is not None:
+            self.staff[old]=max(0,self.staff[old]-1)
+            if old in self.sites:self.sites[old]['building'].assigned_workers=self.staff[old]
+        location=person.worksite or person.workplace
+        if present and location in (self._construction_sites if person.worksite else self._workplaces):
+            self._attendance[person.id]=location
+            self.staff[location]+=1
+            self.sites[location]['building'].assigned_workers=self.staff[location]
+            if not person.worksite and location in self.businesses and self.businesses[location].kind=='construction_company':
+                self._available_builders.add(person.id)
+                self._once('builders',self.time,'builders')
+
     def _settle_economy(self,time):
+        self._settle_construction(time)
         elapsed=time-self._last_economy
         if elapsed>1e-8:
             self._last_economy=time
             self._economy(elapsed)
 
-    def request_visit(self,person_id,site,purpose):
+    def _begin_visit(self,person_id,site,purpose):
         self._settle_economy(self.time)
         p=self.residents[person_id];work=p.workplace if p.state=='work' else None
-        result=super().request_visit(person_id,site,purpose)
-        if result and work is not None:self.staff[work]=max(0,self.staff[work]-1)
+        result=super()._begin_visit(person_id,site,purpose)
+        if result and work is not None:self._set_attendance(p,False)
         return result
+
+    def _refresh_staff(self):
+        # Updated only on resident arrivals/departures and restored from residents.
+        pass
+
+    def _choose_shoppers(self):
+        for h in self.households.values():
+            if h.moving_to:continue
+            target=self._resident_count(h.home)*3
+            stock=self.sites[h.home]['building'].inventory
+            if stock.amounts.get('food',0)+self.incoming(h.home,'food')>=target*.5:continue
+            shopper=next((pid for pid in h.members if self.residents[pid].state=='home'),None)
+            if shopper is None:continue
+            options=[sid for sid,b in self.businesses.items() if b.kind=='market'
+                     and self.sites[sid]['building'].inventory.amounts.get('food',0)>0]
+            options.sort(key=lambda sid:self.travel_seconds(self.sites[h.home]['walk_point'],self.sites[sid]['walk_point']))
+            for sid in options:
+                try:
+                    if self.request_shopping(shopper,sid,'food',target):break
+                except (ValueError,RuntimeError):continue
 
     def _economy(self,dt):
         super()._economy(dt)
@@ -368,13 +488,15 @@ class CitySimulation(ServiceTown):
             self.counters['construction']+=1
             self.construction.observe_arrivals(self._construction_arrivals)
             self._construction_arrivals.clear()
-            self.construction.update_external(self.city,self.time-self._last_construction)
+            self._settle_construction(self.time)
+            self.construction.update_external(self.city,self.time-self._last_construction,advance_work=False)
             self.sync_network()
             self._last_construction=self.time
             self.sync_buildings()
             if (self.construction.trips or self.construction.pending_trips or self.construction.road_deconstruction_jobs
                     or any(b.phase==BuildablePhase.UNDER_CONSTRUCTION for b in self.city.buildings)):
                 self._once('construction',self.time+1,'construction')
+        elif kind=='builders':self._dispatch_builders()
         elif kind=='jobs':self.assign_jobs()
         elif kind in ('assess','assess_changed'):
             self.assess_household(value)
@@ -382,6 +504,9 @@ class CitySimulation(ServiceTown):
         elif kind in ('leave','retry_leave'):
             p=self.residents[value]
             if p.state=='home' and self.time%DAY<self.work_end:p.return_due=False;self._safe_depart(p)
+        elif kind=='retry_site_return':
+            p=self.residents[value]
+            if p.state=='work' and p.worksite:self._safe_depart(p,True)
         elif kind in ('return_person','retry_return'):
             p=self.residents[value];p.return_due=True
             if p.state=='work':self._safe_depart(p,True)
@@ -423,7 +548,7 @@ class CitySimulation(ServiceTown):
     def _choose_service(self,pid,purpose):
         p=self.residents[pid]
         if p.state not in ('home','work'):return
-        origin=p.home if p.state=='home' else p.workplace
+        origin=p.home if p.state=='home' else (p.worksite or p.workplace)
         role,resource=('cafe','food') if purpose=='meal' else ('clinic','medicine')
         options=[sid for sid,b in self.businesses.items() if b.kind==role and self.staff[sid]>0
                  and self.sites[sid]['building'].inventory.amounts.get(resource,0)>=1]
@@ -447,9 +572,9 @@ class CitySimulation(ServiceTown):
 
     def assign_workplace(self,person_id,site):
         p=self.residents[person_id]
-        if p.state!='home' or site not in self.businesses:raise ValueError('Assign a resident who is at home to an operating workplace')
+        if p.state!='home' or site not in self._workplaces:raise ValueError('Assign a resident who is at home to an available workplace')
         assigned=sum(q.id!=p.id and q.workplace==site for q in self.residents.values())
-        if assigned>=self.sites[site]['building'].jobs:raise ValueError('Workplace has no vacant jobs')
+        if assigned>=self._workplaces[site]:raise ValueError('Workplace has no vacant jobs')
         p.worker=True;p.workplace=site;self._schedule_shift(p)
 
     def report(self):
@@ -457,7 +582,7 @@ class CitySimulation(ServiceTown):
         types=self._resource_types()
         stock=sum(amount for s in self.sites.values() for r,amount in s['building'].inventory.amounts.items() if r in types)
         cargo=sum(sum(v.cargo.values()) for v in self.fleet.vehicles.values())+sum(sum(h.cargo.values()) for h in self.households.values())
-        reserved=sum(j.get('reserved',0) for j in self.jobs.values())
+        reserved=sum(j.get('reserved',0) for j in self.jobs.values())+sum(v['amount'] for v in self.visits.values() if v['purpose']=='shopping')
         result['resource_balance_error']=stock+cargo+reserved+self.consumed+self.medical_sinks-self.initial_resources-self.imported_resources-sum(self.resource_journal.values())
         result['households']=len(self.households)
         result['relocating_households']=sum(h.moving_to is not None for h in self.households.values())

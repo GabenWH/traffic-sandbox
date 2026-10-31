@@ -22,6 +22,7 @@ class FleetVehicle:
     destination: str | None = None
     trips: int = 0
     distance_feet: float = 0.0
+    truck_spec_id: str = 'material_truck'
     _actor: object = field(default=None, repr=False)
     _last: float = field(default=0.0, repr=False)
 

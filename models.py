@@ -93,6 +93,38 @@ class ResourceInventory:
             return ConsumptionState.PARTIAL, consumed
         return ConsumptionState.FULL, consumed
 
+    def shortage(self, resource: str, target: float, incoming: float = 0.0) -> float:
+        """Uncovered demand; reserved and travelling loads count as incoming."""
+        if any(not isfinite(x) or x < 0 for x in (target, incoming)):
+            raise ValueError("Targets and incoming amounts must be finite and nonnegative")
+        return max(0.0, target - self.amounts.get(resource, 0.0) - incoming)
+
+    def transfer_to(self, destination: ResourceInventory, resource: str, amount: float) -> float:
+        """Move finite stock between building, reservation and cargo inventories."""
+        if destination is self:
+            raise ValueError("A transfer needs distinct inventories")
+        _, taken = self.consume(resource, amount)
+        if taken:
+            destination.add(resource, taken)
+        return taken
+
+    def produce(self, inputs: dict[str, float], outputs: dict[str, float], batches: float) -> float:
+        """Apply a recipe, limited by the scarcest input, with no partial inputs."""
+        if not isfinite(batches) or batches < 0:
+            raise ValueError("Batches must be finite and nonnegative")
+        for resource, amount in (*inputs.items(), *outputs.items()):
+            if not isinstance(resource, str) or not resource.strip() or resource != resource.strip():
+                raise ValueError("Recipe resource IDs must be nonempty and normalized")
+            if not isfinite(amount) or amount <= 0:
+                raise ValueError("Recipe quantities must be positive and finite")
+        actual = min([batches, *(self.amounts.get(r, 0.0) / q for r, q in inputs.items())])
+        if actual > 0:
+            for resource, amount in inputs.items():
+                self.consume(resource, amount * actual)
+            for resource, amount in outputs.items():
+                self.add(resource, amount * actual)
+        return actual
+
     def scaled(self, fraction: float) -> ResourceInventory:
         if not isfinite(fraction) or not 0 <= fraction <= 1:
             raise ValueError("Inventory scale must be between zero and one")
@@ -189,8 +221,7 @@ class Buildable(CityObject):
             if missing:
                 details = ", ".join(f"{name}: {amount:g}" for name, amount in missing.items())
                 raise ValueError(f"Construction needs are not met: {details}")
-            for resource, amount in self.construction_needs.items():
-                self.inventory.consume(resource, amount)
+            self.inventory.produce(self.construction_needs, {}, 1)
         self.active_work = WorkOrder(kind, float(required_work))
         if kind is WorkType.CONSTRUCTION:
             self.phase = BuildablePhase.UNDER_CONSTRUCTION
@@ -201,7 +232,7 @@ class Buildable(CityObject):
     def construction_shortages(self) -> dict[str, float]:
         """Return the undelivered amount for each construction resource."""
         return {
-            resource: amount - self.inventory.amounts.get(resource, 0.0)
+            resource: self.inventory.shortage(resource, amount)
             for resource, amount in self.construction_needs.items()
             if self.inventory.amounts.get(resource, 0.0) < amount
         }
