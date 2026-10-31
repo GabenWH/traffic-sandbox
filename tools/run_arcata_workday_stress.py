@@ -1,6 +1,11 @@
 """Reproducible authored-city stress scenario; synthetic premises on cached Arcata roads."""
-import sys,json,time,random,traceback,os
+import sys,json,time,random,traceback,os,argparse,math
 from pathlib import Path
+parser=argparse.ArgumentParser(description='Run the Arcata workday stress scenario.')
+parser.add_argument('--hours',type=float,default=14.0,help='simulated hours to run from 6 a.m. (default: 14)')
+args=parser.parse_args()
+if not math.isfinite(args.hours) or args.hours<=0:
+ parser.error('hours must be greater than zero and finite')
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from collections import Counter
 from city import Building,Parcel
@@ -101,7 +106,7 @@ for b in [*business,*farms,factory]:
  try:runtime.commission_truck(b.id)
  except ValueError:pass
 runtime.initial_fuel=sum(v.fuel_liters for v in runtime.fleet.vehicles.values())+sum(b.fuel_liters for b in runtime.transit.buses.values())
-configuration=dict(employment_setup='authored job roster' if AUTHORED else 'automatic job selection',houses=500,apartments=500,population=len(runtime.residents),businesses=20,farms=3,factory=1,buses=len(runtime.transit.buses),lines=len(runtime.transit.lines),source=meta,synthetic_locations=True)
+configuration=dict(employment_setup='authored job roster' if AUTHORED else 'automatic job selection',houses=500,apartments=500,population=len(runtime.residents),businesses=20,farms=3,factory=1,buses=len(runtime.transit.buses),lines=len(runtime.transit.lines),source=meta,synthetic_locations=True,duration_hours=args.hours)
 (OUT/'configuration.json').write_text(json.dumps(configuration,indent=2))
 log(stage='assigned',workers=sum(p.worker for p in runtime.residents.values()),assigned=sum(p.workplace is not None for p in runtime.residents.values()))
 runtime.time=runtime.transit.time=runtime.transit.traffic.elapsed_time=21600.0
@@ -124,11 +129,13 @@ if watch_seconds:
    if sample['elapsed']>=watch_seconds:os._exit(124)
  threading.Thread(target=watch,daemon=True).start()
 try:
- for hour in range(6,21):
+ end_time=21600.0+args.hours*3600
+ while True:
   start=time.perf_counter()
-  if hour>6:runtime.update(3600)
-  f=runtime.report();f.update(hour=hour,step_wall=time.perf_counter()-start,states=dict(Counter(p.state for p in runtime.residents.values())),staff=dict(runtime.staff),bus_waiting=sum(map(len,runtime.transit.queues.values())),bus_onboard=sum(len(b.passengers) for b in runtime.transit.buses.values()),production=runtime.produced,unmet=runtime.unmet,construction_phase=str(site.phase))
+  f=runtime.report();f.update(hour=runtime.time/3600,step_wall=0 if not frames else step_wall,states=dict(Counter(p.state for p in runtime.residents.values())),staff=dict(runtime.staff),bus_waiting=sum(map(len,runtime.transit.queues.values())),bus_onboard=sum(len(b.passengers) for b in runtime.transit.buses.values()),production=runtime.produced,unmet=runtime.unmet,construction_phase=str(site.phase))
   frames.append(f);(OUT/'hourly.json').write_text(json.dumps(frames,indent=2));log(stage='hour',**f)
+  if runtime.time>=end_time-1e-7:break
+  start=time.perf_counter();runtime.update(min(3600,end_time-runtime.time));step_wall=time.perf_counter()-start
  summary=dict(configuration=configuration,hours=frames,wall_seconds=time.perf_counter()-t0,business_inventory={b.id:dict(b.inventory.amounts) for b in [*business,*farms,factory]},events=dict(Counter(e['event'] for e in runtime.events)),transit_events=dict(Counter(e['event'] for e in runtime.transit.events)))
  (OUT/'summary.json').write_text(json.dumps(summary,indent=2));log(stage='complete',wall_seconds=summary['wall_seconds'])
 except Exception:
