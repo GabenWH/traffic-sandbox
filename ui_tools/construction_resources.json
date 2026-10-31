@@ -32,6 +32,34 @@
       "mass_kg_per_unit": 20,
       "volume_m3_per_unit": 0.01,
       "visual_key": "deconstruction_materials"
+    },
+    {
+      "id": "food",
+      "name": "Food",
+      "unit": "portion",
+      "mass_kg_per_unit": 0.5,
+      "volume_m3_per_unit": 0.001
+    },
+    {
+      "id": "grain",
+      "name": "Grain",
+      "unit": "batch",
+      "mass_kg_per_unit": 0.5,
+      "volume_m3_per_unit": 0.001
+    },
+    {
+      "id": "seed",
+      "name": "Seed",
+      "unit": "batch",
+      "mass_kg_per_unit": 0.1,
+      "volume_m3_per_unit": 0.0002
+    },
+    {
+      "id": "medicine",
+      "name": "Medicine",
+      "unit": "dose",
+      "mass_kg_per_unit": 0.01,
+      "volume_m3_per_unit": 2e-05
     }
   ],
   "trucks": [

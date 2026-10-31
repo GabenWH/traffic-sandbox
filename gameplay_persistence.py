@@ -189,7 +189,7 @@ def dump_city(city):
     # Flush completed movement events into logical records before taking state.
     city._arrivals()
     managed=set(city.fleet.vehicles)|set(city.transit.buses)
-    return dict(schema='city.gameplay.v1',time=city.time,
+    return dict(schema='city.gameplay.v1',time=city.time,resident_construction_started=city._resident_construction_started,
         residents=[asdict(p) for p in city.residents.values()],households=[asdict(h) for h in city.households.values()],
         fleet=[{f.name:getattr(v,f.name) for f in fields(v) if not f.name.startswith('_')} for v in city.fleet.vehicles.values()],
         transport=dump_transport(city.transit,managed),events=deepcopy(city._events),scheduled=sorted(city._scheduled),
@@ -199,7 +199,7 @@ def dump_city(city):
         meal_queues={k:list(v) for k,v in city.meal_queues.items()},meal_credit=dict(city.meal_credit),meal_capacity=dict(city.meal_capacity),
         metrics={k:getattr(city,k) for k in METRICS},counters=dict(city.counters),resource_journal=dict(city.resource_journal),
         suspended_walkers=city._suspended_walkers,resuming_vehicles=city._resuming_vehicles,resuming_buses=city._resuming_buses,
-        last_economy=city._last_economy,last_construction=city._last_construction,candidate_cursor=city._candidate_cursor)
+        last_economy=city._last_economy,last_construction=city._last_construction,last_construction_work=city._last_construction_work,candidate_cursor=city._candidate_cursor)
 
 
 def restore_city(city,raw):
@@ -249,10 +249,18 @@ def restore_city(city,raw):
         for key,value in data['metrics'].items():setattr(city,key,value)
         city.resource_journal=Counter(data.get('resource_journal',{}))
         city.counters=Counter(data['counters']);city._last_economy=data['last_economy']
-        city._last_construction=data['last_construction'];city._candidate_cursor=data['candidate_cursor']
+        city._last_construction=data['last_construction'];city._last_construction_work=data.get('last_construction_work',data['last_construction']);city._candidate_cursor=data['candidate_cursor']
         city._suspended_walkers={int(k):v for k,v in data.get('suspended_walkers',{}).items()}
         city._resuming_vehicles=data.get('resuming_vehicles',{})
         city._resuming_buses=data.get('resuming_buses',{})
+        city._attendance={p.id:(p.worksite or p.workplace) for p in city.residents.values() if p.state=='work' and not p.return_due and (p.worksite or p.workplace) in city.sites}
+        city.staff=Counter(city._attendance.values())
+        city._resident_construction_started=data.get('resident_construction_started',city._resident_construction_started)
+        city._sync_workforce_mode()
+        if city.construction and city.construction.resident_workforce:
+            for sid in (*city._workplaces,*city._construction_sites):city.sites[sid]['building'].assigned_workers=city.staff[sid]
+        city._construction_commitments=Counter(p.worksite for p in city.residents.values() if p.worksite and p.state!='returning_company')
+        city._available_builders={p.id for p in city.residents.values() if p.id in city._attendance and not p.worksite and p.workplace in city.businesses and city.businesses[p.workplace].kind=='construction_company'}
         city._refresh_occupancy();city._bind_arrivals()
     except (KeyError,TypeError,IndexError) as error:
         raise ValueError('Invalid city gameplay snapshot: '+str(error)) from error

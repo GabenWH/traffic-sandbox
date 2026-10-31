@@ -27,7 +27,7 @@ class ServicesTests(unittest.TestCase):
         t._economy(300);self.assertEqual(t.treated,0)
         t.sites['work']['building'].inventory.amounts['medicine']=1
         t._economy(300);self.assertEqual(t.treated,1)
-        self.assertEqual(t.sites['work']['building'].inventory.amounts['medicine'],0)
+        self.assertEqual(t.sites['work']['building'].inventory.amounts.get('medicine',0),0)
 
     def test_quiescent_service_checkpoint_keeps_businesses_and_requests(self):
         import json

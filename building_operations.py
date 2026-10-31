@@ -2,7 +2,7 @@
 from copy import deepcopy
 from math import isfinite
 
-ROLES = {'home', 'workplace', 'farm', 'bakery', 'cafe', 'market', 'clinic', 'bus_stop'}
+ROLES = {'home', 'workplace', 'farm', 'bakery', 'cafe', 'market', 'clinic', 'bus_stop', 'construction_company'}
 
 
 def validate_operation(value):
