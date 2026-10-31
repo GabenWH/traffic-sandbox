@@ -254,6 +254,7 @@ def world_from_dict(data: object) -> LoadedWorld:
                 ),
                 lane_metadata=lane_metadata,
                 create_intersections=False,
+                _defer_mobility_rebuild=True,
             )
             road_by_id[road.id] = road
             _apply_buildable_state(

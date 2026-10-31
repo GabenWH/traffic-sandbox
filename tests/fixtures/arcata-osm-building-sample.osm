@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='utf-8'?>
+<osm version="0.6" generator="traffic-sandbox test fixture" copyright="OpenStreetMap and contributors" attribution="https://www.openstreetmap.org/copyright" license="https://opendatacommons.org/licenses/odbl/1-0/">
+  <node id="7888454998" lat="40.8608420" lon="-124.0892060" />
+  <node id="7888454999" lat="40.8607970" lon="-124.0889950" />
+  <node id="7888455000" lat="40.8609860" lon="-124.0889240" />
+  <node id="7888455001" lat="40.8610310" lon="-124.0891350" />
+  <node id="7888455002" lat="40.8605330" lon="-124.0890910" />
+  <node id="7888455003" lat="40.8607790" lon="-124.0890030" />
+  <node id="7888455004" lat="40.8608220" lon="-124.0892100" />
+  <node id="7888455005" lat="40.8605760" lon="-124.0892980" />
+  <way id="845521364">
+    <nd ref="7888454998" />
+    <nd ref="7888454999" />
+    <nd ref="7888455000" />
+    <nd ref="7888455001" />
+    <nd ref="7888454998" />
+    <tag k="building" v="yes" />
+    <tag k="source" v="microsoft/BuildingFootprints" />
+  </way>
+  <way id="845521365">
+    <nd ref="7888455002" />
+    <nd ref="7888455003" />
+    <nd ref="7888455004" />
+    <nd ref="7888455005" />
+    <nd ref="7888455002" />
+    <tag k="building" v="yes" />
+    <tag k="source" v="microsoft/BuildingFootprints" />
+  </way>
+</osm>

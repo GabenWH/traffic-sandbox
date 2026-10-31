@@ -179,6 +179,7 @@ class CityMap:
         lane_metadata: list[dict[str, object]] | None = None,
         create_intersections: bool = True,
         endpoint_overrun_tolerance: float = DEFAULT_ENDPOINT_OVERRUN_TOLERANCE,
+        _defer_mobility_rebuild: bool = False,
     ) -> Road:
         """Create a road, splitting at crossings.
 
@@ -187,6 +188,8 @@ class CityMap:
         """
         if endpoint_overrun_tolerance < 0:
             raise ValueError("Endpoint overrun tolerance cannot be negative")
+        if _defer_mobility_rebuild and create_intersections:
+            raise ValueError("Deferred rebuilding is only supported while restoring roads")
         if elevations is not None and len(elevations) != len(centerline):
             raise ValueError("Road elevations must match centerline points")
         road = Road(
@@ -205,7 +208,8 @@ class CityMap:
         road.rebuild_lanes(lane_metadata)
         if not create_intersections:
             self.roads.append(road)
-            self.rebuild_mobility_network()
+            if not _defer_mobility_rebuild:
+                self.rebuild_mobility_network()
             return road
 
         # A demolition job owns this segment's area, inventory, and workforce
