@@ -77,6 +77,12 @@ Python still constructs the canonical road network and external trip requests.
 `NativeRoadSimulation.find_route` supports junction and precise lane-position
 queries in C++. The existing construction scheduler can supply external routes
 to native admission. The older fixed freeway simulation and economy stay Python.
+Walking topology is compiled by `native_walking.NativeWalkingGraph` into an
+immutable native snapshot, sharing `SpawnGraph` search with driving. Native
+walking queries project endpoints and add bidirectional query-local overlays;
+they do not copy adjacency or touch the mutable traffic engine. Callers own
+query output buffers, permitting concurrent readers. Python world rebuilds
+replace snapshots; Python still selects services and bus itineraries.
 
 `vehicle_views()` borrows native records until the next engine operation.
 `snapshot()` returns owned Python values. `sync()` explicitly copies output into

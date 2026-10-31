@@ -1,0 +1,9 @@
+{"wall": 13.83, "stage": "map_loaded", "roads": 1181}
+{"wall": 18.0, "stage": "preflight", "connected": 25}
+{"wall": 22.28, "stage": "preflight", "connected": 50}
+{"wall": 26.74, "stage": "preflight", "connected": 75}
+{"wall": 30.43, "stage": "preflight", "connected": 100}
+{"wall": 30.43, "stage": "connected_roads", "count": 100}
+{"wall": 43.34, "stage": "runtime_ready", "buildings": 1026}
+{"wall": 44.63, "stage": "bus_network", "lines": 3, "buses": 12}
+{"wall": 44.66, "stage": "population_seeded", "residents": 6000}

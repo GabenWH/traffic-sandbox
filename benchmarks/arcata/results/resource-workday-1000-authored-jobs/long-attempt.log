@@ -1,0 +1,11 @@
+{"wall": 14.18, "stage": "map_loaded", "roads": 1181}
+{"wall": 18.34, "stage": "preflight", "connected": 25}
+{"wall": 22.95, "stage": "preflight", "connected": 50}
+{"wall": 27.31, "stage": "preflight", "connected": 75}
+{"wall": 31.41, "stage": "preflight", "connected": 100}
+{"wall": 31.41, "stage": "connected_roads", "count": 100}
+{"wall": 44.84, "stage": "runtime_ready", "buildings": 1026}
+{"wall": 45.99, "stage": "bus_network", "lines": 3, "buses": 12}
+{"wall": 46.02, "stage": "population_seeded", "residents": 6000}
+{"wall": 46.03, "stage": "assigned", "workers": 3000, "assigned": 3000}
+{"wall": 46.04, "stage": "hour", "time": 21600.0, "population": 6000, "at_home": 6000, "at_work": 0, "commuting": 0, "workers_arrived": 0, "produced_food": 0.0, "consumed_food": 0.0, "unmet_food": 0.0, "deliveries": 0, "vehicles": 36, "active_road_vehicles": 0, "fuel_liters": 14400, "resource_balance_error": 0.0, "fuel_used_liters": 0, "at_services": 0, "treated": 0, "clinic_waiting": 0, "meals_served": 0, "harvested": 0.0, "outstanding_requests": 0, "households": 1500, "relocating_households": 0, "hour": 6, "step_wall": 0.0034089600003426312, "states": {"home": 6000}, "staff": {}, "bus_waiting": 0, "bus_onboard": 0, "production": 0.0, "unmet": 0.0, "construction_phase": "under_construction"}
