@@ -1,9 +1,10 @@
-"""Convert OSM building footprints into the city's rectangular home model."""
+"""Convert OSM building footprints into playable city homes."""
 from collections import Counter
 import json
 from math import isfinite
 import xml.etree.ElementTree as ET
 
+from building_footprints import triangulate_ring
 from building_operations import validate_operation
 from city import Building, Parcel, ZoneType
 from models import BuildablePhase
@@ -99,6 +100,10 @@ def _rectangle(rings, project):
         if len(ring) < 4 or ring[0] != ring[-1] or len(set(ring[:-1])) < 3:
             return None
         points = [project(p) for p in ring]
+        try:
+            triangulate_ring(points)
+        except ValueError:
+            return None
         origin = points[0]
         area = abs(sum((a[0]-origin[0])*(b[1]-origin[1]) -
                        (b[0]-origin[0])*(a[1]-origin[1])
@@ -161,7 +166,9 @@ def import_osm_homes(city, paths, in_boundary, project, *, residents_per_buildin
             counts['already_imported'] += 1
             return True
         x, y, width, height = rectangle
-        parcel = Parcel(x, y, width, height, ZoneType.RESIDENTIAL, id=f'osm-parcel:{kind}:{ident}')
+        parcel = Parcel(x, y, width, height, ZoneType.RESIDENTIAL,
+                        id=f'osm-parcel:{kind}:{ident}',
+                        footprints=[[project(point) for point in ring] for ring in rings])
         building = Building(f'OSM home {kind} {ident}', parcel, residents=residents_per_building,
                             jobs=0, buildable_id='small_house', color='#d9b38c', id=bid,
                             phase=BuildablePhase.OPERATIONAL, operation=validate_operation({'role': 'home'}))
@@ -173,6 +180,12 @@ def import_osm_homes(city, paths, in_boundary, project, *, residents_per_buildin
 
     for ident, relation in sorted(relations.items()):
         if not is_building(relation):
+            continue
+        if any(member.get('role') == 'inner' for member in relation.get('members', [])):
+            # Filling a courtyard would create false geometry; report the omission.
+            relation_members.update(str(member.get('ref')) for member in relation.get('members', [])
+                                    if member.get('type') == 'way' and member.get('role', '') in ('', 'outer'))
+            counts['unsupported_holes'] += 1
             continue
         rings, members = _outer_rings(relation, ways, nodes)
         if add('relation', ident, rings):

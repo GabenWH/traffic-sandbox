@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Any
 
+from building_footprints import triangulate_ring
 from city import Building, CityMap, Parcel, Terrain, ZoneType
 from models import (
     Buildable,
@@ -27,7 +28,7 @@ from roundabouts import validate_roundabout_dimensions
 
 
 WORLD_FORMAT = "lanesimulator.world"
-WORLD_VERSION = 8
+WORLD_VERSION = 9
 
 
 class WorldFormatError(ValueError):
@@ -135,6 +136,7 @@ def world_to_dict(
                     "width": parcel.width,
                     "height": parcel.height,
                     "zone": parcel.zone.value if parcel.zone is not None else None,
+                    "footprints": [[[x, y] for x, y in ring] for ring in parcel.footprints],
                 }
                 for parcel in city_map.parcels
             ],
@@ -167,7 +169,7 @@ def world_from_dict(data: object) -> LoadedWorld:
     if root.get("format") != WORLD_FORMAT:
         raise WorldFormatError("This is not a city-builder world save.")
     version = root.get("version")
-    if version not in (4, 5, 6, 7, WORLD_VERSION):
+    if version not in (4, 5, 6, 7, 8, WORLD_VERSION):
         raise WorldFormatError(f"Unsupported world-save version: {root.get('version')!r}.")
 
     world = _mapping(root.get("world"), "world")
@@ -426,6 +428,17 @@ def world_from_dict(data: object) -> LoadedWorld:
             zone = None if raw_zone is None else ZoneType(_string(raw_zone, f"{path}.zone"))
         except ValueError as error:
             raise WorldFormatError(f"Unknown zone in {path}: {raw_zone!r}.") from error
+        footprints = []
+        for ring_index, raw_ring in enumerate(_list(parcel_data.get("footprints", []), f"{path}.footprints")):
+            ring_path = f"{path}.footprints[{ring_index}]"
+            ring = _points(raw_ring, ring_path)
+            if len(set(ring)) < 3:
+                raise WorldFormatError(f"{ring_path} must contain at least three distinct points.")
+            try:
+                triangulate_ring(ring)
+            except ValueError as error:
+                raise WorldFormatError(f"Invalid {ring_path}: {error}") from error
+            footprints.append(ring)
         parcel = Parcel(
             x=_number(parcel_data.get("x"), f"{path}.x"),
             y=_number(parcel_data.get("y"), f"{path}.y"),
@@ -433,7 +446,12 @@ def world_from_dict(data: object) -> LoadedWorld:
             height=_positive_number(parcel_data.get("height"), f"{path}.height"),
             zone=zone,
             id=parcel_id,
+            footprints=footprints,
         )
+        if any(not (parcel.x-1e-6 <= x <= parcel.x+parcel.width+1e-6 and
+                    parcel.y-1e-6 <= y <= parcel.y+parcel.height+1e-6)
+               for ring in footprints for x, y in ring):
+            raise WorldFormatError(f"{path}.footprints must fit within its bounding rectangle.")
         city_map.parcels.append(parcel)
         parcel_by_id[parcel_id] = parcel
 

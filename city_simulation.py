@@ -103,7 +103,7 @@ class CitySimulation(ServiceTown):
         self._sync_workforce_mode()
         for b in self.city.buildings:
             role = operation_for(b)
-            center = (b.parcel.x+b.parcel.width/2, b.parcel.y+b.parcel.height/2)
+            center = b.parcel.representative_point()
             position = min(building_access_points(self.city,b),key=lambda p:dist(p.point,center),default=None)
             site = dict(building=b,road_position=position,walk_point=center,parking_capacity=max(4,b.jobs+b.residents+4))
             self.sites[b.id] = site

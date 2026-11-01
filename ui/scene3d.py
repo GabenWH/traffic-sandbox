@@ -19,6 +19,7 @@ from panda3d.core import (
 )
 
 from city import Building
+from building_footprints import open_ring, prism_geometry
 from mobility import nearest_lane_position
 from models import BuildablePhase, Intersection, IntersectionKind, Road, WorkType
 from vehicle import Vehicle
@@ -95,6 +96,22 @@ def quad_geom(quads: Iterable[DeckQuad], name: str) -> GeomNode:
         triangles.addVertices(count, count + 1, count + 2)
         triangles.addVertices(count, count + 2, count + 3)
         count += 4
+    geometry = Geom(data)
+    geometry.addPrimitive(triangles)
+    node = GeomNode(name)
+    node.addGeom(geometry)
+    return node
+
+
+def triangle_geom(faces, name: str) -> GeomNode:
+    """Make a surface from already-triangulated polygon faces."""
+    data = GeomVertexData(name, GeomVertexFormat.getV3(), Geom.UHStatic)
+    writer = GeomVertexWriter(data, "vertex")
+    triangles = GeomTriangles(Geom.UHStatic)
+    for index, face in enumerate(faces):
+        for vertex in face:
+            writer.addData3(*vertex)
+        triangles.addVertices(3*index, 3*index+1, 3*index+2)
     geometry = Geom(data)
     geometry.addPrimitive(triangles)
     node = GeomNode(name)
@@ -184,6 +201,8 @@ def draw_intersection(junction: Intersection, parent: NodePath) -> NodePath:
 def draw_building(building: Building, parent: NodePath) -> NodePath:
     """Draw a building mass, or a foundation and scaffold while it is built."""
     parcel = building.parcel
+    if parcel.footprints:
+        return _draw_footprint_building(building, parent)
     root = parent.attachNewNode(f"building:{building.id}")
     root.setPos(parcel.x + parcel.width / 2, parcel.y + parcel.height / 2, 0)
     width = max(1.0, parcel.width * 0.88)
@@ -225,6 +244,49 @@ def draw_building(building: Building, parent: NodePath) -> NodePath:
         roof.setColor(*panda_rgba("#454b52"))
         roof.setTwoSided(True)
         _draw_building_facade(root, width, depth, foundation_height, target_height)
+    return root
+
+
+def _draw_footprint_building(building: Building, parent: NodePath) -> NodePath:
+    parcel = building.parcel
+    center_x, center_y = parcel.x + parcel.width/2, parcel.y + parcel.height/2
+    rings = [[(x-center_x, y-center_y) for x,y in open_ring(ring)] for ring in parcel.footprints]
+    root = parent.attachNewNode(f"building:{building.id}")
+    root.setPos(center_x, center_y, 0)
+    target_height = _building_height(building)
+    under_construction = building.phase in (BuildablePhase.PLANNING, BuildablePhase.UNDER_CONSTRUCTION)
+    progress = (building.active_work.progress if under_construction and building.active_work is not None
+                and building.active_work.kind is WorkType.CONSTRUCTION else 0.0)
+
+    def add_prisms(name, bottom, top, color):
+        sides, tops = [], []
+        for ring in rings:
+            part_sides, part_tops = prism_geometry(ring, bottom, top)
+            sides.extend(part_sides); tops.extend(part_tops)
+        for geometry in (quad_geom(sides, name + '-walls'), triangle_geom(tops, name + '-top')):
+            node = root.attachNewNode(geometry)
+            node.setColor(*panda_rgba(color))
+            node.setTwoSided(True)
+
+    foundation_height = 2.0
+    add_prisms('building-foundation', 0, foundation_height, '#777c80')
+    wall_height = target_height * (progress if under_construction else 1.0)
+    if wall_height > 0:
+        add_prisms('building-body', foundation_height, foundation_height + wall_height, building.color)
+    if under_construction:
+        scaffold = LineSegs('construction-scaffold')
+        scaffold.setColor(*panda_rgba('#ffb000')); scaffold.setThickness(2)
+        top = foundation_height + target_height
+        for ring in rings:
+            for x,y in ring:
+                scaffold.moveTo(x,y,foundation_height); scaffold.drawTo(x,y,top)
+            scaffold.moveTo(ring[0][0],ring[0][1],top)
+            for x,y in ring[1:]+ring[:1]:
+                scaffold.drawTo(x,y,top)
+        root.attachNewNode(scaffold.create()).setName('construction-scaffold')
+    else:
+        add_prisms('building-roof', foundation_height + target_height,
+                   foundation_height + target_height + 2.0, '#454b52')
     return root
 
 

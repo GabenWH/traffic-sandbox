@@ -157,6 +157,28 @@ class RendererMixin:
             right, bottom = self.world_to_screen((parcel.x + parcel.width, parcel.y + parcel.height))
             if right < 0 or bottom < 0 or left > self.canvas.winfo_width() or top > self.canvas.winfo_height():
                 continue
+            if parcel.footprints:
+                low_detail = self.camera_zoom < CITY_LOW_DETAIL_ZOOM
+                options = {
+                    "fill": building.color,
+                    "outline": "#ffb000" if under_construction else ("" if low_detail else "#eee4d5"),
+                    "width": max(1, round(self.camera_zoom)), "tags": STATIC_TAG,
+                }
+                if under_construction:
+                    options["dash"] = (4, 3) if low_detail else (7, 4)
+                for ring in parcel.footprints:
+                    points = [coordinate for vertex in ring for coordinate in self.world_to_screen(vertex)]
+                    if not low_detail:
+                        inset = max(1, 3 * self.camera_zoom)
+                        self.canvas.create_polygon(*(coordinate + inset for coordinate in points),
+                                                   fill=Palette.BUILDING_SHADOW, outline="", tags=STATIC_TAG)
+                    self.canvas.create_polygon(*points, **options)
+                if self.camera_zoom >= 0.7:
+                    self.canvas.create_text((left + right) / 2, (top + bottom) / 2,
+                                            text=building.name, fill=Palette.WHITE,
+                                            font=("Arial", max(7, round(9 * self.camera_zoom)), "bold"),
+                                            width=max(20, right - left - 6), tags=STATIC_TAG)
+                continue
             if self.camera_zoom < CITY_LOW_DETAIL_ZOOM:
                 options = {
                     "fill": building.color,

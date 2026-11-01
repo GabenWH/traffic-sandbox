@@ -50,7 +50,9 @@ An existing Overpass JSON or OSM XML extract can instead be passed with
 uses the center of each building's bounding rectangle to test city-boundary
 membership, joins outer-way fragments in multipolygon relations, and avoids
 duplicating a relation's tagged outer ways. Invalid or incomplete geometry is
-skipped. The map service requires network access and may be temporarily busy;
+skipped. Multipolygon relations containing inner rings (courtyards) are also
+skipped and reported because the city does not yet render holes. The map service
+requires network access and may be temporarily busy;
 the offline sample does not require it. The importer will not overwrite an
 existing extract or city save.
 
@@ -62,12 +64,14 @@ or population. Every home defaults to capacity for four people; set
 operational, vacant, and without food. Use the normal household and supply
 commands to populate them and stock them.
 
-The city model currently supports axis-aligned rectangular building parcels.
-Each imported polygon is approximated by its bounding rectangle in feet; it does
-not preserve the exact polygon, orientation, holes, or floor count. Rectangles
-can overlap each other or a road, and mapped positions do not guarantee that a
-usable entrance or vehicle access exists. This creates an authored city save;
-the separate synthetic workday stress scenario is not changed by this import.
+Imported homes retain their mapped exterior polygons, including their angle and
+non-rectangular outlines. Their axis-aligned bounds are kept for quick culling,
+not used as the visible or selectable footprint. The importer does not preserve
+interior holes or infer floor counts. Mapped footprints may themselves overlap,
+and mapped positions do not guarantee a usable entrance or vehicle access.
+This creates an authored city save; the separate synthetic workday stress
+scenario is not changed by this import. Existing saves made with the old
+rectangle-only importer need to be regenerated from their building extract.
 
 ## Run
 

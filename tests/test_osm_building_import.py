@@ -121,6 +121,35 @@ class BuildingImportTests(unittest.TestCase):
         self.assertEqual(len(city.buildings), 3)
         self.assertEqual(metadata['imported_homes'], 3)
 
+    def test_import_keeps_rotated_source_outline(self):
+        data = json.loads(self.buildings.read_text())
+        diamond = [(-124.077, 40.8652), (-124.0769, 40.86525),
+                   (-124.077, 40.8653), (-124.0771, 40.86525), (-124.077, 40.8652)]
+        data['elements'].append({'type': 'way', 'id': 106, 'tags': {'building': 'house'},
+                                 'geometry': geometry(diamond)})
+        self.buildings.write_text(json.dumps(data))
+        city, _, _ = build_city([self.roads], self.boundary, building_paths=[self.buildings])
+        home = next(b for b in city.buildings if b.id == 'osm-building:way:106')
+        outline = home.parcel.footprints[0]
+        self.assertEqual(len(outline), 5)
+        self.assertNotEqual(outline[0][0], outline[1][0])
+        self.assertNotEqual(outline[0][1], outline[1][1])
+        self.assertFalse(home.parcel.contains((home.parcel.x, home.parcel.y)))
+        saved = world_to_dict(city, unit_system='imperial', camera_x=0, camera_y=0, camera_zoom=1)
+        restored = world_from_dict(saved).city_map
+        recovered = next(b for b in restored.buildings if b.id == home.id)
+        self.assertEqual(recovered.parcel.footprints, home.parcel.footprints)
+
+    def test_relation_with_a_courtyard_is_reported_instead_of_filled(self):
+        data = json.loads(self.buildings.read_text())
+        relation = next(e for e in data['elements'] if e['type'] == 'relation')
+        relation['members'].append({'type': 'way', 'ref': 203, 'role': 'inner'})
+        self.buildings.write_text(json.dumps(data))
+        city, _, metadata = build_city([self.roads], self.boundary, building_paths=[self.buildings])
+        self.assertEqual(metadata['unsupported_holes'], 1)
+        self.assertEqual({b.id for b in city.buildings},
+                         {'osm-building:way:101', 'osm-building:way:102'})
+
     def test_download_requests_building_geometry_and_saves_extract(self):
         destination = Path(self.temp.name) / 'downloaded.json'
         response = {'elements': [{'type': 'way', 'id': 101, 'tags': {'building': 'house'}}]}

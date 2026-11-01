@@ -8,6 +8,7 @@ from math import dist
 from random import Random
 from uuid import uuid4
 
+from building_footprints import contains_point, triangulate_ring
 from color_palette import Palette
 from mobility import (
     VEHICLE_LAYER,
@@ -77,13 +78,26 @@ class Parcel(CityObject):
     height: float
     zone: ZoneType | None = None
     id: str = field(default_factory=lambda: str(uuid4()))
+    footprints: list[list[tuple[float, float]]] = field(default_factory=list)
     inspection_title = "Parcel"
 
     def contains(self, position: Point) -> bool:
-        return (
+        in_bounds = (
             self.x <= position[0] <= self.x + self.width
             and self.y <= position[1] <= self.y + self.height
         )
+        return in_bounds and (not self.footprints or any(contains_point(ring, position) for ring in self.footprints))
+
+    def representative_point(self) -> Point:
+        center = (self.x + self.width/2, self.y + self.height/2)
+        if self.contains(center):
+            return center
+        triangles = [triangle for ring in self.footprints for triangle in triangulate_ring(ring)]
+        def area(triangle):
+            a,b,c = triangle
+            return abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]))
+        a,b,c = max(triangles, key=area)
+        return ((a[0]+b[0]+c[0])/3, (a[1]+b[1]+c[1])/3)
 
     def inspection_properties(self):
         return (

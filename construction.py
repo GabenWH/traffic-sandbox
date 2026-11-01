@@ -116,22 +116,29 @@ def building_access_points(
     building: Building,
 ) -> tuple[LanePosition, ...]:
     """Return nearby directional lane positions beside a building parcel."""
-    center = (
-        building.parcel.x + building.parcel.width / 2,
-        building.parcel.y + building.parcel.height / 2,
-    )
+    center = building.parcel.representative_point()
     candidates: list[LanePosition] = []
     for road in city_map.roads:
         maximum_distance = 2.0 * road.lane_width
         for lane in road.lanes:
             position, _ = nearest_lane_position(lane, center)
+            # The bounding box is a cheap lower bound on polygon distance.
+            if _distance_from_parcel_bounds(building.parcel, position.point) > maximum_distance:
+                continue
             if distance_from_parcel(building.parcel, position.point) <= maximum_distance:
                 candidates.append(position)
     return tuple(candidates)
 
 
 def distance_from_parcel(parcel: Parcel, point: Point) -> float:
-    """Measure from a point to the rectangle, returning zero inside it."""
+    """Measure from a point to the parcel footprint, returning zero inside it."""
+    if parcel.footprints:
+        from building_footprints import distance_to_ring
+        return min(distance_to_ring(ring, point) for ring in parcel.footprints)
+    return _distance_from_parcel_bounds(parcel, point)
+
+
+def _distance_from_parcel_bounds(parcel: Parcel, point: Point) -> float:
     distance_x = max(parcel.x - point[0], 0.0, point[0] - (parcel.x + parcel.width))
     distance_y = max(parcel.y - point[1], 0.0, point[1] - (parcel.y + parcel.height))
     return dist((0.0, 0.0), (distance_x, distance_y))

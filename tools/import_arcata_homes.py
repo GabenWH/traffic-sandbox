@@ -76,6 +76,7 @@ def main(argv=None):
     except (OSError, ValueError) as error:
         parser.exit(1, f'Import failed: {error}\n')
     print(json.dumps({'output': str(args.output), 'imported_homes': metadata['imported_homes'],
+                      'skipped_courtyard_relations': metadata.get('unsupported_holes', 0),
                       'road_segments': len(city.roads), 'capacity_per_home': args.residents_per_building,
                       'source': [str(path) for path in building_paths]}))
     return 0
