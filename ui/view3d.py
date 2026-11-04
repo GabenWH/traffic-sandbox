@@ -13,6 +13,7 @@ from panda3d.core import (
 )
 
 from city import Building, CityMap
+from parking import ParkingLot
 from color_palette import Palette, panda_rgba
 from land_ports import land_port_focus_point, land_port_positions
 from models import Road
@@ -22,7 +23,7 @@ from .scene3d import (
     RegionalLandPortFeature, SceneRegistry, TerrainFeature, TreeFeature,
     attach_map_root, draw_building, draw_intersection, draw_regional_land_port,
     draw_road, draw_road_dividers, draw_terrain, draw_tree,
-    update_road_vehicle_layer,
+    update_road_vehicle_layer, draw_parking_lot,
 )
 
 
@@ -47,6 +48,7 @@ class PandaWorldView:
         self.scene.register(Road, draw_road)
         self.scene.register(Intersection, draw_intersection)
         self.scene.register(Building, draw_building)
+        self.scene.register(ParkingLot, draw_parking_lot)
         self.scene.register(RegionalLandPortFeature, draw_regional_land_port)
         self.scene.register(TreeFeature, draw_tree)
         self.on_click: Callable[[int, int], None] | None = None
@@ -175,6 +177,7 @@ class PandaWorldView:
             TerrainFeature(city.width, city.height, city.terrain.grass_color),
             *city.roads,
             *city.intersections,
+            *city.parking_lots,
             *city.buildings,
             *(
                 RegionalLandPortFeature(index, *position)
@@ -196,8 +199,10 @@ class PandaWorldView:
         """Render all active city road users from the shared simulation."""
         if self.city is None:
             return
+        runtime = getattr(self.city, 'gameplay', None)
+        parked = list(runtime.fleet.parked_vehicles()) if runtime else []
         update_road_vehicle_layer(
-            simulation.vehicles,
+            [*simulation.vehicles, *parked],
             self.city,
             self.vehicle_root,
             self.vehicle_nodes,

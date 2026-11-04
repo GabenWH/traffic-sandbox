@@ -6,9 +6,11 @@ Query endpoints are temporary: no road is split for a building.
 from dataclasses import dataclass
 from math import dist
 
-from mobility import MobilityLayer, nearest_lane_position
-from models import PedestrianLane, polyline_length, slice_polyline
-from pathfinding import DirectedGraph
+from mobility import MobilityLayer
+from models import polyline_length, slice_polyline
+from threading import Lock
+
+from native_walking import NativeWalkingGraph
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,8 @@ def _part(points, start, end):
 class PedestrianNetwork:
     def __init__(self, roads, intersections):
         self.layer = MobilityLayer()
+        self._native = None
+        self._compile_lock = Lock()
         self.lanes = []
         by_road = {}
         for road in roads:
@@ -69,27 +73,16 @@ class PedestrianNetwork:
     def route(self, start_point, destination_point):
         if not self.lanes:
             raise ValueError('No pedestrian lanes')
-        start, _ = min((nearest_lane_position(lane, start_point) for lane in self.lanes), key=lambda value: value[1])
-        end, _ = min((nearest_lane_position(lane, destination_point) for lane in self.lanes), key=lambda value: value[1])
-        graph = DirectedGraph()
-        graph.extend(self.layer.graph)
-        source, target = ('pedestrian_query', 'start'), ('pedestrian_query', 'end')
-        positions = dict(self.layer.positions)
-        positions[source], positions[target] = start.point, end.point
-        for end_name, distance in (('start',0),('end',polyline_length(start.lane.points))):
-            points = _part(start.lane.points, start.distance, distance)
-            graph.add_edge(source, _node(start.lane,end_name), abs(start.distance-distance), WalkLink('lane',points))
-        for end_name, distance in (('start',0),('end',polyline_length(end.lane.points))):
-            points = _part(end.lane.points, distance, end.distance)
-            graph.add_edge(_node(end.lane,end_name), target, abs(end.distance-distance), WalkLink('lane',points))
-        if start.lane.id == end.lane.id:
-            graph.add_edge(source, target, abs(start.distance-end.distance),
-                           WalkLink('lane',_part(start.lane.points,start.distance,end.distance)))
-        path = graph.find_path(source, target, lambda node: dist(positions[node], end.point))
-        if path is None:
-            raise ValueError('No walking route')
-        links = (WalkLink('access', (tuple(start_point), start.point)), *path.edges,
-                 WalkLink('access', (end.point, tuple(destination_point))))
+        # Build once per world revision, not once per origin/destination pair.
+        with self._compile_lock:
+            if self._native is None:
+                self._native = NativeWalkingGraph(self.layer)
+            native = self._native
+        (start, end), steps = native.route(start_point, destination_point)
+        links = (WalkLink('access', (tuple(start_point), start)),
+                 *(WalkLink(link.kind, _part(link.points, begin, finish))
+                   for link, begin, finish in steps),
+                 WalkLink('access', (end, tuple(destination_point))))
         points = []
         first_crossing = None
         distance = 0.0

@@ -28,6 +28,10 @@ class ConstructionCatalogTests(unittest.TestCase):
                 "stone": ("t", 1000.0, 0.5),
                 "steel": ("t", 1000.0, 1.0),
                 "deconstruction_materials": ("ft²", 20.0, 0.01),
+                "food": ("portion", .5, .001),
+                "grain": ("batch", .5, .001),
+                "seed": ("batch", .1, .0002),
+                "medicine": ("dose", .01, .00002),
             },
         )
         material = trucks["material_truck"]

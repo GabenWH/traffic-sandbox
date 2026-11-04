@@ -1,0 +1,40 @@
+Wall 40.599s
+  File "/tmp/run_background_arcata_benchmark.py", line 30, in <module>
+    result=run_workday(runtime,hours=duration/3600,report_every=30,emit=emit,
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/tools/run_arcata_city_workday.py", line 202, in run_workday
+    before=time.perf_counter();runtime.update(min(STEP,end-runtime.time));elapsed=time.perf_counter()-before
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/city_simulation.py", line 592, in update
+    try:self._update_background(seconds)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/city_simulation.py", line 610, in _update_background
+    self.transit.update(until-self.time)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/transit.py", line 363, in update
+    arrivals = self.traffic.update(self.city, dt)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/traffic_testbed.py", line 613, in update
+    return self._native_backend(city_map).update(elapsed_seconds)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/native_spawning.py", line 449, in update
+    e.step(dt)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/native_traffic.py", line 307, in step
+    self._call('nt_step', dt)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/native_traffic.py", line 182, in _call
+    result = getattr(self._lib, name)(self._ptr, *args)
+
+Wall 70.600s
+  File "/tmp/run_background_arcata_benchmark.py", line 30, in <module>
+    result=run_workday(runtime,hours=duration/3600,report_every=30,emit=emit,
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/tools/run_arcata_city_workday.py", line 202, in run_workday
+    before=time.perf_counter();runtime.update(min(STEP,end-runtime.time));elapsed=time.perf_counter()-before
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/city_simulation.py", line 592, in update
+    try:self._update_background(seconds)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/city_simulation.py", line 610, in _update_background
+    self.transit.update(until-self.time)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/transit.py", line 363, in update
+    arrivals = self.traffic.update(self.city, dt)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/traffic_testbed.py", line 613, in update
+    return self._native_backend(city_map).update(elapsed_seconds)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/native_spawning.py", line 449, in update
+    e.step(dt)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/native_traffic.py", line 307, in step
+    self._call('nt_step', dt)
+  File "/workspace/scratch/bcfa5dd0145c/traffic-sandbox-osm/native_traffic.py", line 182, in _call
+    result = getattr(self._lib, name)(self._ptr, *args)
+

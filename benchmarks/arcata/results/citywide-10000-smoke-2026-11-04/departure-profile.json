@@ -1,0 +1,1573 @@
+{
+  "step_seconds": 0.05,
+  "tick_seconds": 44.815655684000376,
+  "counts": {
+    "event_economy": 1,
+    "event_leave": 500,
+    "vehicle_route_searches": 766,
+    "vehicle_graph_copies": 766,
+    "vehicle_astar_searches": 766,
+    "car_dispatch_attempts": 215,
+    "car_dispatch_successes": 198,
+    "pedestrian_trip_requests": 285,
+    "transit_updates": 1
+  },
+  "totals": {
+    "event_economy_seconds": 0.01111975700041512,
+    "vehicle_graph_copy_seconds": 34.92162084798474,
+    "vehicle_astar_seconds": 3.833027609025521,
+    "vehicle_route_seconds": 41.928739065002446,
+    "car_dispatch_seconds": 43.72176653799943,
+    "event_leave_seconds": 44.424088687999756,
+    "pedestrian_request_seconds": 0.6872302490100992,
+    "transit_update_seconds": 0.3734743280001567
+  },
+  "graph_nodes": 8700,
+  "graph_edges": 10479,
+  "departure_cohorts": {
+    "0.0": 500,
+    "4.0": 500,
+    "8.0": 500,
+    "12.0": 500,
+    "16.0": 500,
+    "20.0": 500,
+    "24.0": 500,
+    "28.0": 500,
+    "32.0": 500,
+    "36.0": 500
+  },
+  "dispatch_search_count_histogram": {
+    "4": 172,
+    "2": 31,
+    "0": 8,
+    "3": 1,
+    "1": 1,
+    "6": 2
+  },
+  "route_mean_ms": 54.73725726501625,
+  "route_max_ms": 251.12633899880166,
+  "cars_driving": 198,
+  "configuration": {
+    "population": 10000,
+    "workers": 5000,
+    "cars": 1000,
+    "seed": 42,
+    "start_hour": 7.5
+  },
+  "dispatches": [
+    {
+      "car": "car-household-0",
+      "seconds": 0.2497769010005868,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-5",
+      "seconds": 0.23156512800051132,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-30",
+      "seconds": 0.22832993600059126,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-35",
+      "seconds": 0.21421090999865555,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-45",
+      "seconds": 0.27399181299915654,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-100",
+      "seconds": 0.10786013300094055,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-105",
+      "seconds": 0.2262451560000045,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-110",
+      "seconds": 0.053805685998668196,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-115",
+      "seconds": 0.23756071499883546,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-125",
+      "seconds": 0.24590755900135264,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-135",
+      "seconds": 0.2268404959995678,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-145",
+      "seconds": 0.12447377500029688,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-150",
+      "seconds": 0.2582359219995851,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-170",
+      "seconds": 0.245556146999661,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-180",
+      "seconds": 0.26547700199989777,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-200",
+      "seconds": 0.10545030499997665,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-225",
+      "seconds": 0.242422137000176,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-230",
+      "seconds": 0.2322091999994882,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-240",
+      "seconds": 0.21142335799959255,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-250",
+      "seconds": 0.13242932600041968,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-265",
+      "seconds": 0.25132180100081314,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-270",
+      "seconds": 0.32282867899994017,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-280",
+      "seconds": 0.11899894300040614,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-290",
+      "seconds": 0.24441427399870008,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-300",
+      "seconds": 0.25787188700087427,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-310",
+      "seconds": 0.2127722339992033,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-340",
+      "seconds": 0.09642394200091076,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-370",
+      "seconds": 0.0014703159995406168,
+      "route_searches": 0,
+      "new_cache_entries": 0,
+      "success": false
+    },
+    {
+      "car": "car-household-425",
+      "seconds": 0.2461527750001551,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-445",
+      "seconds": 0.2116381879986875,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-450",
+      "seconds": 0.27013744200121437,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-455",
+      "seconds": 0.21693547500035493,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-460",
+      "seconds": 0.0546543059990654,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-465",
+      "seconds": 0.2498700119995192,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-470",
+      "seconds": 0.08752486799858161,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-475",
+      "seconds": 0.2561599069995282,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-485",
+      "seconds": 0.05887300999893341,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-515",
+      "seconds": 0.0017791259997466113,
+      "route_searches": 0,
+      "new_cache_entries": 0,
+      "success": false
+    },
+    {
+      "car": "car-household-525",
+      "seconds": 0.2780870939986926,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-530",
+      "seconds": 0.26199535399973684,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-540",
+      "seconds": 0.1844342720014538,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-545",
+      "seconds": 0.26314179399923887,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-550",
+      "seconds": 0.08260733600036474,
+      "route_searches": 3,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-555",
+      "seconds": 0.049005414999555796,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-570",
+      "seconds": 0.21837665899874992,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-580",
+      "seconds": 0.05021396299889602,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-590",
+      "seconds": 0.23224580399983097,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-605",
+      "seconds": 0.2854246950009838,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-630",
+      "seconds": 0.27425382300134515,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-645",
+      "seconds": 0.22901349600033427,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-650",
+      "seconds": 0.05469090099904861,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-665",
+      "seconds": 0.21668520200000785,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-670",
+      "seconds": 0.08294972400108236,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-675",
+      "seconds": 0.3152274169988232,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-690",
+      "seconds": 0.22099340800014033,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-700",
+      "seconds": 0.03493134600103076,
+      "route_searches": 1,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-705",
+      "seconds": 0.31207052300123905,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-725",
+      "seconds": 0.13751757200043357,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-730",
+      "seconds": 0.2750995240003249,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-745",
+      "seconds": 0.2008683200001542,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-750",
+      "seconds": 0.11102019799909613,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-760",
+      "seconds": 0.3176574860008259,
+      "route_searches": 6,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-775",
+      "seconds": 0.19777711799906683,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-785",
+      "seconds": 0.09691595299955225,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-795",
+      "seconds": 0.2127543650003645,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-815",
+      "seconds": 0.28769658700002765,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-820",
+      "seconds": 0.12437885300096241,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-825",
+      "seconds": 0.2722596549992886,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-865",
+      "seconds": 0.3154837430010957,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-880",
+      "seconds": 0.16599699300059,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-890",
+      "seconds": 0.24682321900036186,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-900",
+      "seconds": 0.26662799500081746,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-915",
+      "seconds": 0.31788139899981616,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-920",
+      "seconds": 0.30009406200042577,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": false
+    },
+    {
+      "car": "car-household-935",
+      "seconds": 0.20301080600074783,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-940",
+      "seconds": 0.1169492339995486,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-960",
+      "seconds": 0.2635473999998794,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-965",
+      "seconds": 0.2897616019999987,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-980",
+      "seconds": 0.29032908599947405,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-995",
+      "seconds": 0.1402568240009714,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1020",
+      "seconds": 0.29939397699854453,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1025",
+      "seconds": 0.0017537080002512084,
+      "route_searches": 0,
+      "new_cache_entries": 0,
+      "success": false
+    },
+    {
+      "car": "car-household-1030",
+      "seconds": 0.2525886219991662,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1035",
+      "seconds": 0.2625262809997366,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1055",
+      "seconds": 0.13871692499924393,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": false
+    },
+    {
+      "car": "car-household-1065",
+      "seconds": 0.33430153699919174,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1070",
+      "seconds": 0.44680792699909944,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1075",
+      "seconds": 0.30153371000051266,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1105",
+      "seconds": 0.06624702899898693,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1110",
+      "seconds": 0.28527955199933785,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1115",
+      "seconds": 0.24016772599861724,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1120",
+      "seconds": 0.1461436040008266,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1140",
+      "seconds": 0.29299273600008746,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1150",
+      "seconds": 0.2612593129997549,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1155",
+      "seconds": 0.14065940299951762,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1160",
+      "seconds": 0.19384299599914812,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1180",
+      "seconds": 0.30805778700050723,
+      "route_searches": 6,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1205",
+      "seconds": 0.3499621159990056,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1215",
+      "seconds": 0.0576707219988748,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1245",
+      "seconds": 0.2587726920010027,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1255",
+      "seconds": 0.28753031299856957,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1260",
+      "seconds": 0.12810691599952406,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1265",
+      "seconds": 0.2756501969997771,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1275",
+      "seconds": 0.0021448499992402503,
+      "route_searches": 0,
+      "new_cache_entries": 0,
+      "success": false
+    },
+    {
+      "car": "car-household-1295",
+      "seconds": 0.26965542700054357,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1310",
+      "seconds": 0.0740041070002917,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1315",
+      "seconds": 0.06968606000009459,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1320",
+      "seconds": 0.3500447379992693,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1325",
+      "seconds": 0.27495109799929196,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1335",
+      "seconds": 0.2778246999987459,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1340",
+      "seconds": 0.07915618200058816,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1355",
+      "seconds": 0.2972373789998528,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1380",
+      "seconds": 0.2939307019987609,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1390",
+      "seconds": 0.09312335299910046,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1400",
+      "seconds": 0.0735315530000662,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1405",
+      "seconds": 0.2955484180001804,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1410",
+      "seconds": 0.10013291599898366,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": false
+    },
+    {
+      "car": "car-household-1415",
+      "seconds": 0.2952549569999974,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1435",
+      "seconds": 0.30682432599860476,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1465",
+      "seconds": 0.29410363900024095,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1480",
+      "seconds": 0.10374894400047197,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1485",
+      "seconds": 0.2527869080004166,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1495",
+      "seconds": 0.291192938999302,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1500",
+      "seconds": 0.04812604800099507,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1515",
+      "seconds": 0.23484390700104996,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1520",
+      "seconds": 0.05694159500126261,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1530",
+      "seconds": 0.2993000909991679,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1535",
+      "seconds": 0.3311597600004461,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": false
+    },
+    {
+      "car": "car-household-1550",
+      "seconds": 0.2041537300010532,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": false
+    },
+    {
+      "car": "car-household-1555",
+      "seconds": 0.05483961000027193,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1565",
+      "seconds": 0.3024353919990972,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1575",
+      "seconds": 0.12321010699997714,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1590",
+      "seconds": 0.32988872099849686,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1595",
+      "seconds": 0.22616582999944512,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1615",
+      "seconds": 0.3319913680006721,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1620",
+      "seconds": 0.05939232800119498,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1635",
+      "seconds": 0.28706458600026963,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1640",
+      "seconds": 0.2679247899995971,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1650",
+      "seconds": 0.11690682500011462,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1665",
+      "seconds": 0.24482571400039888,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1670",
+      "seconds": 0.10658799199882196,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1685",
+      "seconds": 0.3085876300010568,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1705",
+      "seconds": 0.24629615000048943,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1715",
+      "seconds": 0.26466609300041455,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1735",
+      "seconds": 0.08787820399993507,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": false
+    },
+    {
+      "car": "car-household-1750",
+      "seconds": 0.32080295200103137,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1755",
+      "seconds": 0.13299357399955625,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1780",
+      "seconds": 0.2628910840012395,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1785",
+      "seconds": 0.28006626699971093,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1790",
+      "seconds": 0.10284507699907408,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1800",
+      "seconds": 0.26472772600027383,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1805",
+      "seconds": 0.0014830649997747969,
+      "route_searches": 0,
+      "new_cache_entries": 0,
+      "success": false
+    },
+    {
+      "car": "car-household-1815",
+      "seconds": 0.2321074849987781,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1825",
+      "seconds": 0.23166680800022732,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1830",
+      "seconds": 0.001445138999770279,
+      "route_searches": 0,
+      "new_cache_entries": 0,
+      "success": false
+    },
+    {
+      "car": "car-household-1840",
+      "seconds": 0.11362166000071738,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1855",
+      "seconds": 0.21728011399864045,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1870",
+      "seconds": 0.22427856099966448,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1885",
+      "seconds": 0.2575937059991702,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1910",
+      "seconds": 0.13339809799981595,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1915",
+      "seconds": 0.24834542899952794,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1920",
+      "seconds": 0.23504709500048193,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1925",
+      "seconds": 0.10313326400137157,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1930",
+      "seconds": 0.2453877290008677,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1935",
+      "seconds": 0.2231857309998304,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1945",
+      "seconds": 0.06000550899989321,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1965",
+      "seconds": 0.24754013500023575,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-1975",
+      "seconds": 0.12045995600055903,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": false
+    },
+    {
+      "car": "car-household-2020",
+      "seconds": 0.25939493300029426,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2025",
+      "seconds": 0.25191338900003757,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2035",
+      "seconds": 0.09835662799923739,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2040",
+      "seconds": 0.22251838800002588,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2045",
+      "seconds": 0.24342597699978796,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2050",
+      "seconds": 0.10189247599919327,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2055",
+      "seconds": 0.2860036519996356,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2065",
+      "seconds": 0.0016245159986283397,
+      "route_searches": 0,
+      "new_cache_entries": 0,
+      "success": false
+    },
+    {
+      "car": "car-household-2080",
+      "seconds": 0.29541790099938225,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2085",
+      "seconds": 0.3227422370000568,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2090",
+      "seconds": 0.18534960300166858,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2100",
+      "seconds": 0.24100023100072576,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2120",
+      "seconds": 0.06804276000002574,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2125",
+      "seconds": 0.27211895499931416,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2150",
+      "seconds": 0.28202206100104377,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2160",
+      "seconds": 0.1167014670008939,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2165",
+      "seconds": 0.2262262020012713,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2170",
+      "seconds": 0.212828879000881,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": false
+    },
+    {
+      "car": "car-household-2180",
+      "seconds": 0.1113859830002184,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2190",
+      "seconds": 0.28644323499975144,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2195",
+      "seconds": 0.2262262220010598,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2205",
+      "seconds": 0.1278050170003553,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": false
+    },
+    {
+      "car": "car-household-2210",
+      "seconds": 0.24283140400075354,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2215",
+      "seconds": 0.21037233700008073,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2225",
+      "seconds": 0.10410452500036627,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2230",
+      "seconds": 0.23132125900156097,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2245",
+      "seconds": 0.0020213660009176238,
+      "route_searches": 0,
+      "new_cache_entries": 0,
+      "success": false
+    },
+    {
+      "car": "car-household-2260",
+      "seconds": 0.22147493599914014,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2265",
+      "seconds": 0.12731669299864734,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2290",
+      "seconds": 0.20631758700073988,
+      "route_searches": 2,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2295",
+      "seconds": 0.2877414350004983,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2300",
+      "seconds": 0.10879075299999386,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2315",
+      "seconds": 0.3214197110009991,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2320",
+      "seconds": 0.26026539800113824,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2325",
+      "seconds": 0.10037734300021839,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2355",
+      "seconds": 0.24674359600066964,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2360",
+      "seconds": 0.10243440200065379,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2375",
+      "seconds": 0.25907996200112393,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2385",
+      "seconds": 0.2588273860001209,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2395",
+      "seconds": 0.2355416440004774,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2420",
+      "seconds": 0.2680379190005624,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2430",
+      "seconds": 0.09415048099981504,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2450",
+      "seconds": 0.25496813300014765,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2455",
+      "seconds": 0.2459635220002383,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2480",
+      "seconds": 0.08489428600114479,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2485",
+      "seconds": 0.24876887400023406,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    },
+    {
+      "car": "car-household-2495",
+      "seconds": 0.2695642439994117,
+      "route_searches": 4,
+      "new_cache_entries": 1,
+      "success": true
+    }
+  ],
+  "measurement": {
+    "kind": "one instrumented departure update, separate from the 180-second smoke run",
+    "code_commit": "dc91d9e",
+    "date_utc": "2026-11-04",
+    "setup": "same bundled citywide buildings, cached 1181-road network, seed 42, 10000 residents and 1000 cars; initial clock 07:30:00",
+    "method": "perf_counter wrappers around event dispatch, car dispatch, vehicle-route queries, graph copying, A* and transit update; no simulation behavior changes",
+    "timing_note": "nested totals are inclusive and must not be added together; wall-clock results depend on cloud hardware and instrumentation",
+    "road_graph_copy_fraction_of_update": 0.7792281584413391
+  }
+}

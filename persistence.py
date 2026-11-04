@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Any
 
+from building_footprints import triangulate_ring
 from city import Building, CityMap, Parcel, Terrain, ZoneType
 from models import (
     Buildable,
@@ -24,10 +25,11 @@ from models import (
 )
 from units import validate_unit_system
 from roundabouts import validate_roundabout_dimensions
+from parking import ParkingLot, ParkingSpace
 
 
 WORLD_FORMAT = "lanesimulator.world"
-WORLD_VERSION = 8
+WORLD_VERSION = 10
 
 
 class WorldFormatError(ValueError):
@@ -135,13 +137,24 @@ def world_to_dict(
                     "width": parcel.width,
                     "height": parcel.height,
                     "zone": parcel.zone.value if parcel.zone is not None else None,
+                    "footprints": [[[x, y] for x, y in ring] for ring in parcel.footprints],
                 }
                 for parcel in city_map.parcels
+            ],
+            "parking_lots": [
+                {"id": lot.id, "inferred": lot.inferred, "road_id": lot.road_id,
+                 "surface": [list(p) for p in lot.surface], "driveway": [list(p) for p in lot.driveway],
+                 "spaces": [{"id": s.id, "position": list(s.position), "angle": s.angle,
+                             "length": s.length, "width": s.width} for s in lot.spaces]}
+                for lot in city_map.parking_lots
             ],
             "buildings": [
                 {
                     "id": building.id,
                     "name": building.name,
+                    "category": building.category.value,
+                    "parking_lot_id": building.parking_lot_id,
+                    "source_tags": dict(building.source_tags),
                     "operation": dict(building.operation),
                     "parcel_id": building.parcel.id,
                     "residents": building.residents,
@@ -167,7 +180,7 @@ def world_from_dict(data: object) -> LoadedWorld:
     if root.get("format") != WORLD_FORMAT:
         raise WorldFormatError("This is not a city-builder world save.")
     version = root.get("version")
-    if version not in (4, 5, 6, 7, WORLD_VERSION):
+    if version not in (4, 5, 6, 7, 8, 9, WORLD_VERSION):
         raise WorldFormatError(f"Unsupported world-save version: {root.get('version')!r}.")
 
     world = _mapping(root.get("world"), "world")
@@ -254,6 +267,7 @@ def world_from_dict(data: object) -> LoadedWorld:
                 ),
                 lane_metadata=lane_metadata,
                 create_intersections=False,
+                _defer_mobility_rebuild=True,
             )
             road_by_id[road.id] = road
             _apply_buildable_state(
@@ -425,6 +439,17 @@ def world_from_dict(data: object) -> LoadedWorld:
             zone = None if raw_zone is None else ZoneType(_string(raw_zone, f"{path}.zone"))
         except ValueError as error:
             raise WorldFormatError(f"Unknown zone in {path}: {raw_zone!r}.") from error
+        footprints = []
+        for ring_index, raw_ring in enumerate(_list(parcel_data.get("footprints", []), f"{path}.footprints")):
+            ring_path = f"{path}.footprints[{ring_index}]"
+            ring = _points(raw_ring, ring_path)
+            if len(set(ring)) < 3:
+                raise WorldFormatError(f"{ring_path} must contain at least three distinct points.")
+            try:
+                triangulate_ring(ring)
+            except ValueError as error:
+                raise WorldFormatError(f"Invalid {ring_path}: {error}") from error
+            footprints.append(ring)
         parcel = Parcel(
             x=_number(parcel_data.get("x"), f"{path}.x"),
             y=_number(parcel_data.get("y"), f"{path}.y"),
@@ -432,9 +457,42 @@ def world_from_dict(data: object) -> LoadedWorld:
             height=_positive_number(parcel_data.get("height"), f"{path}.height"),
             zone=zone,
             id=parcel_id,
+            footprints=footprints,
         )
+        if any(not (parcel.x-1e-6 <= x <= parcel.x+parcel.width+1e-6 and
+                    parcel.y-1e-6 <= y <= parcel.y+parcel.height+1e-6)
+               for ring in footprints for x, y in ring):
+            raise WorldFormatError(f"{path}.footprints must fit within its bounding rectangle.")
         city_map.parcels.append(parcel)
         parcel_by_id[parcel_id] = parcel
+
+    lot_ids = set()
+    for index, raw in enumerate(_list(world.get('parking_lots', []), 'world.parking_lots')):
+        path = f'world.parking_lots[{index}]'
+        raw = _mapping(raw, path)
+        ident = _string(raw.get('id'), path+'.id')
+        if ident in lot_ids:
+            raise WorldFormatError('Duplicate parking lot ID')
+        lot_ids.add(ident)
+        spaces = []
+        for number, record in enumerate(_list(raw.get('spaces'), path+'.spaces')):
+            sp = f'{path}.spaces[{number}]'
+            record = _mapping(record, sp)
+            position = _points([record.get('position')], sp+'.position')[0]
+            spaces.append(ParkingSpace(_string(record.get('id'), sp+'.id'), position,
+                                       angle=_number(record.get('angle'), sp+'.angle'),
+                                       length=_positive_number(record.get('length'), sp+'.length'),
+                                       width=_positive_number(record.get('width'), sp+'.width')))
+        if not isinstance(raw.get('inferred', True), bool):
+            raise WorldFormatError('Parking lot inferred must be boolean')
+        try:
+            city_map.parking_lots.append(ParkingLot(ident, spaces,
+                surface=_points(raw.get('surface', []), path+'.surface'),
+                driveway=_points(raw.get('driveway', []), path+'.driveway'),
+                road_id=None if raw.get('road_id') is None else _string(raw['road_id'],path+'.road_id'),
+                inferred=raw.get('inferred', True)))
+        except ValueError as error:
+            raise WorldFormatError(f'Invalid parking lot: {error}') from error
 
     building_ids: set[str] = set()
     legacy_templates: dict[str, Any] | None = None
@@ -470,7 +528,13 @@ def world_from_dict(data: object) -> LoadedWorld:
                 buildable_state,
                 legacy_templates.get(buildable_id),
             )
-        city_map.buildings.append(Building(
+        parking_lot_id = building_data.get('parking_lot_id')
+        if parking_lot_id is not None and parking_lot_id not in lot_ids:
+            raise WorldFormatError(f'{path} refers to an unknown parking lot')
+        source_tags = _mapping(building_data.get('source_tags', {}), path+'.source_tags')
+        if any(not isinstance(k,str) or not isinstance(v,str) for k,v in source_tags.items()):
+            raise WorldFormatError('Building source tags must be strings')
+        building = Building(
             name=_string(building_data.get("name"), f"{path}.name"),
             operation=_operation_from_dict(building_data.get("operation")),
             parcel=parcel,
@@ -479,8 +543,13 @@ def world_from_dict(data: object) -> LoadedWorld:
             buildable_id=buildable_id,
             color=_string(building_data.get("color", "#8b8580"), f"{path}.color"),
             id=building_id,
+            parking_lot_id=parking_lot_id,
+            source_tags=dict(source_tags),
             **buildable_state,
-        ))
+        )
+        if building_data.get('category', building.category.value) != building.category.value:
+            raise WorldFormatError('Building category must match its zone')
+        city_map.buildings.append(building)
 
     gameplay = root.get("gameplay")
     if gameplay is not None:

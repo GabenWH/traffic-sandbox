@@ -1,4 +1,4 @@
-"""Physical construction resources and truck specifications supplied as data."""
+"""Physical building resources and truck specifications supplied as data."""
 
 from __future__ import annotations
 
@@ -187,3 +187,12 @@ def _finite_number(value: object, field_name: str) -> float:
     if not isfinite(result):
         raise ConstructionCatalogError(f"{field_name} must be finite")
     return result
+
+
+def material_load(resource: ResourceSpec, truck: TruckSpec, *, requested: float,
+                  available: float) -> float:
+    """Common construction/consumer cargo limit, including finite suppliers."""
+    if not isfinite(requested) or requested < 0 or available != available or available < 0:
+        raise ValueError("Invalid material demand or availability")
+    return min(requested, available, truck.payload_kg / resource.mass_kg_per_unit,
+               truck.cargo_m3 / resource.volume_m3_per_unit)

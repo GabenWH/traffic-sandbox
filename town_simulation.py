@@ -26,6 +26,7 @@ class Resident:
     car_id: str | None = None
     return_due: bool = False
     workplace: str = "work"
+    worksite: str | None = None
 
 
 class TownSimulation:
@@ -183,6 +184,7 @@ class TownSimulation:
         for vid in self.fleet.arrivals:
             v = self.fleet.vehicles[vid]
             if v.kind == 'car':
+                self.transit.record_vehicle_arrival(v.driver,self.sites[v.site]['walk_point'])
                 self._arrive_person(self.residents[v.driver])
             elif vid in self.jobs:
                 job = self.jobs[vid]

@@ -1,0 +1,15 @@
+{
+  "endpoint": "https://overpass-api.de/api/interpreter",
+  "query": "[out:json][timeout:180];(way[\"building\"](40.780733,-124.121726,40.911552,-123.987571);relation[\"building\"](40.780733,-124.121726,40.911552,-123.987571););out body geom;",
+  "osm_snapshot": "2026-11-04T18:00:23Z",
+  "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL.",
+  "license_url": "https://www.openstreetmap.org/copyright",
+  "raw_records": 5590,
+  "compressed_sha256": "d41df7862d56edfcc2bc5b2b97d5f4af0f34fe1d1039d8c6e730a7dae668229f",
+  "raw_sha256": "9a956866c8925c0bf3e4b17de4007ae1c959359848f973e54f956eaf0b6fb2b2",
+  "boundary_relation": "112123",
+  "boundary_file": "arcata-city-boundary.osm",
+  "filter": "building bounds midpoint inside bundled Arcata municipal boundary; relation member ways deduplicated",
+  "imported_buildings": 4500,
+  "imported_courtyard_buildings": 12
+}

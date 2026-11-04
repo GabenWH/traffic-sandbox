@@ -10,6 +10,27 @@ from models import Road
 
 @unittest.skipUnless(importlib.util.find_spec("panda3d"), "Panda3D is required")
 class Scene3DTests(unittest.TestCase):
+    def test_imported_building_roof_uses_rotated_polygon(self):
+        from panda3d.core import GeomVertexReader, NodePath
+        from city import Building, Parcel
+        from models import BuildablePhase
+        from ui.scene3d import draw_building
+
+        diamond = [(0, 10), (10, 0), (20, 10), (10, 20), (0, 10)]
+        building = Building('Diamond', Parcel(0, 0, 20, 20, footprints=[diamond]),
+                            residents=4, phase=BuildablePhase.OPERATIONAL)
+        root = NodePath('scene')
+        node = draw_building(building, root)
+        roof = node.find('**/building-roof-top')
+        self.assertFalse(roof.isEmpty())
+        data = roof.node().getGeom(0).getVertexData()
+        reader = GeomVertexReader(data, 'vertex')
+        xy = set()
+        for _ in range(data.getNumRows()):
+            point = reader.getData3()
+            xy.add((round(point.x + 10, 6), round(point.y + 10, 6)))
+        self.assertEqual(xy, set(diamond[:-1]))
+
     def test_custom_roundabout_surfaces_and_car_use_shared_route_geometry(self) -> None:
         from panda3d.core import GeomVertexReader, NodePath
         from city import CityMap, Terrain

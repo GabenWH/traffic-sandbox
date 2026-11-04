@@ -8,6 +8,7 @@ from math import dist
 from random import Random
 from uuid import uuid4
 
+from building_footprints import contains_point, triangulate_ring
 from color_palette import Palette
 from mobility import (
     VEHICLE_LAYER,
@@ -34,6 +35,7 @@ from models import (
 )
 from pedestrian_mobility import PedestrianNetwork
 from pathfinding import Path
+from parking import ParkingLot
 from roundabouts import validate_roundabout_dimensions
 
 
@@ -77,13 +79,26 @@ class Parcel(CityObject):
     height: float
     zone: ZoneType | None = None
     id: str = field(default_factory=lambda: str(uuid4()))
+    footprints: list[list[tuple[float, float]]] = field(default_factory=list)
     inspection_title = "Parcel"
 
     def contains(self, position: Point) -> bool:
-        return (
+        in_bounds = (
             self.x <= position[0] <= self.x + self.width
             and self.y <= position[1] <= self.y + self.height
         )
+        return in_bounds and (not self.footprints or any(contains_point(ring, position) for ring in self.footprints))
+
+    def representative_point(self) -> Point:
+        center = (self.x + self.width/2, self.y + self.height/2)
+        if self.contains(center):
+            return center
+        triangles = [triangle for ring in self.footprints for triangle in triangulate_ring(ring)]
+        def area(triangle):
+            a,b,c = triangle
+            return abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]))
+        a,b,c = max(triangles, key=area)
+        return ((a[0]+b[0]+c[0])/3, (a[1]+b[1]+c[1])/3)
 
     def inspection_properties(self):
         return (
@@ -103,8 +118,20 @@ class Building(Buildable):
     color: str = "#8b8580"
     id: str = field(default_factory=lambda: str(uuid4()))
     operation: dict = field(default_factory=dict)
+    parking_lot_id: str | None = None
+    source_tags: dict[str, str] = field(default_factory=dict)
     occupants: int = field(default=0, init=False)
     inspection_title = "Building"
+
+    def __post_init__(self):
+        if self.parcel.zone is None:
+            role = self.operation.get('role', '')
+            self.parcel.zone = (ZoneType.INDUSTRIAL if role in ('factory', 'farm', 'construction_company')
+                                else ZoneType.RESIDENTIAL if self.residents else ZoneType.COMMERCIAL)
+
+    @property
+    def category(self) -> ZoneType:
+        return ZoneType.COMMERCIAL if self.parcel.zone == ZoneType.CIVIC else self.parcel.zone
 
     def contains(self, position: Point) -> bool:
         return self.parcel.contains(position)
@@ -112,6 +139,8 @@ class Building(Buildable):
     def inspection_properties(self):
         return (
             CityInspectionProperty("Name", self.name),
+            CityInspectionProperty("Category", self.category.value),
+            CityInspectionProperty("Parking lot", self.parking_lot_id or "unassigned"),
             *super().inspection_properties(),
             CityInspectionProperty("Template", self.buildable_id or "custom"),
             CityInspectionProperty("Zone", self.parcel.zone.value if self.parcel.zone else "unassigned"),
@@ -135,6 +164,7 @@ class CityMap:
     intersections: list[Intersection] = field(default_factory=list)
     parcels: list[Parcel] = field(default_factory=list)
     buildings: list[Building] = field(default_factory=list)
+    parking_lots: list[ParkingLot] = field(default_factory=list)
     mobility: MobilityNetwork = field(default_factory=MobilityNetwork, init=False, repr=False)
     mobility_revision: int = field(default=0, init=False, repr=False)
     pedestrian_network: PedestrianNetwork = field(init=False, repr=False)
@@ -179,6 +209,7 @@ class CityMap:
         lane_metadata: list[dict[str, object]] | None = None,
         create_intersections: bool = True,
         endpoint_overrun_tolerance: float = DEFAULT_ENDPOINT_OVERRUN_TOLERANCE,
+        _defer_mobility_rebuild: bool = False,
     ) -> Road:
         """Create a road, splitting at crossings.
 
@@ -187,6 +218,8 @@ class CityMap:
         """
         if endpoint_overrun_tolerance < 0:
             raise ValueError("Endpoint overrun tolerance cannot be negative")
+        if _defer_mobility_rebuild and create_intersections:
+            raise ValueError("Deferred rebuilding is only supported while restoring roads")
         if elevations is not None and len(elevations) != len(centerline):
             raise ValueError("Road elevations must match centerline points")
         road = Road(
@@ -203,9 +236,13 @@ class CityMap:
             buildable_id=buildable_id,
         )
         road.rebuild_lanes(lane_metadata)
+        if self.parking_lots:
+            from parking_layout import validate_road_parking
+            validate_road_parking(self,road)
         if not create_intersections:
             self.roads.append(road)
-            self.rebuild_mobility_network()
+            if not _defer_mobility_rebuild:
+                self.rebuild_mobility_network()
             return road
 
         # A demolition job owns this segment's area, inventory, and workforce

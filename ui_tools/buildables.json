@@ -327,6 +327,33 @@
           "targets": {}
         }
       }
+    },
+    {
+      "id": "construction_company",
+      "kind": "building",
+      "name": "Construction company",
+      "description": "Employ residents and dispatch them to temporary building sites.",
+      "specs": {
+        "width": 60,
+        "height": 44,
+        "zone": "commercial",
+        "residents": 0,
+        "jobs": 8,
+        "color": "#ca9b46",
+        "construction_needs": {
+          "lumber": 20,
+          "stone": 10
+        },
+        "construction_workers": 2,
+        "construction_work": 120,
+        "operation": {
+          "role": "construction_company",
+          "inputs": {},
+          "output": null,
+          "rate": 0,
+          "targets": {}
+        }
+      }
     }
   ]
 }

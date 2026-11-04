@@ -290,6 +290,21 @@ class BuildingTool(CanvasTool):
                 self.panel.set_message("The entire building must fit inside the city map.", error=True)
             return None
         parcel = Parcel(x, y, width, height, ZoneType(str(details["zone"])))
+        from parking import polygons_overlap
+        footprint = [(x,y),(x+width,y),(x+width,y+height),(x,y+height)]
+        overlaps = [lot for lot in self.host.city_map.parking_lots
+                    if any(polygons_overlap(footprint, surface)
+                           for surface in ([lot.surface] if lot.surface else [])+lot.driveway_surfaces)]
+        runtime = getattr(self.host.city_map, 'gameplay', None)
+        claims = set()
+        if runtime:
+            claims = {runtime.sites[site]['parking_lot'].id
+                      for v in runtime.fleet.vehicles.values() for site in (v.site,v.destination)
+                      if site in runtime.sites and runtime.sites[site].get('parking_lot') is not None}
+        if any(not lot.inferred or lot.id in claims for lot in overlaps):
+            if self.panel is not None:
+                self.panel.set_message('The building overlaps occupied or authored parking.',error=True)
+            return None
         building = Building(
             name=f"{self.selected_spec.name} {len(self.host.city_map.buildings) + 1}",
             parcel=parcel,
@@ -305,6 +320,15 @@ class BuildingTool(CanvasTool):
         )
         self.host.city_map.parcels.append(parcel)
         self.host.city_map.buildings.append(building)
+        # An explicit building placement may replace empty inferred parking.
+        # Occupied/authored lots were rejected above, before any mutation.
+        replaced = {lot.id for lot in overlaps}
+        self.host.city_map.parking_lots[:] = [lot for lot in self.host.city_map.parking_lots if lot.id not in replaced]
+        for existing in self.host.city_map.buildings:
+            if existing.parking_lot_id in replaced:
+                existing.parking_lot_id = None
+        from parking_layout import ensure_parking
+        ensure_parking(self.host.city_map)
         self.host.redraw_world()
         if self.panel is not None:
             self.panel.set_message(f"Placed {building.name}.")

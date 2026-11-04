@@ -1,0 +1,37 @@
+{
+  "employment_setup": "authored job roster",
+  "houses": 500,
+  "apartments": 500,
+  "population": 6000,
+  "businesses": 20,
+  "farms": 3,
+  "factory": 1,
+  "buses": 12,
+  "lines": 3,
+  "source": {
+    "boundary_relation_id": "112123",
+    "boundary_name": "Arcata",
+    "osm_snapshot": "2026-06-01T08:52:28Z",
+    "ways_in_extract": 2030,
+    "driveable_ways_in_extract": 686,
+    "driveable_ways_used": 681,
+    "road_segments": 1181,
+    "street_junctions": 971,
+    "portal_junctions": 50,
+    "boundary_clipped_points": 55,
+    "road_centerline_points": 6299,
+    "network_length_feet": 466914.5,
+    "roads_by_highway": {
+      "residential": 742,
+      "unclassified": 18,
+      "secondary": 80,
+      "tertiary": 304,
+      "motorway": 34,
+      "trunk": 3
+    },
+    "osm_file_names": [
+      "arcata-roads-2026-06-01.json"
+    ]
+  },
+  "synthetic_locations": true
+}

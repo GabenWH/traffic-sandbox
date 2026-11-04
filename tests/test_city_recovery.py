@@ -48,7 +48,7 @@ class CityRecoveryTests(unittest.TestCase):
     def test_served_customer_can_wait_for_disconnected_return_path(self):
         runtime,home,target,cafe,*_=neighborhood()
         h=runtime.invite_household(target.id,2)
-        worker=runtime.residents[h.members[0]];worker.workplace=cafe.id;worker.state='work'
+        worker=runtime.residents[h.members[0]];worker.workplace=cafe.id;worker.state='commuting';runtime._arrive_person(worker)
         runtime.import_resources(cafe.id,'food',5)
         customer=runtime.residents[h.members[1]]
         # Native arrival is about 57 s; interrupt before the 60 s service event.
@@ -122,7 +122,7 @@ class CityRecoveryTests(unittest.TestCase):
     def test_closing_service_releases_queued_customer_to_home(self):
         runtime,home,target,cafe,*_=neighborhood()
         h=runtime.invite_household(target.id,2)
-        worker=runtime.residents[h.members[0]];worker.workplace=cafe.id;worker.state='work'
+        worker=runtime.residents[h.members[0]];worker.workplace=cafe.id;worker.state='commuting';runtime._arrive_person(worker)
         customer=runtime.residents[h.members[1]]
         runtime.import_resources(cafe.id,'food',5)
         # Native arrival is about 57 s; interrupt before the 60 s service event.
@@ -181,7 +181,7 @@ class CityRecoveryTests(unittest.TestCase):
     def test_cafe_service_budget_depends_on_elapsed_time(self):
         runtime,home,target,cafe,*_=neighborhood()
         h=runtime.invite_household(target.id,3)
-        worker=runtime.residents[h.members[0]];worker.workplace=cafe.id;worker.state='work'
+        worker=runtime.residents[h.members[0]];worker.workplace=cafe.id;worker.state='commuting';runtime._arrive_person(worker)
         runtime.import_resources(cafe.id,'food',5)
         for pid in h.members[1:]:
             runtime.residents[pid].state='waiting_meal'

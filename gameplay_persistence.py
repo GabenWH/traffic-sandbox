@@ -189,7 +189,7 @@ def dump_city(city):
     # Flush completed movement events into logical records before taking state.
     city._arrivals()
     managed=set(city.fleet.vehicles)|set(city.transit.buses)
-    return dict(schema='city.gameplay.v1',time=city.time,
+    return dict(schema='city.gameplay.v1',time=city.time,resident_construction_started=city._resident_construction_started,
         residents=[asdict(p) for p in city.residents.values()],households=[asdict(h) for h in city.households.values()],
         fleet=[{f.name:getattr(v,f.name) for f in fields(v) if not f.name.startswith('_')} for v in city.fleet.vehicles.values()],
         transport=dump_transport(city.transit,managed),events=deepcopy(city._events),scheduled=sorted(city._scheduled),
@@ -198,8 +198,12 @@ def dump_city(city):
         visits=deepcopy(city.visits),care_queue=list(city.care_queue),care_tasks=deepcopy(city.care_tasks),
         meal_queues={k:list(v) for k,v in city.meal_queues.items()},meal_credit=dict(city.meal_credit),meal_capacity=dict(city.meal_capacity),
         metrics={k:getattr(city,k) for k in METRICS},counters=dict(city.counters),resource_journal=dict(city.resource_journal),
+        commutes=dict(policy=asdict(city.commute_policy),limits=city.fleet.admission.to_dict(),
+            pending=[(pid,returning,ready) for pid,(returning,ready) in city._pending_departures.items()],
+            departures=city._commute_departures,learning=city.fleet.routing.learning.to_dict(),
+            travel=deepcopy(city.fleet._travel),work_start=city.work_start,work_end=city.work_end),
         suspended_walkers=city._suspended_walkers,resuming_vehicles=city._resuming_vehicles,resuming_buses=city._resuming_buses,
-        last_economy=city._last_economy,last_construction=city._last_construction,candidate_cursor=city._candidate_cursor)
+        last_economy=city._last_economy,last_construction=city._last_construction,last_construction_work=city._last_construction_work,candidate_cursor=city._candidate_cursor)
 
 
 def restore_city(city,raw):
@@ -231,6 +235,7 @@ def restore_city(city,raw):
         city.time=data['time']
         actors=restore_transport(city.transit,data['transport'])
         city.fleet.vehicles.clear();city.fleet.routes.clear()
+        legacy_parking = []
         for info in data['fleet']:
             v=FleetVehicle(**info)
             if v.id in city.fleet.vehicles or v.site not in city.sites:raise ValueError('Invalid saved fleet')
@@ -238,6 +243,8 @@ def restore_city(city,raw):
             if v.phase=='driving' and v._actor is None:raise ValueError('Missing active fleet actor')
             if v._actor is not None:v._last=v._actor.distance
             city.fleet.vehicles[v.id]=v
+            if 'parking_space_id' not in info:legacy_parking.append(v.id)
+        city.fleet.restore_parking(legacy_ids=legacy_parking,suspended_ids=data.get('resuming_vehicles',{}))
         city._events=[tuple(e) for e in data['events']];heapq.heapify(city._events)
         city._scheduled=set(data['scheduled']);city._sequence=data['sequence']
         city._next_person=data['next_person'];city._next_household=data['next_household']
@@ -249,10 +256,42 @@ def restore_city(city,raw):
         for key,value in data['metrics'].items():setattr(city,key,value)
         city.resource_journal=Counter(data.get('resource_journal',{}))
         city.counters=Counter(data['counters']);city._last_economy=data['last_economy']
-        city._last_construction=data['last_construction'];city._candidate_cursor=data['candidate_cursor']
+        city._last_construction=data['last_construction'];city._last_construction_work=data.get('last_construction_work',data['last_construction']);city._candidate_cursor=data['candidate_cursor']
         city._suspended_walkers={int(k):v for k,v in data.get('suspended_walkers',{}).items()}
         city._resuming_vehicles=data.get('resuming_vehicles',{})
         city._resuming_buses=data.get('resuming_buses',{})
+        from commute_schedule import CommutePolicy,DepartureLimits
+        from route_learning import TravelLearning
+        commutes=data.get('commutes')
+        if commutes is not None:
+            city.configure_commutes(CommutePolicy(**commutes['policy']),TravelLearning.from_dict(commutes['learning']))
+            city.fleet.admission=DepartureLimits.from_dict(city.commute_policy,commutes['limits'])
+            city.work_start=commutes.get('work_start',city.work_start);city.work_end=commutes.get('work_end',city.work_end)
+            if not 0<=city.work_start<city.work_end<86400:raise ValueError('Invalid saved shift hours')
+            city._commute_departures=commutes['departures']
+            if not isinstance(city._commute_departures,int) or city._commute_departures<0:raise ValueError('Invalid departure count')
+            for pid,returning,ready in commutes['pending']:
+                if pid not in city.residents or not isinstance(returning,bool) or not isfinite(ready) or ready<0:
+                    raise ValueError('Invalid queued commuter')
+                city._pending_departures[pid]=(returning,ready)
+        for v in city.fleet.vehicles.values():
+            if v.phase=='driving':
+                saved=commutes.get('travel',{}).get(v.id) if commutes else None
+                if saved is not None:
+                    if (not isinstance(saved['cursor'],int) or saved['cursor']<0 or
+                            any(not isfinite(saved[k]) or saved[k]<0 for k in ('entered','previous_time','previous_distance'))):
+                        raise ValueError('Invalid travel progress')
+                city.fleet._track_trip(v,v._actor.route,saved=saved)
+                if city.fleet._travel[v.id]['cursor']>len(city.fleet._travel[v.id]['segments']):
+                    raise ValueError('Invalid travel cursor')
+        city._attendance={p.id:(p.worksite or p.workplace) for p in city.residents.values() if p.state=='work' and not p.return_due and (p.worksite or p.workplace) in city.sites}
+        city.staff=Counter(city._attendance.values())
+        city._resident_construction_started=data.get('resident_construction_started',city._resident_construction_started)
+        city._sync_workforce_mode()
+        if city.construction and city.construction.resident_workforce:
+            for sid in (*city._workplaces,*city._construction_sites):city.sites[sid]['building'].assigned_workers=city.staff[sid]
+        city._construction_commitments=Counter(p.worksite for p in city.residents.values() if p.worksite and p.state!='returning_company')
+        city._available_builders={p.id for p in city.residents.values() if p.id in city._attendance and not p.worksite and p.workplace in city.businesses and city.businesses[p.workplace].kind=='construction_company'}
         city._refresh_occupancy();city._bind_arrivals()
     except (KeyError,TypeError,IndexError) as error:
         raise ValueError('Invalid city gameplay snapshot: '+str(error)) from error
@@ -277,6 +316,9 @@ def rebind_transport(city):
     city.transit.time=city.time;traffic.elapsed_time=city.time
     city.transit.engine._call('nt_clock',city.time,0.0,0.0)
     city.fleet.transit=city.transit;city.fleet.routes.clear()
+    city.fleet._travel.clear()
+    city.fleet.routing.learning._remaining.clear();city.fleet.routing.learning._users.clear()
+    city.fleet.routing.sync()
     city._building_signature=None;city.sync_buildings()
     # Lines only resume once every stop has usable vehicle access.
     for line in data.get('line_plans',data['lines']):

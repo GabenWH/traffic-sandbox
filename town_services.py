@@ -6,6 +6,8 @@ is implied by a completed care visit. Road movement is owned by shared C++.
 from collections import Counter,deque
 from dataclasses import dataclass,asdict
 from town_simulation import TownSimulation
+from models import ResourceInventory
+from resources import load_construction_catalog, material_load
 
 
 @dataclass
@@ -29,6 +31,7 @@ class ServiceTown(TownSimulation):
         self.treated=self.meals_served=0
         self.requests=[]
         self.staff=Counter()
+        self.resource_specs,self.truck_specs=load_construction_catalog()
 
     def _record_production(self, business, amount):
         pass
@@ -37,18 +40,51 @@ class ServiceTown(TownSimulation):
         return self.sites[site]["building"].residents
 
     def request_visit(self,person_id,site,purpose):
+        if purpose=='shopping':
+            raise ValueError('Use request_shopping to reserve collection stock')
+        return self._begin_visit(person_id,site,purpose)
+
+    def _begin_visit(self,person_id,site,purpose):
         p=self.residents[person_id]
         if p.state not in ('home','work') or person_id in self.visits:
             return False
-        if purpose not in ('care','meal') or site not in self.businesses:
+        if purpose not in ('care','meal','shopping') or site not in self.businesses:
             raise ValueError('Unknown service visit')
         if (purpose=='care' and self.businesses[site].kind!='clinic') or (purpose=='meal' and site not in self.meal_queues):
             raise ValueError('Site does not offer requested service')
-        origin=p.home if p.state=='home' else p.workplace
+        if purpose=='shopping' and self.businesses[site].kind!='market':
+            raise ValueError('Shopping requires a market')
+        origin=p.home if p.state=='home' else (p.worksite or p.workplace)
         self.transit.request_trip(p.id,self.sites[origin]['walk_point'],self.sites[site]['walk_point'])
         self.visits[p.id]=dict(site=site,purpose=purpose,origin=origin,previous=p.state)
         p.state='visiting'
         return True
+
+    def incoming(self, site, resource):
+        """Both collection and delivery satisfy the same outstanding demand."""
+        return sum(j['amount'] for j in self.jobs.values()
+                   if j['destination']==site and j['resource']==resource and j['stage']!='return') + sum(
+            v['amount'] for v in self.visits.values() if v['purpose']=='shopping'
+            and v['origin']==site and v['resource']==resource)
+
+    def request_shopping(self, person_id, site, resource='food', target=3.0):
+        p=self.residents[person_id]
+        if p.state!='home' or person_id in self.visits:
+            return False
+        inventory=self.sites[p.home]['building'].inventory
+        needed=inventory.shortage(resource,target,self.incoming(p.home,resource))
+        source=self.sites[site]['building'].inventory
+        amount=min(needed,3.0,source.amounts.get(resource,0))
+        if amount<=0:return False
+        # Routing must succeed before any stock is reserved.
+        if not self._begin_visit(person_id,site,'shopping'):return False
+        _,amount=source.consume(resource,amount)
+        self.visits[person_id].update(resource=resource,amount=amount,picked_up=False)
+        return True
+
+    def _choose_shoppers(self):
+        """Scenario adapter leaves collection decisions to its caller."""
+        pass
 
     def _process_events(self):
         # Dispatch service events separately, preserving the existing commute
@@ -81,13 +117,24 @@ class ServiceTown(TownSimulation):
     def _arrive_person(self,p):
         if p.state=='visiting':
             visit=self.visits[p.id]
-            if visit['purpose']=='care':
+            if visit['purpose']=='shopping':
+                if visit.get('cancelled'):
+                    if visit['amount']:
+                        self.sites[visit['site']]['building'].add_resource(visit['resource'],visit['amount'])
+                    visit['amount']=0
+                else:
+                    visit['picked_up']=True
+                self._leave_service(p.id)
+            elif visit['purpose']=='care':
                 p.state='waiting_care';self.care_queue.append(p.id)
             else:
                 p.state='waiting_meal';self.meal_queues[visit['site']].append(p.id)
             return
         if p.state=='visiting_return':
             visit=self.visits.pop(p.id)
+            if visit['purpose']=='shopping' and visit['amount']:
+                self.sites[visit['origin']]['building'].add_resource(visit['resource'],visit['amount'])
+                self._note('shopping_delivered',person=p.id,site=visit['origin'],amount=visit['amount'])
             p.state=visit['previous']
             if p.state=='work':self._worker_resumed(p)
             if p.return_due and p.state=='work':
@@ -116,17 +163,17 @@ class ServiceTown(TownSimulation):
     def _return_after_visit(self,person):
         if not self._depart(person,True):self.schedule(self.time+5,'retry_return',person.id)
 
-    def _economy(self,dt):
+    def _refresh_staff(self):
+        # Legacy scenario adapter. Authored cities maintain attendance on events.
         self.staff=Counter(p.workplace for p in self.residents.values() if p.state=='work')
+
+    def _economy(self,dt):
+        self._refresh_staff()
         for b in self.businesses.values():
             inv=self.sites[b.site]['building'].inventory.amounts
             if b.output:
-                amount=self.staff[b.site]*b.rate_per_worker_hour*dt/3600
-                for resource,quantity in b.inputs.items():
-                    amount=min(amount,inv.get(resource,0)/quantity)
-                for resource,quantity in b.inputs.items():
-                    inv[resource]=inv.get(resource,0)-amount*quantity
-                inv[b.output]=inv.get(b.output,0)+amount
+                amount=self.sites[b.site]['building'].inventory.produce(
+                    b.inputs, {b.output: 1}, self.staff[b.site]*b.rate_per_worker_hour*dt/3600)
                 self._record_production(b,amount)
                 if b.output=='food':self.produced+=amount
                 elif b.output=='grain':self.harvested+=amount
@@ -137,14 +184,14 @@ class ServiceTown(TownSimulation):
             wanted=n*3*dt/86400
             credit=min(wanted,self.meal_credit[sid]);self.meal_credit[sid]-=credit
             wanted-=credit
-            used=min(wanted,inv.get('food',0));inv['food']=inv.get('food',0)-used
+            used=site['building'].inventory.consume('food',wanted)[1] if wanted>0 else 0
             self.consumed+=used;self.unmet+=wanted-used
         for site,queue in self.meal_queues.items():
             inv=self.sites[site]['building'].inventory.amounts
             self.meal_capacity[site]=min(self.staff[site],self.meal_capacity[site]+self.staff[site]*dt/60)
             for _ in range(min(len(queue),int(self.meal_capacity[site]+1e-9))):
                 if inv.get('food',0)<1:break
-                pid=queue.popleft();inv['food']-=1
+                pid=queue.popleft();self.sites[site]['building'].consume_resource('food',1)
                 self.meal_capacity[site]=max(0,self.meal_capacity[site]-1)
                 self.meals_served+=1;self.consumed+=1
                 self.meal_credit[self.residents[pid].home]+=1
@@ -157,7 +204,7 @@ class ServiceTown(TownSimulation):
             for pid in list(self.care_queue):
                 if len(active)>=slots or inv.get('medicine',0)<1:break
                 if self.visits.get(pid,{}).get('site',clinic)!=clinic:continue
-                self.care_queue.remove(pid);inv['medicine']-=1;self.medical_sinks+=1
+                self.care_queue.remove(pid);self.sites[clinic]['building'].consume_resource('medicine',1);self.medical_sinks+=1
                 task=dict(person=pid,site=clinic,remaining=120.0)
                 self.care_tasks.append(task);active.append(task)
             for task in active[:slots]:
@@ -176,7 +223,9 @@ class ServiceTown(TownSimulation):
                 job['stage']='outbound'
             else:
                 inv=self.sites[site]['building'].inventory.amounts
-                resource=job['resource'];inv[resource]=inv.get(resource,0)+v.cargo.pop(resource,0)
+                resource=job['resource']
+                amount=v.cargo.get(resource,0)
+                if amount:ResourceInventory(v.cargo).transfer_to(self.sites[site]['building'].inventory,resource,amount)
                 job['stage']='return';self.deliveries+=1
                 self._note('unload',site=site,resource=resource,vehicle=vid)
             del self.bay_active[site]
@@ -200,14 +249,17 @@ class ServiceTown(TownSimulation):
                 if v.site==job['source']:del self.jobs[vid]
                 else:self.fleet.dispatch(vid,job['source'])
         requests=[]
-        outstanding={(j['destination'],j['resource']) for j in self.jobs.values()}
+        self._choose_shoppers()
+        outstanding=set()
         for sid,site in self.sites.items():
             targets=({'food':self._resident_count(sid)*3} if self._resident_count(sid) else {})
             if sid in self.businesses:targets.update(self.businesses[sid].targets)
             for resource,target in targets.items():
                 available=site['building'].inventory.amounts.get(resource,0)
-                if available<target*.5 and (sid,resource) not in outstanding:
-                    requests.append(dict(site=sid,resource=resource,amount=target-available))
+                incoming=self.incoming(sid,resource)
+                needed=site['building'].inventory.shortage(resource,target,incoming)
+                if available+incoming<target*.5 and needed>0:
+                    requests.append(dict(site=sid,resource=resource,amount=needed))
         self.requests=requests
         for v in self.fleet.vehicles.values():
             if v.kind!='truck' or v.phase!='parked' or v.id in self.jobs:continue
@@ -222,7 +274,12 @@ class ServiceTown(TownSimulation):
                 if not suppliers:continue
                 source=max(suppliers,key=lambda s:self.sites[s]['building'].inventory.amounts.get(req['resource'],0))
                 inv=self.sites[source]['building'].inventory.amounts
-                amount=min(v.capacity,req['amount'],inv[req['resource']]);inv[req['resource']]-=amount
+                resource=self.resource_specs.get(req['resource'])
+                truck=self.truck_specs.get(v.truck_spec_id)
+                if resource is None or truck is None:continue
+                amount=material_load(resource,truck,requested=min(v.capacity,req['amount']),available=inv[req['resource']])
+                if amount<=0:continue
+                self.sites[source]['building'].consume_resource(req['resource'],amount)
                 self.jobs[v.id]=dict(source=source,destination=req['site'],resource=req['resource'],amount=amount,
                                       reserved=amount,stage='to_source')
                 outstanding.add(key);break
@@ -231,7 +288,9 @@ class ServiceTown(TownSimulation):
         self.fleet.observe()
         for vid in self.fleet.arrivals:
             v=self.fleet.vehicles[vid]
-            if v.kind=='car':self._arrive_person(self.residents[v.driver])
+            if v.kind=='car':
+                self.transit.record_vehicle_arrival(v.driver,self.sites[v.site]['walk_point'])
+                self._arrive_person(self.residents[v.driver])
             elif vid in self.jobs:
                 job=self.jobs[vid]
                 if job['stage']=='to_source':
@@ -247,11 +306,11 @@ class ServiceTown(TownSimulation):
 
     def report(self):
         result=super().report()
-        result['commuting']=sum(p.state in ('commuting','returning','visiting','visiting_return') for p in self.residents.values())
+        result['commuting']=sum(p.state in ('commuting','returning','commuting_site','returning_company','visiting','visiting_return') for p in self.residents.values())
         result['at_services']=sum(p.state in ('waiting_care','waiting_meal') for p in self.residents.values())
         result.update(treated=self.treated,clinic_waiting=len(self.care_queue),meals_served=self.meals_served,
                       harvested=self.harvested,outstanding_requests=len(self.requests))
-        result['resource_balance_error']+=self.medical_sinks+sum(j.get('reserved',0) for j in self.jobs.values())
+        result['resource_balance_error']+=self.medical_sinks+sum(j.get('reserved',0) for j in self.jobs.values())+sum(v['amount'] for v in self.visits.values() if v['purpose']=='shopping')
         return result
 
     def checkpoint(self):

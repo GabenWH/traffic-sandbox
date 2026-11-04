@@ -34,6 +34,7 @@ from traffic_testbed import RoutedRoadVehicle
 from units import mph_to_display
 from vehicle import Vehicle
 from color_palette import Palette
+from parking import bounds, oriented_rectangle
 
 from .base import SPEED_LIMIT_TAG, STATIC_TAG
 
@@ -72,6 +73,7 @@ class RendererMixin:
         self._draw_visible_trees()
         self.draw_city_roads()
         self._draw_regional_land_ports()
+        self._draw_parking_lots()
         self._draw_buildings()
         if self.blank_map:
             if not any(
@@ -148,6 +150,36 @@ class RendererMixin:
                 tags=STATIC_TAG,
             )
 
+    def _draw_parking_lots(self) -> None:
+        left, top, right, bottom = self.visible_world_bounds()
+        for lot in self.city_map.parking_lots:
+            if not lot.surface:
+                continue
+            x,y,r,b = bounds(lot.surface)
+            if r < left or x > right or b < top or y > bottom:
+                continue
+            for surface in lot.driveway_surfaces+[lot.surface]:
+                self.canvas.create_polygon(*(n for p in surface for n in self.world_to_screen(p)),
+                    fill='#606568',outline='',tags=STATIC_TAG)
+            if self.camera_zoom >= .3:
+                for space in lot.spaces:
+                    self.canvas.create_polygon(*(n for p in space.corners for n in self.world_to_screen(p)),
+                        fill='',outline='#e9e2c7',width=1,tags=STATIC_TAG)
+
+    def _draw_parked_vehicles(self) -> None:
+        runtime = getattr(self, 'city_simulation', None)
+        if runtime is None:
+            return
+        self.canvas.delete('parked_vehicles')
+        left,top,right,bottom = self.visible_world_bounds()
+        for vehicle in runtime.fleet.parked_vehicles():
+            x,y = vehicle.position
+            if not (left-vehicle.length <= x <= right+vehicle.length and top-vehicle.length <= y <= bottom+vehicle.length):
+                continue
+            corners = oriented_rectangle(vehicle.position, vehicle.heading, vehicle.length, vehicle.width)
+            self.canvas.create_polygon(*(n for p in corners for n in self.world_to_screen(p)),
+                fill=vehicle.color,outline='#20252a',width=1,tags='parked_vehicles')
+
     def _draw_buildings(self) -> None:
         """Draw persistent building footprints above the authored road layer."""
         for building in self.city_map.buildings:
@@ -156,6 +188,30 @@ class RendererMixin:
             left, top = self.world_to_screen((parcel.x, parcel.y))
             right, bottom = self.world_to_screen((parcel.x + parcel.width, parcel.y + parcel.height))
             if right < 0 or bottom < 0 or left > self.canvas.winfo_width() or top > self.canvas.winfo_height():
+                continue
+            if parcel.footprints:
+                courtyard=building.source_tags.get('traffic:courtyard')=='yes'
+                low_detail = self.camera_zoom < CITY_LOW_DETAIL_ZOOM
+                options = {
+                    "fill": building.color,
+                    "outline": "#ffb000" if under_construction else ("" if low_detail else "#eee4d5"),
+                    "width": max(1, round(self.camera_zoom)), "tags": STATIC_TAG,
+                }
+                if under_construction:
+                    options["dash"] = (4, 3) if low_detail else (7, 4)
+                if courtyard:options['outline']=''
+                for ring in parcel.footprints:
+                    points = [coordinate for vertex in ring for coordinate in self.world_to_screen(vertex)]
+                    if not low_detail and not courtyard:
+                        inset = max(1, 3 * self.camera_zoom)
+                        self.canvas.create_polygon(*(coordinate + inset for coordinate in points),
+                                                   fill=Palette.BUILDING_SHADOW, outline="", tags=STATIC_TAG)
+                    self.canvas.create_polygon(*points, **options)
+                if self.camera_zoom >= 0.7:
+                    self.canvas.create_text((left + right) / 2, (top + bottom) / 2,
+                                            text=building.name, fill=Palette.WHITE,
+                                            font=("Arial", max(7, round(9 * self.camera_zoom)), "bold"),
+                                            width=max(20, right - left - 6), tags=STATIC_TAG)
                 continue
             if self.camera_zoom < CITY_LOW_DETAIL_ZOOM:
                 options = {
@@ -206,6 +262,7 @@ class RendererMixin:
     def draw_road_vehicles(self) -> None:
         """Refresh every city road user through the same vehicle collection."""
         self.canvas.delete(CONSTRUCTION_TRUCK_TAG)
+        self._draw_parked_vehicles()
         road_vehicles = getattr(self, "road_vehicles", None)
         if road_vehicles is None:
             return

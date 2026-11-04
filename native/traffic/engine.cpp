@@ -1,5 +1,7 @@
 #include "engine.h"
 #include "spawning.h"
+#include "walking.h"
+#include "routing.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -953,6 +955,46 @@ Engine& engine(void* p) {require(p!=nullptr,"engine is closed");return *static_c
 template<class F> int guarded(F f) {try {error.clear();return f();}catch(const std::exception& e){error=e.what();return -1;}catch(...){error="native engine failure";return -1;}}
 }
 extern "C" {
+void* nt_routing_graph(int nodes,const NTRouteEdge* edges,int count) {
+    try {error.clear();return new RoutingGraphOwner(std::make_shared<RoutingGraph>(nodes,edges,count));}
+    catch(const std::exception& ex) {error=ex.what();return nullptr;}
+    catch(...) {error="routing graph allocation failed";return nullptr;}
+}
+void nt_routing_graph_destroy(void* ptr) {delete static_cast<RoutingGraphOwner*>(ptr);}
+void* nt_routing_tree(void* ptr,const int* targets,const double* finals,int count,const double* weights,int size) {
+    try {error.clear();require(ptr!=nullptr,"missing routing graph");
+        return new RoutingTree(*static_cast<RoutingGraphOwner*>(ptr),targets,finals,count,weights,size);}
+    catch(const std::exception& ex) {error=ex.what();return nullptr;}
+    catch(...) {error="routing tree allocation failed";return nullptr;}
+}
+void nt_routing_tree_destroy(void* ptr) {delete static_cast<RoutingTree*>(ptr);}
+int nt_routing_path(void* ptr,const int* sources,const double* initials,int count,int* edges,int capacity,
+                    int* origin,int* target,double* cost) {
+    return guarded([&] {require(ptr!=nullptr,"missing routing tree");
+        return static_cast<const RoutingTree*>(ptr)->path(sources,initials,count,edges,capacity,origin,target,cost);});
+}
+void* nt_walk_graph(const NTPoint* nodes,int n,const NTWalkEdge* edges,int m,const NTPoint* points,int count) {
+    try {error.clear();return new WalkingGraph(nodes,n,edges,m,points,count);}
+    catch(const std::exception& ex) {error=ex.what();return nullptr;}
+    catch(...) {error="native walking allocation failure";return nullptr;}
+}
+void nt_walk_destroy(void* p) {delete static_cast<WalkingGraph*>(p);}
+int nt_walk_query(void* p,NTPoint start,NTPoint finish,NTPoint* projections,NTWalkStep* steps,int capacity) {
+    return guarded([&] {
+        require(p && projections && steps && capacity>=0,"invalid walking query buffer");
+        auto& walking=*static_cast<const WalkingGraph*>(p);
+        auto from=walking.project(start),to=walking.project(finish);
+        projections[0]=from.point;projections[1]=to.point;
+        auto path=walking.graph.find(from,to);
+        require(path.edges.size()<=static_cast<size_t>(capacity),"walking output buffer too small");
+        for(size_t i=0;i<path.edges.size();++i) {
+            int id=path.edges[i];
+            const auto& edge=id<int(walking.graph.edges.size())?walking.graph.edges[id]:path.extras[id-walking.graph.edges.size()];
+            steps[i]={edge.data.key,edge.data.offset,edge.data.offset+edge.data.length};
+        }
+        return int(path.edges.size());
+    });
+}
 int nt_abi(){return 4;}
 const char* nt_error(){return error.c_str();}
 void* nt_create(double speed){try{error.clear();return new Engine(speed);}catch(const std::exception& e){error=e.what();return nullptr;}}

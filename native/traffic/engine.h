@@ -40,6 +40,13 @@ struct NTProfile {
     uint64_t ticks, vehicle_visits;
     double preparation_ms, control_ms, decision_ms, arbitration_ms, movement_ms;
 };
+// Immutable walking snapshots use the same SpawnGraph search as driving.
+struct NTWalkEdge { int source, destination, point_start, point_count, reverse; };
+struct NTWalkStep { int edge; double start, end; };
+void* nt_walk_graph(const NTPoint*, int, const NTWalkEdge*, int, const NTPoint*, int);
+void nt_walk_destroy(void*);
+// Returns step count, 0 for unreachable, -1 for invalid input. Caller owns output.
+int nt_walk_query(void*, NTPoint, NTPoint, NTPoint*, NTWalkStep*, int);
 int nt_abi();
 const char* nt_error();
 void* nt_create(double speed);
@@ -99,4 +106,10 @@ const NTBookkeeping* nt_bookkeeping(void*, int*, NTClock*);
 int nt_trace_enable(void*, int);
 const NTTrace* nt_trace(void*, int*);
 const int* nt_trace_vehicles(void*, int*);
+struct NTRouteEdge { int source, destination; double cost; };
+void* nt_routing_graph(int, const NTRouteEdge*, int);
+void nt_routing_graph_destroy(void*);
+void* nt_routing_tree(void*, const int*, const double*, int, const double*, int);
+void nt_routing_tree_destroy(void*);
+int nt_routing_path(void*, const int*, const double*, int, int*, int, int*, int*, double*);
 }

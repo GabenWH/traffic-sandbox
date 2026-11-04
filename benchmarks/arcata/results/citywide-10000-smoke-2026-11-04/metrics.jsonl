@@ -1,0 +1,76 @@
+{"wall": 0.0, "stage": "loading_map", "output": "/tmp/arcata-10000-smoke"}
+{"wall": 15.531, "stage": "building_geometry", "source_records": 5590}
+{"wall": 15.649, "stage": "building_geometry", "imported_buildings": 250}
+{"wall": 15.795, "stage": "building_geometry", "imported_buildings": 500}
+{"wall": 16.0, "stage": "building_geometry", "imported_buildings": 750}
+{"wall": 16.097, "stage": "building_geometry", "imported_buildings": 1000}
+{"wall": 16.18, "stage": "building_geometry", "imported_buildings": 1250}
+{"wall": 16.258, "stage": "building_geometry", "imported_buildings": 1500}
+{"wall": 16.34, "stage": "building_geometry", "imported_buildings": 1750}
+{"wall": 16.422, "stage": "building_geometry", "imported_buildings": 2000}
+{"wall": 16.517, "stage": "building_geometry", "imported_buildings": 2250}
+{"wall": 16.613, "stage": "building_geometry", "imported_buildings": 2500}
+{"wall": 16.708, "stage": "building_geometry", "imported_buildings": 2750}
+{"wall": 16.797, "stage": "building_geometry", "imported_buildings": 3000}
+{"wall": 16.878, "stage": "building_geometry", "imported_buildings": 3250}
+{"wall": 16.96, "stage": "building_geometry", "imported_buildings": 3500}
+{"wall": 17.046, "stage": "building_geometry", "imported_buildings": 3750}
+{"wall": 17.228, "stage": "building_geometry", "imported_buildings": 4000}
+{"wall": 17.326, "stage": "building_geometry", "imported_buildings": 4250}
+{"wall": 17.557, "stage": "building_geometry", "imported_buildings": 4500}
+{"wall": 18.206, "stage": "parking_layout", "groups": 4376, "completed": 0}
+{"wall": 19.578, "stage": "parking_layout", "groups": 4376, "completed": 100}
+{"wall": 20.961, "stage": "parking_layout", "groups": 4376, "completed": 200}
+{"wall": 21.835, "stage": "parking_layout", "groups": 4376, "completed": 300}
+{"wall": 22.681, "stage": "parking_layout", "groups": 4376, "completed": 400}
+{"wall": 24.387, "stage": "parking_layout", "groups": 4376, "completed": 500}
+{"wall": 25.82, "stage": "parking_layout", "groups": 4376, "completed": 600}
+{"wall": 27.65, "stage": "parking_layout", "groups": 4376, "completed": 700}
+{"wall": 31.576, "stage": "parking_layout", "groups": 4376, "completed": 800}
+{"wall": 34.14, "stage": "parking_layout", "groups": 4376, "completed": 900}
+{"wall": 35.849, "stage": "parking_layout", "groups": 4376, "completed": 1000}
+{"wall": 38.735, "stage": "parking_layout", "groups": 4376, "completed": 1100}
+{"wall": 41.838, "stage": "parking_layout", "groups": 4376, "completed": 1200}
+{"wall": 44.385, "stage": "parking_layout", "groups": 4376, "completed": 1300}
+{"wall": 47.078, "stage": "parking_layout", "groups": 4376, "completed": 1400}
+{"wall": 49.005, "stage": "parking_layout", "groups": 4376, "completed": 1500}
+{"wall": 51.614, "stage": "parking_layout", "groups": 4376, "completed": 1600}
+{"wall": 54.426, "stage": "parking_layout", "groups": 4376, "completed": 1700}
+{"wall": 55.839, "stage": "parking_layout", "groups": 4376, "completed": 1800}
+{"wall": 57.782, "stage": "parking_layout", "groups": 4376, "completed": 1900}
+{"wall": 59.563, "stage": "parking_layout", "groups": 4376, "completed": 2000}
+{"wall": 60.783, "stage": "parking_layout", "groups": 4376, "completed": 2100}
+{"wall": 62.3, "stage": "parking_layout", "groups": 4376, "completed": 2200}
+{"wall": 64.706, "stage": "parking_layout", "groups": 4376, "completed": 2300}
+{"wall": 67.675, "stage": "parking_layout", "groups": 4376, "completed": 2400}
+{"wall": 70.012, "stage": "parking_layout", "groups": 4376, "completed": 2500}
+{"wall": 72.193, "stage": "parking_layout", "groups": 4376, "completed": 2600}
+{"wall": 75.122, "stage": "parking_layout", "groups": 4376, "completed": 2700}
+{"wall": 77.334, "stage": "parking_layout", "groups": 4376, "completed": 2800}
+{"wall": 78.939, "stage": "parking_layout", "groups": 4376, "completed": 2900}
+{"wall": 81.157, "stage": "parking_layout", "groups": 4376, "completed": 3000}
+{"wall": 84.338, "stage": "parking_layout", "groups": 4376, "completed": 3100}
+{"wall": 87.042, "stage": "parking_layout", "groups": 4376, "completed": 3200}
+{"wall": 89.28, "stage": "parking_layout", "groups": 4376, "completed": 3300}
+{"wall": 91.621, "stage": "parking_layout", "groups": 4376, "completed": 3400}
+{"wall": 93.739, "stage": "parking_layout", "groups": 4376, "completed": 3500}
+{"wall": 96.231, "stage": "parking_layout", "groups": 4376, "completed": 3600}
+{"wall": 99.102, "stage": "parking_layout", "groups": 4376, "completed": 3700}
+{"wall": 101.092, "stage": "parking_layout", "groups": 4376, "completed": 3800}
+{"wall": 103.747, "stage": "parking_layout", "groups": 4376, "completed": 3900}
+{"wall": 106.395, "stage": "parking_layout", "groups": 4376, "completed": 4000}
+{"wall": 107.754, "stage": "parking_layout", "groups": 4376, "completed": 4100}
+{"wall": 109.033, "stage": "parking_layout", "groups": 4376, "completed": 4200}
+{"wall": 110.275, "stage": "parking_layout", "groups": 4376, "completed": 4300}
+{"wall": 112.508, "stage": "parking_layout", "groups": 4376, "completed": 4376}
+{"wall": 122.959, "stage": "parking_ready", "lots": 2964, "spaces": 8990}
+{"wall": 122.988, "stage": "map_loaded", "roads": 1181, "buildings": 4500}
+{"wall": 124.777, "stage": "ready", "population": 10000, "workers": 5000, "cars": 1000, "parking_lots": 2964, "parking_spaces": 8990}
+{"wall": 124.787, "time": 26964.0, "population": 10000, "at_home": 10000, "at_work": 0, "commuting": 0, "workers_arrived": 0, "produced_food": 0.0, "consumed_food": 0.0, "unmet_food": 0.0, "deliveries": 0, "vehicles": 1000, "active_road_vehicles": 0, "fuel_liters": 50000.0, "resource_balance_error": 0.0, "fuel_used_liters": 0.0, "at_services": 0, "treated": 0, "clinic_waiting": 0, "meals_served": 0, "harvested": 0.0, "outstanding_requests": 0, "households": 2500, "relocating_households": 0, "states": {"home": 10000}, "clock_hour": 7.49, "cars_parked_at_work": 0, "cars_driving": 0, "cars_waiting_to_depart": 0, "cars_blocked_by_full_destination": 0, "cars_blocked_by_missing_access": 0, "stage": "progress", "simulated_seconds": 0.0, "ticks": 0, "tick_mean_ms": 0.0, "tick_p50_ms": 0.0, "tick_p95_ms": 0.0, "tick_p99_ms": 0.0, "tick_max_ms": 0.0, "run_max_tick_ms": 0.0, "ticks_over_50ms": 0, "ticks_over_100ms": 0, "updates_per_wall_second": 0.0}
+{"wall": 125.72, "time": 26994.0, "population": 10000, "at_home": 10000, "at_work": 0, "commuting": 0, "workers_arrived": 0, "produced_food": 0.0, "consumed_food": 0.0, "unmet_food": 0.0, "deliveries": 0, "vehicles": 1000, "active_road_vehicles": 0, "fuel_liters": 50000.0, "resource_balance_error": 0.0, "fuel_used_liters": 0.0, "at_services": 0, "treated": 0, "clinic_waiting": 0, "meals_served": 0, "harvested": 0.0, "outstanding_requests": 0, "households": 2500, "relocating_households": 0, "states": {"home": 10000}, "clock_hour": 7.49833, "cars_parked_at_work": 0, "cars_driving": 0, "cars_waiting_to_depart": 0, "cars_blocked_by_full_destination": 0, "cars_blocked_by_missing_access": 0, "stage": "progress", "simulated_seconds": 30.0, "ticks": 600, "tick_mean_ms": 1.5355726116316266, "tick_p50_ms": 0.9405889995832695, "tick_p95_ms": 1.1471059988252819, "tick_p99_ms": 1.312272001086967, "tick_max_ms": 339.2936410000402, "run_max_tick_ms": 339.2936410000402, "ticks_over_50ms": 1, "ticks_over_100ms": 1, "updates_per_wall_second": 636.2134239647326}
+{"wall": 267.446, "time": 27024.0, "population": 10000, "at_home": 6763, "at_work": 4, "commuting": 3233, "workers_arrived": 4, "produced_food": 0.0, "consumed_food": 20.833333333028833, "unmet_food": 0.0, "deliveries": 0, "vehicles": 1000, "active_road_vehicles": 571, "fuel_liters": 49993.565139554164, "resource_balance_error": 3.637978807091713e-12, "fuel_used_liters": 6.434860445835511, "at_services": 0, "treated": 0, "clinic_waiting": 0, "meals_served": 0, "harvested": 0.0, "outstanding_requests": 0, "households": 2500, "relocating_households": 0, "states": {"commuting": 3233, "home": 6763, "work": 4}, "clock_hour": 7.50667, "cars_parked_at_work": 4, "cars_driving": 571, "cars_waiting_to_depart": 135, "cars_blocked_by_full_destination": 89, "cars_blocked_by_missing_access": 8, "stage": "progress", "simulated_seconds": 60.0, "ticks": 1200, "tick_mean_ms": 236.10035180668697, "tick_p50_ms": 5.193583998334361, "tick_p95_ms": 10.836516999916057, "tick_p99_ms": 491.46230699989246, "tick_max_ms": 43590.295635000075, "run_max_tick_ms": 43590.295635000075, "ticks_over_50ms": 8, "ticks_over_100ms": 8, "updates_per_wall_second": 8.41106005878534}
+{"wall": 300.625, "time": 27054.0, "population": 10000, "at_home": 5397, "at_work": 19, "commuting": 4584, "workers_arrived": 19, "produced_food": 0.0, "consumed_food": 30.972222221777642, "unmet_food": 0.0, "deliveries": 0, "vehicles": 1000, "active_road_vehicles": 637, "fuel_liters": 49980.37476964864, "resource_balance_error": 1.8189894035458565e-11, "fuel_used_liters": 19.625230351361097, "at_services": 0, "treated": 0, "clinic_waiting": 0, "meals_served": 0, "harvested": 0.0, "outstanding_requests": 0, "households": 2500, "relocating_households": 0, "states": {"commuting": 4584, "home": 5397, "work": 19}, "clock_hour": 7.515, "cars_parked_at_work": 18, "cars_driving": 637, "cars_waiting_to_depart": 345, "cars_blocked_by_full_destination": 279, "cars_blocked_by_missing_access": 12, "stage": "progress", "simulated_seconds": 90.0, "ticks": 1800, "tick_mean_ms": 55.02409308999935, "tick_p50_ms": 14.187729000695981, "tick_p95_ms": 20.2562440008478, "tick_p99_ms": 25.10372300093877, "tick_max_ms": 22784.89883400107, "run_max_tick_ms": 43590.295635000075, "ticks_over_50ms": 11, "ticks_over_100ms": 11, "updates_per_wall_second": 10.23613581807526}
+{"wall": 310.83, "time": 27084.0, "population": 10000, "at_home": 5383, "at_work": 51, "commuting": 4566, "workers_arrived": 51, "produced_food": 0.0, "consumed_food": 41.66666666604919, "unmet_food": 0.0, "deliveries": 0, "vehicles": 1000, "active_road_vehicles": 619, "fuel_liters": 49968.4458167423, "resource_balance_error": 1.4551915228366852e-11, "fuel_used_liters": 31.55418325770006, "at_services": 0, "treated": 0, "clinic_waiting": 0, "meals_served": 0, "harvested": 0.0, "outstanding_requests": 0, "households": 2500, "relocating_households": 0, "states": {"commuting": 4566, "home": 5383, "work": 51}, "clock_hour": 7.52333, "cars_parked_at_work": 50, "cars_driving": 619, "cars_waiting_to_depart": 331, "cars_blocked_by_full_destination": 284, "cars_blocked_by_missing_access": 12, "stage": "progress", "simulated_seconds": 120.0, "ticks": 2400, "tick_mean_ms": 16.701828053343586, "tick_p50_ms": 14.57276200017077, "tick_p95_ms": 22.087396999268094, "tick_p99_ms": 27.452585998616996, "tick_max_ms": 517.5512440000603, "run_max_tick_ms": 43590.295635000075, "ticks_over_50ms": 15, "ticks_over_100ms": 13, "updates_per_wall_second": 12.8995150235624}
+{"wall": 321.497, "time": 27114.0, "population": 10000, "at_home": 5381, "at_work": 104, "commuting": 4515, "workers_arrived": 104, "produced_food": 0.0, "consumed_food": 52.06597222138449, "unmet_food": 0.0, "deliveries": 0, "vehicles": 1000, "active_road_vehicles": 573, "fuel_liters": 49957.855190541515, "resource_balance_error": -3.637978807091713e-11, "fuel_used_liters": 42.144809458484815, "at_services": 0, "treated": 0, "clinic_waiting": 0, "meals_served": 0, "harvested": 0.0, "outstanding_requests": 0, "households": 2500, "relocating_households": 0, "states": {"commuting": 4515, "home": 5381, "work": 104}, "clock_hour": 7.53167, "cars_parked_at_work": 98, "cars_driving": 573, "cars_waiting_to_depart": 329, "cars_blocked_by_full_destination": 284, "cars_blocked_by_missing_access": 12, "stage": "progress", "simulated_seconds": 150.0, "ticks": 3000, "tick_mean_ms": 17.419655491685262, "tick_p50_ms": 16.302980999171268, "tick_p95_ms": 25.266307999118, "tick_p99_ms": 31.46078600002511, "tick_max_ms": 102.91698199944221, "run_max_tick_ms": 43590.295635000075, "ticks_over_50ms": 16, "ticks_over_100ms": 14, "updates_per_wall_second": 15.250073489050674}
+{"wall": 331.534, "time": 27144.0, "population": 10000, "at_home": 5378, "at_work": 159, "commuting": 4463, "workers_arrived": 159, "produced_food": 0.0, "consumed_food": 62.49999999899054, "unmet_food": 0.0, "deliveries": 0, "vehicles": 1000, "active_road_vehicles": 524, "fuel_liters": 49948.527672962555, "resource_balance_error": -2.1827872842550278e-11, "fuel_used_liters": 51.47232703744521, "at_services": 0, "treated": 0, "clinic_waiting": 0, "meals_served": 0, "harvested": 0.0, "outstanding_requests": 0, "households": 2500, "relocating_households": 0, "states": {"commuting": 4463, "home": 5378, "work": 159}, "clock_hour": 7.54, "cars_parked_at_work": 150, "cars_driving": 524, "cars_waiting_to_depart": 326, "cars_blocked_by_full_destination": 284, "cars_blocked_by_missing_access": 12, "stage": "progress", "simulated_seconds": 180.0, "ticks": 3600, "tick_mean_ms": 16.41709304669651, "tick_p50_ms": 14.961500000936212, "tick_p95_ms": 25.03935200002161, "tick_p99_ms": 38.06609300045238, "tick_max_ms": 121.16922700079158, "run_max_tick_ms": 43590.295635000075, "ticks_over_50ms": 20, "ticks_over_100ms": 15, "updates_per_wall_second": 17.411771191755783}
+{"wall": 331.698, "stage": "complete", "stop_reason": "duration", "simulated_seconds": 180.0, "summary": "/tmp/arcata-10000-smoke/summary.json"}

@@ -107,7 +107,22 @@ data. Supplying `pedestrian_sides=()` explicitly disables walkways on any road.
 `PedestrianNetwork` compiles the exact road-owned lane objects into the
 `pedestrians` mobility layer. It does not generate a second set of lane
 geometry. `CityMap.find_pedestrian_route(start, destination)` snaps a query to
-those walkways and runs A* with distance costs and a Euclidean heuristic.
+those walkways and runs native A* with distance costs and a Euclidean heuristic.
+Python authors the world and lane geometry. `NativeWalkingGraph` lazily uploads
+an immutable snapshot to the same C++ library and `SpawnGraph` search used for
+cars. Walking retains its own bidirectional edges; cars cannot use sidewalks.
+Endpoint projection and path search execute in C++, using query-local partial
+lane edges instead of copying the graph. Python reconstructs `WalkingRoute`
+geometry and crossing metadata from native edge slices.
+
+A mobility rebuild replaces the pedestrian network and its compiled snapshot.
+Snapshots own their native memory, are freed when no longer referenced, and
+are never serialized. Each query owns its output buffer and releases the GIL
+during native search, so an existing snapshot supports concurrent readers.
+The current gameplay calls still wait for route results: this migration does
+not add a background economy scheduler. Transit schedules, service selection,
+and the small walking/bus itinerary graph remain Python. The full Arcata
+workday should be measured separately with `tools/run_arcata_workday_stress.py`.
 Temporary partial-lane query edges allow arbitrary positions without adding
 per-building nodes to the persistent graph. The route's flattened points can
 be passed to `NativeTrafficEngine.register_pedestrian_lane()` for C++ movement.

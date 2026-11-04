@@ -1,0 +1,23 @@
+{
+  "tests_run": 707,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 2,
+  "seconds": 338.237,
+  "command": "python -m unittest discover -s tests",
+  "environment": "Python 3.12; Panda3D available; two display-dependent skips",
+  "review": {
+    "critical": 0,
+    "important": 2,
+    "minor": 0,
+    "important_fixed": [
+      "road-port observation normalization",
+      "event-fragment budget amplification"
+    ],
+    "additional_measured_fix": "ready drivers no longer starve behind walking departure intents"
+  },
+  "stress_scenarios": [
+    "background-10000-synchronized-2026-11-04",
+    "background-10000-spread-2026-11-04"
+  ]
+}

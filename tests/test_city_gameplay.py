@@ -50,6 +50,7 @@ class OperationalBuildingTests(unittest.TestCase):
 
 def neighborhood():
     from city_simulation import CitySimulation
+    from commute_schedule import CommutePolicy
     city = CityMap(terrain=Terrain(trees=[]))
     city.add_road([(30,30),(4500,30)])
     home=placed(city,'small_house',200)
@@ -58,7 +59,8 @@ def neighborhood():
     bakery=placed(city,'bakery',3600)
     market=placed(city,'market',3300)
     for b in city.buildings: b.phase=BuildablePhase.OPERATIONAL
-    return CitySimulation(city),home,other,cafe,bakery,market
+    # Resource/arrival tests use a known shift; default spread has its own tests.
+    return CitySimulation(city,commute_policy=CommutePolicy(departure_window=0)),home,other,cafe,bakery,market
 
 
 class CityRuntimeTests(unittest.TestCase):
@@ -184,7 +186,12 @@ class GameplayPersistenceTests(unittest.TestCase):
         self.assertEqual(restored.households[h.id].moving_to,target.id)
         runtime.update(1100);restored.update(1100)
         self.assertEqual(restored.households[h.id].home,target.id)
-        self.assertEqual(restored.report(),runtime.report())
+        # Background preparation may finish on a different tick after loading.
+        # Cache counters are disposable; physical/accounting state must agree.
+        for key,value in runtime.report().items():
+            if key.startswith('routing_'):continue
+            if isinstance(value,float):self.assertAlmostEqual(restored.report()[key],value,places=7)
+            else:self.assertEqual(restored.report()[key],value,key)
 
     def test_active_bus_passengers_and_waiting_queues_restore(self):
         from city_simulation import CitySimulation
@@ -274,7 +281,7 @@ class GameplayLifecycleTests(unittest.TestCase):
             c=placed(runtime.city,'clinic',x);c.phase=BuildablePhase.OPERATIONAL;clinics.append(c)
         runtime.sync_buildings();h=runtime.invite_household(target.id,4)
         for i,c in enumerate(clinics):
-            p=runtime.residents[h.members[i]];p.workplace=c.id;p.state='work'
+            p=runtime.residents[h.members[i]];p.workplace=c.id;p.state='commuting';runtime._arrive_person(p)
             runtime.import_resources(c.id,'medicine',1)
             runtime.request_visit(h.members[2+i],c.id,'care')
         runtime.update(500)
@@ -299,7 +306,7 @@ class GameplayLifecycleTests(unittest.TestCase):
     def test_recipe_conversion_is_accounted_separately_from_construction(self):
         runtime,home,target,cafe,bakery,*_=neighborhood()
         h=runtime.invite_household(target.id,1)
-        p=runtime.residents[h.members[0]];p.workplace=bakery.id;p.state='work'
+        p=runtime.residents[h.members[0]];p.workplace=bakery.id;p.state='commuting';runtime._arrive_person(p)
         bakery.operation['inputs']={'grain':2};runtime.sync_buildings()
         runtime.import_resources(bakery.id,'grain',20)
         runtime.import_resources(home.id,'food',10)

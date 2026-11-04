@@ -174,6 +174,17 @@ class TransitSimulation:
             self._walk_cache[key] = self.city.find_pedestrian_route(a, b)
         return self._walk_cache[key]
 
+    def record_vehicle_arrival(self, person_id, destination):
+        """Reconcile a completed personal-car trip with an earlier walking trip."""
+        if len(destination)!=2 or not all(isfinite(v) for v in destination):
+            raise ValueError('Arrival point must be a finite 2D position')
+        previous=self.people.get(person_id)
+        if previous is None:return
+        if previous.phase!='arrived':
+            raise ValueError('A car arrival cannot replace an active transit journey')
+        previous.origin=previous.destination=tuple(destination)
+        previous.arrived_at=self.time
+
     def request_trip(self, person_id, origin, destination, *, allow_bus=True):
         self._check_network()
         if isinstance(person_id, bool) or not isinstance(person_id, int) or person_id < 0 or person_id > 2147483647:

@@ -37,7 +37,7 @@ struct SpawnRandom {
 };
 
 struct SpawnEdge { NTGraphEdge data; std::vector<NTPoint> points; };
-struct SpawnEndpoint { NTPoint point; std::vector<int> outgoing, incoming; int lane=-1; double distance=0; };
+struct SpawnEndpoint { NTPoint point; std::vector<int> outgoing, incoming; int lane=-1, reverse_lane=-1; double distance=0; };
 struct SpawnPath { std::vector<int> edges; double cost=0; bool found=false; std::vector<SpawnEdge> extras; };
 struct SpawnGraph {
     std::vector<NTPoint> nodes;
@@ -75,10 +75,29 @@ struct SpawnGraph {
     SpawnPath find(const SpawnEndpoint& from,const SpawnEndpoint& to,bool same=false) const {
         int start=static_cast<int>(nodes.size()),goal=start+1;
         std::vector<SpawnEdge> extras;
-        int first=-1,last=-1,direct=-1;
-        if(from.lane>=0) {first=int(edges.size()+extras.size());auto& lane=edges[from.lane];extras.push_back(partial(from.lane,from.distance,lane.data.length,start,lane.data.destination));}
-        if(to.lane>=0) {last=int(edges.size()+extras.size());auto& lane=edges[to.lane];extras.push_back(partial(to.lane,0,to.distance,lane.data.source,goal));}
-        if(from.lane>=0 && from.lane==to.lane && to.distance>=from.distance) {direct=int(edges.size()+extras.size());extras.push_back(partial(from.lane,from.distance,to.distance,start,goal));}
+        std::vector<int> first, last, direct;
+        // Query-local endpoint overlays; the compiled adjacency is never copied.
+        auto origins=[&](const SpawnEndpoint& endpoint) {
+            std::vector<std::pair<int,double>> lanes;
+            if(endpoint.lane>=0) lanes.emplace_back(endpoint.lane,endpoint.distance);
+            if(endpoint.reverse_lane>=0)
+                lanes.emplace_back(endpoint.reverse_lane,edges[endpoint.reverse_lane].data.length-endpoint.distance);
+            return lanes;
+        };
+        auto from_lanes=origins(from),to_lanes=origins(to);
+        for(auto [lane,distance]:from_lanes) {
+            first.push_back(int(edges.size()+extras.size()));
+            extras.push_back(partial(lane,distance,edges[lane].data.length,start,edges[lane].data.destination));
+        }
+        for(auto [lane,distance]:to_lanes) {
+            last.push_back(int(edges.size()+extras.size()));
+            extras.push_back(partial(lane,0,distance,edges[lane].data.source,goal));
+        }
+        for(auto [source,sd]:from_lanes) for(auto [destination,dd]:to_lanes)
+            if(source==destination && dd>=sd) {
+                direct.push_back(int(edges.size()+extras.size()));
+                extras.push_back(partial(source,sd,dd,start,goal));
+            }
         double infinity=std::numeric_limits<double>::infinity();
         std::vector<double> best(nodes.size()+2,infinity);
         std::vector<int> previous(nodes.size()+2,-1),via(nodes.size()+2,-1);
@@ -105,14 +124,14 @@ struct SpawnGraph {
                 frontier.emplace(candidate+estimate(next),sequence++,candidate,next);
             };
             if(node==start) {
-                if(first>=0) {auto& edge=extras[first-int(edges.size())];push(edge.data.destination,edge.data.cost,first);}
-                else for(int next:from.outgoing) push(next,0,-1);
-                if(direct>=0) push(goal,to.distance-from.distance,direct);
-                else if(same) push(goal,0,-1);
+                for(int id:first) {auto& edge=extras[id-int(edges.size())];push(edge.data.destination,edge.data.cost,id);}
+                if(first.empty()) for(int next:from.outgoing) push(next,0,-1);
+                for(int id:direct) {auto& edge=extras[id-int(edges.size())];push(goal,edge.data.cost,id);}
+                if(direct.empty() && same) push(goal,0,-1);
             } else {
                 for(int edge:adjacency[node]) push(edges[edge].data.destination,edges[edge].data.cost,edge);
-                if(last>=0) {auto& edge=extras[last-int(edges.size())];if(edge.data.source==node) push(goal,edge.data.cost,last);}
-                else for(int incoming:to.incoming) if(incoming==node) push(goal,0,-1);
+                for(int id:last) {auto& edge=extras[id-int(edges.size())];if(edge.data.source==node) push(goal,edge.data.cost,id);}
+                if(last.empty()) for(int incoming:to.incoming) if(incoming==node) push(goal,0,-1);
             }
         }
         return {};

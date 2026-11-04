@@ -229,7 +229,8 @@ def road_lanes(tags: dict[str, str]) -> tuple[int, int]:
     return forward, reverse
 
 
-def build_city(paths: list[Path], boundary_path: Path) -> tuple[CityMap, list[str], dict[str, object]]:
+def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(),
+               residents_per_building: int = 4, building_progress=None) -> tuple[CityMap, list[str], dict[str, object]]:
     nodes, ways, osm_metadata = load_osm(paths)
     outer, inner, boundary_metadata = parse_boundary(boundary_path)
     boundary_points = [point for ring in outer for point in ring[:-1]]
@@ -381,6 +382,14 @@ def build_city(paths: list[Path], boundary_path: Path) -> tuple[CityMap, list[st
         "roads_by_highway": dict(Counter(road.name.split(" [", 1)[-1].rstrip("]") for road in roads)),
         "osm_file_names": [path.name for path in paths],
     }
+    if building_paths:
+        from tools.osm_buildings import import_osm_homes
+        home_stats = import_osm_homes(city, building_paths, in_boundary, to_feet,
+                                      residents_per_building=residents_per_building,progress=building_progress)
+        metadata.update(home_stats)
+        metadata.setdefault('imported_homes', 0)
+        metadata['building_osm_file_names'] = [Path(path).name for path in building_paths]
+        metadata['residents_per_imported_home'] = residents_per_building
     return city, portal_ids, metadata
 
 

@@ -22,6 +22,7 @@ from models import (
     Point,
     Road,
     WorkType,
+    ResourceInventory,
     point_at_polyline_distance,
     polyline_length,
 )
@@ -30,6 +31,7 @@ from resources import (
     ConstructionCatalogError,
     ResourceSpec,
     TruckSpec,
+    material_load,
 )
 from traffic_testbed import RoadVehicleSimulation, RoutedRoadVehicle
 from units import pixels_per_second_to_mph
@@ -114,22 +116,29 @@ def building_access_points(
     building: Building,
 ) -> tuple[LanePosition, ...]:
     """Return nearby directional lane positions beside a building parcel."""
-    center = (
-        building.parcel.x + building.parcel.width / 2,
-        building.parcel.y + building.parcel.height / 2,
-    )
+    center = building.parcel.representative_point()
     candidates: list[LanePosition] = []
     for road in city_map.roads:
         maximum_distance = 2.0 * road.lane_width
         for lane in road.lanes:
             position, _ = nearest_lane_position(lane, center)
+            # The bounding box is a cheap lower bound on polygon distance.
+            if _distance_from_parcel_bounds(building.parcel, position.point) > maximum_distance:
+                continue
             if distance_from_parcel(building.parcel, position.point) <= maximum_distance:
                 candidates.append(position)
     return tuple(candidates)
 
 
 def distance_from_parcel(parcel: Parcel, point: Point) -> float:
-    """Measure from a point to the rectangle, returning zero inside it."""
+    """Measure from a point to the parcel footprint, returning zero inside it."""
+    if parcel.footprints:
+        from building_footprints import distance_to_ring
+        return min(distance_to_ring(ring, point) for ring in parcel.footprints)
+    return _distance_from_parcel_bounds(parcel, point)
+
+
+def _distance_from_parcel_bounds(parcel: Parcel, point: Point) -> float:
     distance_x = max(parcel.x - point[0], 0.0, point[0] - (parcel.x + parcel.width))
     distance_y = max(parcel.y - point[1], 0.0, point[1] - (parcel.y + parcel.height))
     return dist((0.0, 0.0), (distance_x, distance_y))
@@ -272,6 +281,7 @@ class ConstructionSimulation:
         self._material_delivery_counts: dict[tuple[str, str], int] = {}
         self.road_deconstruction_jobs: dict[str, RoadDeconstructionJob] = {}
         self.exported_materials: dict[str, float] = {}
+        self.resident_workforce = False
 
     def request_road_deconstruction(
         self, city_map: CityMap, road: Road,
@@ -357,14 +367,14 @@ class ConstructionSimulation:
                 self._apply_delivery(trip)
                 self.trips.remove(trip)
 
-    def update_external(self, city_map, elapsed_seconds):
+    def update_external(self, city_map, elapsed_seconds, *, advance_work=True):
         """Coarse construction coordination when the city owns road movement."""
         if not isfinite(elapsed_seconds) or elapsed_seconds < 0:
             raise ValueError('Construction elapsed time must be finite and nonnegative')
         self._city_map = city_map
         self.sync_network(city_map)
         self._restore_road_deconstruction_jobs(city_map)
-        self._advance_work(city_map, elapsed_seconds)
+        if advance_work:self._advance_work(city_map, elapsed_seconds)
         self._seconds_until_next_departure = max(0, self._seconds_until_next_departure-elapsed_seconds)
         self._start_ready_work(city_map)
         self._queue_outstanding_demand(city_map)
@@ -602,6 +612,9 @@ class ConstructionSimulation:
                 self._material_delivery_counts.get(key, 0) + 1
             )
         else:
+            # A regional crew queued before the first residents moved in must
+            # not turn into anonymous extra labor in the populated city.
+            if building is not None and self.resident_workforce:return
             target.assigned_workers += trip.payload.workers
 
     def _materials_complete(self, building: Building) -> bool:
@@ -694,11 +707,8 @@ class ConstructionSimulation:
                     truck.cargo_m3 / resource.volume_m3_per_unit,
                 )
                 while True:
-                    remaining = (
-                        required
-                        - building.construction_delivered.get(resource_id, 0.0)
-                        - self._in_transit_material(building.id, resource_id)
-                    )
+                    remaining = ResourceInventory(building.construction_delivered).shortage(
+                        resource_id, required, self._in_transit_material(building.id, resource_id))
                     rounding_tolerance = self._material_rounding_tolerance(
                         building.id, resource_id, required,
                     )
@@ -707,7 +717,7 @@ class ConstructionSimulation:
                     available = self.provider.available_material(resource_id)
                     if isnan(available) or available <= 0:
                         break
-                    amount = min(remaining, max_load, available)
+                    amount = material_load(resource, truck, requested=remaining, available=available)
                     if amount <= 0:
                         break
                     if route is None:
@@ -733,7 +743,8 @@ class ConstructionSimulation:
         truck = max(crew_trucks, key=lambda candidate: (candidate.crew_capacity, candidate.id))
         for building in city_map.buildings:
             if (
-                building.phase is not BuildablePhase.UNDER_CONSTRUCTION
+                self.resident_workforce
+                or building.phase is not BuildablePhase.UNDER_CONSTRUCTION
                 or building.active_work is not None
             ):
                 continue

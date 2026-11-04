@@ -1,0 +1,31 @@
+{
+  "outcome": "workday_not_completed_routing_stall",
+  "source_commit": "aa338db",
+  "planned_hours": [
+    6,
+    20
+  ],
+  "population": 6000,
+  "workers": 3000,
+  "houses": 500,
+  "apartments": 500,
+  "endpoint_businesses": 20,
+  "farms": 3,
+  "factory": 1,
+  "bus_lines": 3,
+  "buses": 12,
+  "bus_seats_each": 60,
+  "roads": 1181,
+  "authored_job_setup_seconds": 0.01,
+  "automatic_assignment": "interrupted after more than three CPU minutes following population initialization",
+  "long_attempt": "interrupted after more than six CPU minutes total; first simulated hour had not completed",
+  "watched_seconds": 91.09825696200005,
+  "last_simulated_time": 21659.999999999272,
+  "last_states": {
+    "visiting": 48,
+    "home": 5952
+  },
+  "samples": 6,
+  "exit_code": 124,
+  "validation": "No completed workday; production, delivery and commute success remain unverified."
+}
