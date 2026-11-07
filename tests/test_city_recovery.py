@@ -1,5 +1,6 @@
 """Regression cases from the independent whole-branch review."""
 import unittest
+from unittest.mock import patch
 from tests.test_city_gameplay import neighborhood, placed, roundtrip
 from models import BuildablePhase
 
@@ -88,12 +89,43 @@ class CityRecoveryTests(unittest.TestCase):
         h=runtime.invite_household(home.id,1,car=True)
         p=runtime.residents[h.members[0]]
         p.workplace=bakery.id;p.state='visiting_return';p.return_due=True
+        vehicle=runtime.fleet.vehicles[p.car_id];vehicle.site=bakery.id
+        vehicle.parking_space_id=runtime.fleet._available_space(vehicle,bakery.id)
+        runtime.fleet.restore_parking()
+        runtime.visits[p.id]=dict(site=cafe.id,purpose='meal',origin=bakery.id,previous='work')
+        # A transient road blockage needs a retry event. Zero fuel now permits
+        # walking fallback or a change-driven wait, so cannot model this case.
+        with patch.object(runtime.transit.traffic,'admit_route',return_value=None):
+            runtime._arrive_person(p);runtime.update(10)
+        self.assertEqual(p.state,'work')
+        retry=next(e for e in runtime._events if e[2]=='retry_return')
+        self.assertEqual(retry[3],['retry_return:'+str(p.id),p.id])
+        self.assertIs(runtime.fleet.vehicles[p.car_id],vehicle)
+        runtime.update(1500)
+        self.assertEqual(p.state,'home')
+
+    def test_out_of_fuel_return_after_visit_walks_home_and_keeps_car(self):
+        runtime,home,_,cafe,bakery,*_=neighborhood()
+        h=runtime.invite_household(home.id,1,car=True)
+        p=runtime.residents[h.members[0]]
+        p.workplace=bakery.id;p.state='visiting_return';p.return_due=True
         vehicle=runtime.fleet.vehicles[p.car_id];vehicle.site=bakery.id;vehicle.fuel_liters=0
+        vehicle.parking_space_id=runtime.fleet._available_space(vehicle,bakery.id)
+        runtime.fleet.restore_parking()
+        space=vehicle.parking_space_id
         runtime.visits[p.id]=dict(site=cafe.id,purpose='meal',origin=bakery.id,previous='work')
         runtime._arrive_person(p);runtime.update(10)
-        self.assertEqual(p.state,'work')
-        self.assertTrue(any(e[2]=='retry_return' for e in runtime._events))
+        self.assertEqual(p.state,'returning')
+        self.assertEqual(runtime.parking_trips.counts['mode_fallbacks'],1)
+        self.assertFalse(any(e[2]=='retry_return' for e in runtime._events))
+        runtime.update(1500)
+        self.assertEqual(p.state,'home')
+        self.assertEqual(p.mode,'car')
+        self.assertNotIn(p.id,runtime.visits)
         self.assertIs(runtime.fleet.vehicles[p.car_id],vehicle)
+        self.assertEqual((vehicle.phase,vehicle.site,vehicle.parking_space_id),('parked',bakery.id,space))
+        self.assertEqual(vehicle.fuel_liters,0)
+        self.assertEqual(vehicle.trips,0)
 
     def test_building_completion_advances_housing_review_without_duplicate_months(self):
         runtime,home,*_=neighborhood()

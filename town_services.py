@@ -55,9 +55,14 @@ class ServiceTown(TownSimulation):
         if purpose=='shopping' and self.businesses[site].kind!='market':
             raise ValueError('Shopping requires a market')
         origin=p.home if p.state=='home' else (p.worksite or p.workplace)
-        self.transit.request_trip(p.id,self.sites[origin]['walk_point'],self.sites[site]['walk_point'])
+        if not self._travel_person(p,origin,site):
+            return False
         self.visits[p.id]=dict(site=site,purpose=purpose,origin=origin,previous=p.state)
         p.state='visiting'
+        return True
+
+    def _travel_person(self, person, source, destination):
+        self.transit.request_trip(person.id,self.sites[source]['walk_point'],self.sites[destination]['walk_point'])
         return True
 
     def incoming(self, site, resource):
@@ -148,7 +153,9 @@ class ServiceTown(TownSimulation):
         p=self.residents[pid];visit=self.visits[pid]
         p.state='service_return_pending'
         try:
-            self.transit.request_trip(pid,self.sites[visit['site']]['walk_point'],self.sites[visit['origin']]['walk_point'])
+            if not self._travel_person(p,visit['site'],visit['origin']):
+                self._defer_service_return(pid)
+                return
         except (ValueError,RuntimeError):
             self._defer_service_return(pid)
             return
@@ -289,8 +296,7 @@ class ServiceTown(TownSimulation):
         for vid in self.fleet.arrivals:
             v=self.fleet.vehicles[vid]
             if v.kind=='car':
-                self.transit.record_vehicle_arrival(v.driver,self.sites[v.site]['walk_point'])
-                self._arrive_person(self.residents[v.driver])
+                self._car_arrived(v)
             elif vid in self.jobs:
                 job=self.jobs[vid]
                 if job['stage']=='to_source':

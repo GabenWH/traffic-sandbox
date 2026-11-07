@@ -17,6 +17,10 @@ struct NTSpawn {
     int handle, route, style, state, signal, generated;
     double distance, speed, length, width, cap, dwell, desired, entry;
 };
+struct NTObstacle {
+    int handle, key;
+    double distance, length, width, x, y, hx, hy;
+};
 struct NTState {
     int handle, state, signal, claim, alive;
     double distance, speed, x, y, hx, hy, desired, dwell, entry;
@@ -60,6 +64,9 @@ int nt_place(void*, int, double);
 int nt_yellow(void*, int, int, int);
 int nt_resize(void*, int, double, double);
 int nt_remove(void*, int);
+int nt_stop_at_end(void*, int, int);
+int nt_lane_obstacle(void*, const NTObstacle*, const char*);
+int nt_remove_obstacle(void*, const char*);
 int nt_claim(void*, int, int);
 int nt_external_claim(void*, int, int);
 int nt_arrival(void*, int, int, double);

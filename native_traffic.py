@@ -57,6 +57,11 @@ class _Spawn(C.Structure):
         (x, C.c_double) for x in ('distance', 'speed', 'length', 'width', 'cap', 'dwell', 'desired', 'entry')]
 
 
+class _Obstacle(C.Structure):
+    _fields_ = [(x, C.c_int) for x in ('handle', 'key')] + [
+        (x, C.c_double) for x in ('distance', 'length', 'width', 'x', 'y', 'hx', 'hy')]
+
+
 class _Profile(C.Structure):
     _fields_ = [('ticks', C.c_uint64), ('vehicle_visits', C.c_uint64)] + [
         (name, C.c_double) for name in (
@@ -123,6 +128,9 @@ def _library():
         'nt_place': (C.c_int, [C.c_void_p, C.c_int, C.c_double]),
         'nt_resize': (C.c_int, [C.c_void_p, C.c_int, C.c_double, C.c_double]),
         'nt_remove': (C.c_int, [C.c_void_p, C.c_int]),
+        'nt_stop_at_end': (C.c_int, [C.c_void_p, C.c_int, C.c_int]),
+        'nt_lane_obstacle': (C.c_int, [C.c_void_p, C.POINTER(_Obstacle), C.c_char_p]),
+        'nt_remove_obstacle': (C.c_int, [C.c_void_p, C.c_char_p]),
         'nt_external_claim': (C.c_int, [C.c_void_p, C.c_int, C.c_int]),
         'nt_claim': (C.c_int, [C.c_void_p, C.c_int, C.c_int]),
         'nt_arrival': (C.c_int, [C.c_void_p, C.c_int, C.c_int, C.c_double]),
@@ -166,6 +174,7 @@ class NativeTrafficEngine:
             raise ValueError(self._lib.nt_error().decode())
         self._ids = {}
         self._handles = {}
+        self._obstacle_handles = {}
         self._next_handle = 0
         self._connections = []
         self._connection_ids = {}
@@ -190,6 +199,8 @@ class NativeTrafficEngine:
         try:
             engine.prepare(traffic.cars)
             engine.prepare_connections(traffic.stop_coordinator.claims.values())
+            for obstacle in getattr(traffic, '_lane_obstacles', {}).values():
+                engine.set_lane_obstacle(obstacle)
             for car in traffic.cars:
                 engine.spawn(car)
             for car in traffic.cars:
@@ -198,7 +209,12 @@ class NativeTrafficEngine:
             foreign = {}
             for (owner, _), connection in traffic.stop_coordinator.claims.items():
                 if owner not in engine._handles:
-                    handle = foreign.setdefault(owner, -1-len(foreign))
+                    if owner not in foreign:
+                        handle = -1
+                        while handle in engine._ids:
+                            handle -= 1
+                        foreign[owner] = handle
+                    handle = foreign[owner]
                     engine._ids[handle] = owner
                     engine._call('nt_external_claim', handle, engine._connection_ids[id(connection)])
             for car_id, arrival in traffic.stop_coordinator.arrivals.items():
@@ -302,6 +318,29 @@ class NativeTrafficEngine:
             self._call('nt_yellow', handle, yellow, int(car.brain._yellow_go))
         self._ids[handle], self._handles[car.id] = car.id, handle
         self._next_handle += 1
+        if getattr(car, '_road_stop_position', None) is not None:
+            self.stop_vehicle_at_route_end(car.id)
+
+    def stop_vehicle_at_route_end(self, vehicle_id):
+        self._call('nt_stop_at_end', self._handles[vehicle_id], 1)
+
+    def set_lane_obstacle(self, obstacle):
+        handle = self._obstacle_handles.get(obstacle.id)
+        if handle is None:
+            handle = -1
+            while handle in self._ids:
+                handle -= 1
+        key, distance = obstacle.occupancy_position()
+        data = _Obstacle(handle, self._key(key), distance, obstacle.length, obstacle.width,
+                         *obstacle.position, *obstacle.heading)
+        self._call('nt_lane_obstacle', C.byref(data), obstacle.id.encode())
+        self._ids[handle] = obstacle.id
+        self._obstacle_handles[obstacle.id] = handle
+
+    def remove_lane_obstacle(self, vehicle_id):
+        removed = self._call('nt_remove_obstacle', vehicle_id.encode())
+        self._obstacle_handles.pop(vehicle_id, None)
+        return bool(removed)
 
     def step(self, dt):
         self._call('nt_step', dt)

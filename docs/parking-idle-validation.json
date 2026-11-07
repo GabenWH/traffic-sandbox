@@ -1,0 +1,290 @@
+{
+  "baseline": {
+    "label": "before-689803e",
+    "module_root": "/workspace/scratch/eed76a8e336e/traffic-sandbox",
+    "python": "3.12.14",
+    "method": "One warmup; independent state-read and uninstrumented timing passes; median of fixed-length repeats; setup, routing, native traffic and UI excluded.",
+    "max_record_reads": 20000000,
+    "cases": [
+      {
+        "case": "parked",
+        "population": 100,
+        "persistent_records": 100,
+        "repetitions": 100,
+        "repeats": 5,
+        "warmup_record_reads": 200,
+        "status": "measured",
+        "record_reads": 20000,
+        "record_reads_per_observation": 200.0,
+        "completed_observations": 100,
+        "wall_ns_per_observation": 5126.72,
+        "cpu_ns_per_observation": 5110.59,
+        "wall_ns_samples": [
+          6338.52,
+          5126.72,
+          5022.87,
+          5680.04,
+          4922.92
+        ],
+        "cpu_ns_samples": [
+          5736.61,
+          5110.59,
+          5015.85,
+          5669.21,
+          4909.28
+        ]
+      },
+      {
+        "case": "parked",
+        "population": 1000,
+        "persistent_records": 1000,
+        "repetitions": 100,
+        "repeats": 5,
+        "warmup_record_reads": 2000,
+        "status": "measured",
+        "record_reads": 200000,
+        "record_reads_per_observation": 2000.0,
+        "completed_observations": 100,
+        "wall_ns_per_observation": 47431.4,
+        "cpu_ns_per_observation": 47415.34,
+        "wall_ns_samples": [
+          47287.28,
+          47431.4,
+          48514.52,
+          46576.93,
+          49304.48
+        ],
+        "cpu_ns_samples": [
+          47224.96,
+          47415.34,
+          48344.91,
+          46565.18,
+          49285.31
+        ]
+      },
+      {
+        "case": "parked",
+        "population": 16000,
+        "persistent_records": 16000,
+        "repetitions": 100,
+        "repeats": 5,
+        "warmup_record_reads": 32000,
+        "status": "measured",
+        "record_reads": 3200000,
+        "record_reads_per_observation": 32000.0,
+        "completed_observations": 100,
+        "wall_ns_per_observation": 750369.04,
+        "cpu_ns_per_observation": 747178.61,
+        "wall_ns_samples": [
+          750585.05,
+          781210.98,
+          747234.88,
+          750369.04,
+          744955.39
+        ],
+        "cpu_ns_samples": [
+          750483.32,
+          781151.91,
+          747178.61,
+          747100.39,
+          744884.0
+        ]
+      }
+    ]
+  },
+  "changed": {
+    "label": "parking-fix",
+    "module_root": "/workspace/scratch/09e0f88ae435/traffic-sandbox",
+    "python": "3.12.14",
+    "method": "One warmup; independent state-read and uninstrumented timing passes; median of fixed-length repeats; setup, routing, native traffic and UI excluded.",
+    "max_record_reads": 20000000,
+    "cases": [
+      {
+        "case": "parked",
+        "population": 100,
+        "persistent_records": 100,
+        "repetitions": 100,
+        "repeats": 5,
+        "warmup_record_reads": 900,
+        "status": "measured",
+        "record_reads": 0,
+        "record_reads_per_observation": 0.0,
+        "completed_observations": 100,
+        "wall_ns_per_observation": 355.93,
+        "cpu_ns_per_observation": 350.32,
+        "wall_ns_samples": [
+          416.12,
+          355.93,
+          354.53,
+          353.33,
+          519.47
+        ],
+        "cpu_ns_samples": [
+          365.65,
+          349.11,
+          350.02,
+          350.32,
+          509.76
+        ]
+      },
+      {
+        "case": "parked",
+        "population": 1000,
+        "persistent_records": 1000,
+        "repetitions": 100,
+        "repeats": 5,
+        "warmup_record_reads": 9000,
+        "status": "measured",
+        "record_reads": 0,
+        "record_reads_per_observation": 0.0,
+        "completed_observations": 100,
+        "wall_ns_per_observation": 457.48,
+        "cpu_ns_per_observation": 452.27,
+        "wall_ns_samples": [
+          410.01,
+          457.48,
+          798.99,
+          704.45,
+          362.44
+        ],
+        "cpu_ns_samples": [
+          375.65,
+          452.27,
+          791.37,
+          697.54,
+          358.13
+        ]
+      },
+      {
+        "case": "parked",
+        "population": 16000,
+        "persistent_records": 16000,
+        "repetitions": 100,
+        "repeats": 5,
+        "warmup_record_reads": 144000,
+        "status": "measured",
+        "record_reads": 0,
+        "record_reads_per_observation": 0.0,
+        "completed_observations": 100,
+        "wall_ns_per_observation": 398.29,
+        "cpu_ns_per_observation": 394.69,
+        "wall_ns_samples": [
+          500.74,
+          398.59,
+          391.18,
+          397.69,
+          398.29
+        ],
+        "cpu_ns_samples": [
+          430.64,
+          389.97,
+          387.98,
+          394.69,
+          394.79
+        ]
+      },
+      {
+        "case": "waiters",
+        "population": 100,
+        "persistent_records": 101,
+        "repetitions": 100,
+        "repeats": 5,
+        "warmup_record_reads": 909,
+        "status": "measured",
+        "record_reads": 0,
+        "record_reads_per_observation": 0.0,
+        "completed_observations": 100,
+        "wall_ns_per_observation": 346.42,
+        "cpu_ns_per_observation": 343.81,
+        "wall_ns_samples": [
+          393.98,
+          352.03,
+          345.51,
+          346.42,
+          345.21
+        ],
+        "cpu_ns_samples": [
+          358.73,
+          348.42,
+          342.61,
+          343.81,
+          341.61
+        ]
+      },
+      {
+        "case": "waiters",
+        "population": 1000,
+        "persistent_records": 1001,
+        "repetitions": 100,
+        "repeats": 5,
+        "warmup_record_reads": 9009,
+        "status": "measured",
+        "record_reads": 0,
+        "record_reads_per_observation": 0.0,
+        "completed_observations": 100,
+        "wall_ns_per_observation": 362.34,
+        "cpu_ns_per_observation": 359.53,
+        "wall_ns_samples": [
+          455.78,
+          365.64,
+          362.34,
+          358.53,
+          360.23
+        ],
+        "cpu_ns_samples": [
+          416.82,
+          359.63,
+          359.53,
+          355.92,
+          356.53
+        ]
+      },
+      {
+        "case": "waiters",
+        "population": 16000,
+        "persistent_records": 16001,
+        "repetitions": 100,
+        "repeats": 5,
+        "warmup_record_reads": 144009,
+        "status": "measured",
+        "record_reads": 0,
+        "record_reads_per_observation": 0.0,
+        "completed_observations": 100,
+        "wall_ns_per_observation": 366.14,
+        "cpu_ns_per_observation": 362.54,
+        "wall_ns_samples": [
+          600.29,
+          957.93,
+          366.14,
+          362.24,
+          363.94
+        ],
+        "cpu_ns_samples": [
+          527.08,
+          372.35,
+          362.54,
+          358.93,
+          355.13
+        ]
+      }
+    ]
+  },
+  "stationary_trucks": [
+    {
+      "stationary_trucks": 0,
+      "simulated_seconds": 86400.0,
+      "native_ticks": 0,
+      "driver_visits": 0,
+      "obstacle_pose_reads": 0,
+      "python_calls": 24
+    },
+    {
+      "stationary_trucks": 128,
+      "simulated_seconds": 86400.0,
+      "native_ticks": 0,
+      "driver_visits": 0,
+      "obstacle_pose_reads": 0,
+      "python_calls": 24
+    }
+  ]
+}

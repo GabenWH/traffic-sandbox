@@ -358,15 +358,22 @@ class NativeRoadSimulation:
         speed = min(sim.speed_mph, speed_cap_mph if speed_cap_mph is not None else sim.speed_mph) * 22 / 15
         if not isfinite(speed) or speed <= 0:
             raise ValueError('A road vehicle needs a positive speed')
+        departing_stop = vehicle_id in sim._lane_obstacles
         handle = e._next_handle
         spawn = _Spawn(handle, native_route, 0, 0, 0, int(source_type == 'test_traffic'),
-                       0, speed, length, width, -1 if speed_cap_mph is None else speed_cap_mph, 0, 0, -1)
+                       0, 0 if departing_stop else speed, length, width,
+                       -1 if speed_cap_mph is None else speed_cap_mph, 0, 0, -1)
         if not e._call('nt_admit', C.byref(spawn), vehicle_id.encode()):
             return None
         car = RoutedRoadVehicle(source_id, destination_id, route, points, speed, color,
                                 appearance=appearance if appearance is not None else VehicleAppearance(),
                                 source_type=source_type, speed_cap_mph=speed_cap_mph,
                                 length=length, width=width, id=vehicle_id)
+        if departing_stop:
+            car.speed = 0
+            sim._lane_obstacles.pop(vehicle_id)
+            e._obstacle_handles.pop(vehicle_id, None)
+            sim._occupancy_dirty = True
         self.append(car, handle)
         return car
 
@@ -461,6 +468,12 @@ class NativeRoadSimulation:
             bookkeeping_published = perf_counter()
             sim._occupancy_dirty = True
             if completed:
+                from truck_stops import LaneObstacle
+                for car in completed:
+                    if car._road_stop_position is not None:
+                        sim._lane_obstacles[car.id] = LaneObstacle(car.id,
+                            car._road_stop_position, car.length, car.width, heading=car.heading)
+                        e._obstacle_handles[car.id] = e._handles[car.id]
                 removed = {id(car) for car in completed}
                 with sim._roster_revision.mutate():
                     sim._cars[:] = [car for car in sim.cars if id(car) not in removed]

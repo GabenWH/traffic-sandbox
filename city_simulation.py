@@ -19,6 +19,7 @@ from town_services import Business, ServiceTown
 from town_simulation import Resident
 from transit import Bus, BusLine, BusStop
 from commute_schedule import CommutePolicy,DepartureLimits
+from parking_trips import ParkingTrips
 
 
 class CitySimulation(ServiceTown):
@@ -60,6 +61,7 @@ class CitySimulation(ServiceTown):
         self.resource_journal = Counter()
         self._last_economy = self._last_construction = self._last_construction_work = self.time
         self._construction_arrivals = []
+        self.parking_trips = ParkingTrips(self)
         self._bind_arrivals()
         self.sync_buildings()
         self.configure_commutes(self.commute_policy)
@@ -77,6 +79,9 @@ class CitySimulation(ServiceTown):
         self.fleet.admission=DepartureLimits(policy)
         self.fleet.routing=BackgroundRoutes(self.city,speed_mph=self.transit.traffic.speed_mph,
             max_pending=policy.route_pending,submissions_per_update=policy.route_submissions,learning=learning)
+        if hasattr(self,'parking_trips'):
+            self.parking_trips._options.clear()
+            self.parking_trips.wake_network()
 
     def _shift_end(self,p):
         return self.work_end+self.commute_policy.offset(p.id,p.workplace)
@@ -167,6 +172,7 @@ class CitySimulation(ServiceTown):
                 self.care_tasks[:]=[t for t in self.care_tasks if t['person']!=pid]
                 self._leave_service(pid)
         self._access_times.clear()
+        self.parking_trips.sync_access()
         self.assign_jobs()
         for p in self.residents.values():
             if p.worksite and p.state=='work' and (p.worksite not in self._construction_sites or p.workplace not in self._workplaces):
@@ -352,6 +358,8 @@ class CitySimulation(ServiceTown):
             self._once('move:'+str(pid),self.time+delay,'move_person',pid)
 
     def _arrive_person(self,p):
+        if self.parking_trips.person_arrived(p):
+            return
         self._settle_economy(self.time)
         if p.state=='relocating':
             h=self.households[self._membership[p.id]]
@@ -402,7 +410,22 @@ class CitySimulation(ServiceTown):
             p.state='returning_company'
             if self._available_builders:self._once('builders',self.time,'builders')
             return True
+        if p.mode=='car' and p.id not in self.visits:
+            source,target=(p.workplace,p.home) if returning else (p.home,p.workplace)
+            if self.parking_trips.start(p,source,target,purpose='commute',returning=returning):
+                p.state='returning' if returning else 'commuting'
+                return True
+            return False
         return super()._depart(p,returning)
+
+    def _travel_person(self,person,source,destination):
+        if person.mode=='car' and person.car_id in self.fleet.vehicles:
+            return self.parking_trips.start(person,source,destination)
+        return super()._travel_person(person,source,destination)
+
+    def _car_arrived(self,vehicle):
+        if not self.parking_trips.car_arrived(vehicle):
+            super()._car_arrived(vehicle)
 
     def _dispatch_builders(self):
         if not self._available_builders or not self.construction:return
@@ -431,6 +454,7 @@ class CitySimulation(ServiceTown):
         if p.workplace is None:return False
         if not returning and p.state!='home':return False
         if self._inside_update and not self._admitting_departure:
+            self.parking_trips.resolved(p.id)
             self._pending_departures[p.id]=(returning,self.time)
             return False
         was_work=p.state=='work'
@@ -438,11 +462,15 @@ class CitySimulation(ServiceTown):
         except (ValueError,RuntimeError,KeyError):success=False
         if (success and was_work) or returning:self._set_attendance(p,False)
         if not success and not self._admitting_departure:
+            if self.fleet.last_dispatch_status in ('full','inaccessible','no_fuel'):
+                self.parking_trips.defer(p.id,'commute',returning)
+                return False
             retry='retry_site_return' if returning and p.worksite and not p.return_due else ('retry_return' if returning else 'retry_leave')
             self._once(retry+':'+str(p.id),self.time+60,retry,p.id)
         return success
 
     def _service_departures(self,epoch):
+        self.parking_trips.wake_capacity()
         if epoch!=self._departure_budget_epoch:
             self._departure_budget_epoch=epoch;self._departure_checks_left=self.commute_policy.checks_per_update
         limits=self.fleet.admission
@@ -451,11 +479,16 @@ class CitySimulation(ServiceTown):
             self._departure_checks_left-=1
             pid,(returning,ready)=self._pending_departures.popitem(last=False)
             p=self.residents.get(pid)
-            if p is None or p.workplace is None:continue
+            if p is None or p.workplace is None:
+                self.parking_trips.resolved(pid)
+                continue
             if returning and p.state!='work':
                 if p.state=='home':p.return_due=False
                 continue
             if not returning and (p.state!='home' or p.workplace not in self._workplaces or self.time%DAY>=self._shift_end(p)):
+                if p.state=='home' and p.workplace in self._workplaces and self.time%DAY>=self._shift_end(p):
+                    self.parking_trips.unmet(pid,p.workplace,'shift_ended',since=ready)
+                else:self.parking_trips.resolved(pid)
                 continue
             if ready>self.time+1e-8:
                 self._pending_departures[pid]=(returning,ready);continue
@@ -463,11 +496,13 @@ class CitySimulation(ServiceTown):
             try:success=self._safe_depart(p,returning)
             finally:self._admitting_departure=False
             if success:
+                self.parking_trips.resolved(pid)
                 if p.mode!='car' or self.fleet.last_dispatch_status!='departed':limits.consume(self.time)
                 self._commute_departures+=1
             else:
-                wait=30 if self.fleet.last_dispatch_status=='full' else .25
-                self._pending_departures[pid]=(returning,self.time+wait)
+                if self.fleet.last_dispatch_status in ('full','inaccessible','no_fuel'):
+                    self.parking_trips.defer(pid,'commute',returning)
+                else:self._pending_departures[pid]=(returning,self.time+.25)
 
     def _worker_resumed(self,person):
         self._set_attendance(person,not person.return_due)
@@ -476,6 +511,9 @@ class CitySimulation(ServiceTown):
         self._safe_depart(person,True)
 
     def _defer_service_return(self,pid):
+        if self.fleet.last_dispatch_status in ('full','inaccessible','no_fuel'):
+            self.parking_trips.defer(pid,'service_return')
+            return
         self._once('service_return:'+str(pid),self.time+60,'service_return',pid)
 
     def _settle_construction(self,time):
@@ -578,6 +616,9 @@ class CitySimulation(ServiceTown):
         elif kind=='move_person':self._move_person(value)
         elif kind=='resume':self._resume_transport()
         elif kind=='service_return':self._leave_service(value)
+        elif kind=='parking_resume':self.parking_trips.resume(value)
+        elif kind=='parking_finish':self.parking_trips.finish_walk(value)
+        elif kind=='trip_deadline':self.parking_trips.expire(*value)
         elif kind in ('choose_meal','choose_care'):
             self._choose_service(value,'meal' if kind=='choose_meal' else 'care')
             if kind=='choose_care':self._once(key,self.time+MONTH,'choose_care',value)
@@ -594,6 +635,7 @@ class CitySimulation(ServiceTown):
 
     def _update_background(self,seconds):
         self.sync_network()
+        self.parking_trips.wake_capacity()
         end=self.time+seconds
         if self.transit.person_arrivals or self.transit.vehicle_arrivals:
             self._transport_arrived(self.transit.time)
@@ -669,8 +711,9 @@ class CitySimulation(ServiceTown):
         result['resource_balance_error']=stock+cargo+reserved+self.consumed+self.medical_sinks-self.initial_resources-self.imported_resources-sum(self.resource_journal.values())
         result['households']=len(self.households)
         result['relocating_households']=sum(h.moving_to is not None for h in self.households.values())
-        result.update(commute_waiting=len(self._pending_departures),commute_departures=self._commute_departures,
+        result.update(commute_waiting=len(self._pending_departures)+len(self.parking_trips.waits),commute_departures=self._commute_departures,
                       **self.fleet.routing.report())
+        result.update(self.parking_trips.report())
         return result
 
     def close(self):
@@ -737,6 +780,7 @@ class CitySimulation(ServiceTown):
             if line and line.stop_ids[bus.stop_index]==site and bus.phase in ('docked','out_of_fuel'):
                 bus.fuel_liters+=amount;bus.phase='docked';total+=amount
         self.initial_fuel+=total
+        self.parking_trips.wake_network()
         return total
 
     def snapshot(self):

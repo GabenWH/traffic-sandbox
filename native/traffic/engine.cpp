@@ -53,12 +53,14 @@ struct Car {
     int latest_claim=-1;
     int yellow_movement=-1;
     bool yellow_go=false;
+    bool stop_at_end=false;
     double cruise=0;
     NTPoint position{}, heading{1,0};
     size_t geometry=0, control_cursor=0, route_cursor=0, round_cursor=0, section_cursor=0;
     size_t section_first=0, section_stop=0;
     int order=0;
 };
+struct Stationary { std::unique_ptr<Car> car; int key; double position; };
 struct Arrival { int connection; double time; };
 struct Entry { Car* car; double position; int segment; };
 struct MergeVehicle { Car* car; double position; };
@@ -103,6 +105,10 @@ public:
     std::map<int,double> waiting;
     std::unordered_map<int,std::vector<Entry>> lanes;
     double max_vehicle_length=0;
+    std::map<std::string,Stationary> obstacles;
+    std::unordered_map<int,std::vector<Entry>> obstacle_lanes;
+    std::unordered_map<uint64_t,std::vector<Car*>> obstacle_cells;
+    double max_obstacle_length=0;
     std::vector<NTState> output;
     std::vector<NTState> completed;
     std::vector<std::unique_ptr<Car>> retired; // completed strings valid until next step
@@ -367,24 +373,25 @@ public:
         auto first=std::lower_bound(ss.begin(),ss.end(),distance-c.s.length/2,[](auto& s,double d){return s.end<d;});
         for(auto it=first;it!=ss.end();++it) {
             auto& s=*it; if(s.start>distance+look) break;
-            auto found=lanes.find(s.key); if(found==lanes.end()) continue;
-            auto& entries=found->second;
-            auto pos=std::lower_bound(entries.begin(),entries.end(),s.offset+distance-s.start-1e-8,
-                [](auto& e,double p){return e.position<p;});
             Car* local=nullptr; double local_gap=inf; int order=0;
-            for(;pos!=entries.end();++pos) {
-                auto& e=*pos; double center=s.start+e.position-s.offset;
-                // Lane entries are ordered by position. Once even the longest
-                // vehicle cannot overlap the requested lookahead, later cars
-                // cannot be leaders either. This avoids walking an entire
-                // downstream queue for every follower.
-                if(center>distance+look+(c.s.length+max_vehicle_length)/2) break;
-                if(e.car==&c || center<distance) continue;
-                double g=center-distance-(e.car->s.length+c.s.length)/2;
-                if(g<=look && (g<local_gap || (g==local_gap && e.car->order<order))) {
-                    local=e.car;local_gap=g;order=e.car->order;
+            auto inspect=[&](const auto& entries,double longest) {
+                auto pos=std::lower_bound(entries.begin(),entries.end(),s.offset+distance-s.start-1e-8,
+                    [](auto& e,double p){return e.position<p;});
+                for(;pos!=entries.end();++pos) {
+                    auto& e=*pos; double center=s.start+e.position-s.offset;
+                    // Sorted, persistent lane entries bound work to nearby bodies.
+                    if(center>distance+look+(c.s.length+longest)/2) break;
+                    if(e.car==&c || e.car->id==c.id || center<distance) continue;
+                    double g=center-distance-(e.car->s.length+c.s.length)/2;
+                    if(g<=look && (g<local_gap || (g==local_gap && e.car->order<order))) {
+                        local=e.car;local_gap=g;order=e.car->order;
+                    }
                 }
-            }
+            };
+            auto moving=lanes.find(s.key);
+            if(moving!=lanes.end()) inspect(moving->second,max_vehicle_length);
+            auto stopped=obstacle_lanes.find(s.key);
+            if(stopped!=obstacle_lanes.end()) inspect(stopped->second,max_obstacle_length);
             if(local && local_gap<gap) {best=local;gap=local_gap;}
         }
         return {best,gap};
@@ -423,6 +430,19 @@ public:
                 if(occ.first>=0) for(auto& s:downstream) if(s.key==occ.first) {position=s.start-m.end+occ.second-s.offset;break;}
             }
             if(std::abs(position)<=look) result.vehicles.push_back({&o,position});
+        }
+        std::set<Car*> observed;
+        for(auto& s:downstream) {
+            auto found=obstacle_lanes.find(s.key);if(found==obstacle_lanes.end()) continue;
+            auto& entries=found->second;
+            auto first=std::lower_bound(entries.begin(),entries.end(),s.offset+m.end-s.start-look,
+                [](const Entry& entry,double position){return entry.position<position;});
+            for(auto it=first;it!=entries.end();++it) {
+                double position=s.start-m.end+it->position-s.offset;
+                if(position>look) break;
+                if(it->car->id!=c.id && observed.insert(it->car).second)
+                    result.vehicles.push_back({it->car,position});
+            }
         }
         return result;
     }
@@ -633,6 +653,11 @@ public:
                         auto found=traffic_grid.find(cell_key(cx+dx,cy+dy));if(found==traffic_grid.end()) continue;
                         for(auto v:found->second) if(std::hypot(v.x-lane.crossing_point.x,v.y-lane.crossing_point.y)<=radius) {blocked=true;break;}
                     }
+                    for(int dx=-1;dx<=1 && !blocked;++dx) for(int dy=-1;dy<=1 && !blocked;++dy) {
+                        auto found=obstacle_cells.find(cell_key(cx+dx,cy+dy));if(found==obstacle_cells.end()) continue;
+                        for(auto body:found->second) if(std::hypot(body->position.x-lane.crossing_point.x,
+                            body->position.y-lane.crossing_point.y)<=radius) {blocked=true;break;}
+                    }
                     cached=blocked?1:0;
                 }
                 if(cached){next=lane.crossing;p.waiting=true;if(!previously_waiting)++pedestrian_waits;}else p.passed=true;
@@ -790,8 +815,15 @@ public:
         mark_phase(profile.arbitration_ms);
         std::unordered_map<int,double> travels;
         for(auto& i:intents) {
-            auto& c=*i.car;double delta=i.decision.desired-c.s.speed,limit=(delta>0?10:24)*dt;
+            auto& c=*i.car;
+            if(c.stop_at_end) {
+                i.decision.desired=std::min(i.decision.desired,
+                    std::sqrt(48*std::max(0.0,route(c).length-c.s.distance)));
+                c.s.desired=i.decision.desired;
+            }
+            double delta=i.decision.desired-c.s.speed,limit=(delta>0?10:24)*dt;
             i.next_speed=c.s.speed+clamp(delta,-limit,limit);i.travel=i.next_speed*dt;
+            if(c.stop_at_end) i.travel=std::min(i.travel,route(c).length-c.s.distance);
             if(i.movement>=0 && !i.claimed && !i.decision.signal_entry)
                 i.travel=std::min(i.travel,std::max(0.0,route(c).movements[i.movement].start-c.s.length/2-c.s.distance));
             travels[c.s.handle]=i.travel;
@@ -822,7 +854,13 @@ public:
         for(int h:done) {
             auto& c=car(h);c.claims.clear();c.latest_claim=-1;
             for(int movement:c.signal_occupancy) adjust_signal_occupancy(movement,-1);
-            c.signal_occupancy.clear();arrivals.erase(h);completed.push_back(state(c,0));
+            c.signal_occupancy.clear();arrivals.erase(h);
+            if(c.stop_at_end) {
+                c.s.speed=c.s.desired=0;c.cruise=0;
+                auto where=occupancy(c);
+                store_obstacle(std::make_unique<Car>(c),where.first,where.second);
+            }
+            completed.push_back(state(c,0));
             retired.push_back(std::move(cars.at(h)));cars.erase(h);
         }
         advance_pedestrians(dt);
@@ -867,17 +905,71 @@ public:
         }
         return true;
     }
+    bool remove_obstacle(const std::string& id) {
+        auto found=obstacles.find(id);if(found==obstacles.end()) return false;
+        Car* body=found->second.car.get();
+        auto& entries=obstacle_lanes.at(found->second.key);
+        entries.erase(std::remove_if(entries.begin(),entries.end(),
+            [body](const Entry& entry){return entry.car==body;}),entries.end());
+        if(entries.empty()) obstacle_lanes.erase(found->second.key);
+        auto cell=cell_key(int(std::floor(body->position.x/100)),int(std::floor(body->position.y/100)));
+        auto& occupants=obstacle_cells.at(cell);
+        occupants.erase(std::remove(occupants.begin(),occupants.end(),body),occupants.end());
+        if(occupants.empty()) obstacle_cells.erase(cell);
+        double length=body->s.length;obstacles.erase(found);
+        if(length>=max_obstacle_length) {
+            max_obstacle_length=0;
+            for(auto& pair:obstacles) max_obstacle_length=std::max(max_obstacle_length,pair.second.car->s.length);
+        }
+        return true;
+    }
+    void store_obstacle(std::unique_ptr<Car> body,int key,double position) {
+        require(key>=0,"loading stop needs lane occupancy");
+        remove_obstacle(body->id);
+        Car* pointer=body.get();std::string id=body->id;
+        max_obstacle_length=std::max(max_obstacle_length,body->s.length);
+        obstacles.emplace(id,Stationary{std::move(body),key,position});
+        auto& entries=obstacle_lanes[key];Entry entry{pointer,position,-1};
+        auto before=std::upper_bound(entries.begin(),entries.end(),entry,
+            [](const Entry& a,const Entry& b){return std::tie(a.position,a.car->order)<std::tie(b.position,b.car->order);});
+        entries.insert(before,entry);
+        auto cell=cell_key(int(std::floor(pointer->position.x/100)),int(std::floor(pointer->position.y/100)));
+        obstacle_cells[cell].push_back(pointer);
+    }
+    void set_obstacle(const NTObstacle& o,const std::string& id) {
+        require(!id.empty() && o.key>=0 && !cars.count(o.handle),"invalid stationary identity");
+        for(double value:{o.distance,o.length,o.width,o.x,o.y,o.hx,o.hy}) check_finite(value);
+        require(o.distance>=0 && o.length>0 && o.width>0 && std::abs(std::hypot(o.hx,o.hy)-1)<1e-6,
+            "invalid stationary body");
+        auto body=std::make_unique<Car>();body->id=id;body->s.handle=o.handle;body->s.route=-1;
+        body->s.distance=o.distance;body->s.length=o.length;body->s.width=o.width;
+        body->position={o.x,o.y};body->heading={o.hx,o.hy};body->order=admission_order;
+        for(auto& pair:cars) require(pair.second->id!=id && !overlaps(*body,*pair.second),
+            "loading stop overlaps an active vehicle");
+        for(auto& pair:obstacles) if(pair.first!=id) require(!overlaps(*body,*pair.second.car),
+            "loading stop overlaps another stopped vehicle");
+        store_obstacle(std::move(body),o.key,o.distance);++admission_order;
+    }
     bool admit(const NTSpawn& s,const std::string& id) {
         for(auto& pair:cars) if(pair.second->id==id) return false;
         require(s.route>=0 && size_t(s.route)<routes.size(),"unknown route");
         if(routes[s.route].length<=0) return false;
         validate_spawn(s,id);
-        Car candidate;candidate.s=s;geometry(candidate);
+        Car candidate;candidate.s=s;candidate.id=id;geometry(candidate);
+        auto stopped=obstacles.find(id);
+        if(stopped!=obstacles.end()) {
+            const auto& body=*stopped->second.car;
+            auto where=occupancy(candidate);
+            if(std::hypot(candidate.position.x-body.position.x,candidate.position.y-body.position.y)>1e-6 ||
+                where.first!=stopped->second.key || std::abs(where.second-stopped->second.position)>1e-6) return false;
+            candidate.s.speed=0;
+        }
         if(!key_speeds.empty()) candidate.s.speed=std::min(candidate.s.speed,cruise(candidate));
         for(auto& pair:cars) if(overlaps(candidate,*pair.second)) return false;
+        for(auto& pair:obstacles) if(pair.first!=id && overlaps(candidate,*pair.second.car)) return false;
         index_current();
         if(lead(candidate,s.distance,22+s.length).second<22) return false;
-        insert(candidate.s,id);return true;
+        insert(candidate.s,id);remove_obstacle(id);return true;
     }
     int compile_path(const SpawnPath& path) {
         if(!path.found) return -1;
@@ -1036,6 +1128,14 @@ int nt_yellow(void* p,int h,int movement,int go){return guarded([&]{auto& e=engi
 int nt_place(void* p,int h,double d){return guarded([&]{check_finite(d);auto& e=engine(p);auto& c=e.car(h);c.s.distance=clamp(d,0,e.route(c).length);c.geometry=c.control_cursor=c.route_cursor=c.round_cursor=c.section_cursor=c.section_first=c.section_stop=0;e.geometry(c);e.update_signal_occupancy(c);e.index_dirty=true;return 0;});}
 int nt_resize(void* p,int h,double l,double w){return guarded([&]{check_finite(l);check_finite(w);require(l>0 && w>0,"invalid dimensions");auto& e=engine(p);auto& c=e.car(h);c.s.length=l;c.s.width=w;c.section_first=c.section_stop=0;e.update_signal_occupancy(c);e.index_dirty=true;return 0;});}
 int nt_remove(void* p,int h){return guarded([&]{auto& e=engine(p);auto& c=e.car(h);for(int movement:c.signal_occupancy)e.adjust_signal_occupancy(movement,-1);e.cars.erase(h);e.arrivals.erase(h);e.waiting.clear();e.stall=0;e.winner=e.winner_connection=-1;e.hard=false;e.index_dirty=true;return 0;});}
+int nt_stop_at_end(void* p,int h,int enabled){return guarded([&]{auto& e=engine(p);auto& c=e.car(h);
+    require(enabled==0 || enabled==1,"invalid stop flag");
+    require(!enabled || !e.route(c).sections.empty(),"loading stop needs lane occupancy");
+    c.stop_at_end=enabled!=0;return 0;});}
+int nt_lane_obstacle(void* p,const NTObstacle* obstacle,const char* id){return guarded([&]{
+    require(obstacle && id,"missing lane obstacle");engine(p).set_obstacle(*obstacle,id);return 0;});}
+int nt_remove_obstacle(void* p,const char* id){return guarded([&]{require(id,"missing obstacle ID");
+    return int(engine(p).remove_obstacle(id));});}
 int nt_external_claim(void* p,int h,int con){return guarded([&]{auto& e=engine(p);
     require(h<0,"external claim handle must be negative");require(con>=0 && static_cast<size_t>(con)<e.connections.size(),"unknown external claim");
     auto& claims=e.external_claims[h];if(std::find(claims.begin(),claims.end(),con)==claims.end()) claims.push_back(con);return 0;});}

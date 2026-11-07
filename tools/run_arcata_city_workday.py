@@ -165,9 +165,10 @@ def _snapshot(runtime):
     report=runtime.report()
     report['states']=dict(Counter(p.state for p in runtime.residents.values()))
     report['clock_hour']=round(runtime.time/3600,5)
-    report['cars_parked_at_work']=sum(v.phase=='parked' and v.site==runtime.residents[v.driver].workplace
-                                    for v in runtime.fleet.vehicles.values())
-    report['cars_driving']=sum(v.phase=='driving' for v in runtime.fleet.vehicles.values())
+    cars=[v for v in runtime.fleet.vehicles.values() if v.kind=='car' and v.driver in runtime.residents]
+    report['cars_parked_at_work']=sum(v.phase=='parked' and v.site==runtime.residents[v.driver].workplace for v in cars)
+    report['cars_parked_in_overflow']=sum(v.phase=='parked' and v.site.startswith('parking-endpoint:') for v in cars)
+    report['cars_driving']=sum(v.phase=='driving' for v in cars)
     due=[p for p in runtime.residents.values() if p.car_id and p.state=='home' and p.workplace
          and runtime.work_start+runtime.commute_policy.offset(p.id,p.workplace)<=runtime.time%86400<runtime._shift_end(p)]
     report['cars_waiting_to_depart']=len(due)

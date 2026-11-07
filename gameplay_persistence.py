@@ -15,6 +15,7 @@ from intersection_controls import StopArrival
 from mobility import MobilityLink, LaneTraversal, PortTraversal, nearest_lane_position
 from pathfinding import Path
 from pedestrian_mobility import WalkingRoute
+from walking_cache import walking_geometry_key, walking_geometry_points
 from persistent_fleet import FleetVehicle
 from town_simulation import Resident
 from traffic_testbed import RoutedRoadVehicle
@@ -88,9 +89,12 @@ def dump_transport(transit, managed=None):
             length=a.length,width=a.width,distance=a.distance,brain=asdict(a.brain),
             merge_entry_speed=a._merge_entry_speed,position=a.position))
     routes={i:key for key,i in transit._walk_routes.items()}
+    decoded={}
     walkers=[]
     for p in transit.engine.pedestrian_states():
-        points,crossing=routes[p.lane]
+        key=routes[p.lane]
+        if p.lane not in decoded:decoded[p.lane]=walking_geometry_points(key)
+        points,crossing=decoded[p.lane],key[1]
         walkers.append(dict(id=p.id,points=points,crossing=crossing,distance=p.distance,
                             waiting=bool(p.waiting),position=(p.x,p.y)))
     buses=[]
@@ -169,8 +173,10 @@ def restore_transport(transit,data):
     transit.engine=traffic._native_backend(transit.city).engine
     transit.revision=transit.city.mobility_revision
     for info in data['walkers']:
-        key=(tuple(map(tuple,info['points'])),info['crossing'])
-        if key not in transit._walk_routes:transit._walk_routes[key]=transit.engine.register_pedestrian_lane(*key)
+        points=tuple(map(tuple,info['points']))
+        key=walking_geometry_key(points,info['crossing'])
+        if key not in transit._walk_routes:
+            transit._walk_routes[key]=transit.engine.register_pedestrian_lane(points,info['crossing'])
         transit.engine.spawn_pedestrian(info['id'],transit._walk_routes[key],4.4)
         transit.engine.place_pedestrian(info['id'],info['distance'],info['waiting'])
     for bus in transit.buses.values():
@@ -199,6 +205,7 @@ def dump_city(city):
         meal_queues={k:list(v) for k,v in city.meal_queues.items()},meal_credit=dict(city.meal_credit),meal_capacity=dict(city.meal_capacity),
         metrics={k:getattr(city,k) for k in METRICS},counters=dict(city.counters),resource_journal=dict(city.resource_journal),
         commutes=dict(policy=asdict(city.commute_policy),limits=city.fleet.admission.to_dict(),
+            parking=city.parking_trips.snapshot(),
             pending=[(pid,returning,ready) for pid,(returning,ready) in city._pending_departures.items()],
             departures=city._commute_departures,learning=city.fleet.routing.learning.to_dict(),
             travel=deepcopy(city.fleet._travel),work_start=city.work_start,work_end=city.work_end),
@@ -238,13 +245,14 @@ def restore_city(city,raw):
         legacy_parking = []
         for info in data['fleet']:
             v=FleetVehicle(**info)
-            if v.id in city.fleet.vehicles or v.site not in city.sites:raise ValueError('Invalid saved fleet')
+            if v.id in city.fleet.vehicles or v.site not in city.fleet.sites:raise ValueError('Invalid saved fleet')
             v._actor=actors.get(v.id)
             if v.phase=='driving' and v._actor is None:raise ValueError('Missing active fleet actor')
             if v._actor is not None:v._last=v._actor.distance
             city.fleet.vehicles[v.id]=v
             if 'parking_space_id' not in info:legacy_parking.append(v.id)
         city.fleet.restore_parking(legacy_ids=legacy_parking,suspended_ids=data.get('resuming_vehicles',{}))
+        city.fleet.restore_road_stops()
         city._events=[tuple(e) for e in data['events']];heapq.heapify(city._events)
         city._scheduled=set(data['scheduled']);city._sequence=data['sequence']
         city._next_person=data['next_person'];city._next_household=data['next_household']
@@ -274,6 +282,7 @@ def restore_city(city,raw):
                 if pid not in city.residents or not isinstance(returning,bool) or not isfinite(ready) or ready<0:
                     raise ValueError('Invalid queued commuter')
                 city._pending_departures[pid]=(returning,ready)
+            city.parking_trips.restore(commutes.get('parking',{}))
         for v in city.fleet.vehicles.values():
             if v.phase=='driving':
                 saved=commutes.get('travel',{}).get(v.id) if commutes else None
@@ -356,5 +365,7 @@ def rebind_transport(city):
     for v in city.fleet.vehicles.values():
         if v.phase=='driving':
             v._actor=None;v.phase='parked'
-            city._resuming_vehicles[v.id]=(positions.get(v.id,city.sites[v.site]['walk_point']),v.destination)
+            city._resuming_vehicles[v.id]=(positions.get(v.id,city.fleet.sites[v.site]['walk_point']),v.destination)
+    city.fleet.rebuild_indexes()
+    city.fleet.restore_road_stops()
     city._bind_arrivals();city._once('resume',city.time,'resume')

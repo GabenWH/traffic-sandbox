@@ -13,6 +13,7 @@ from math import dist, isfinite
 from mobility import LanePosition, vehicle_route_points
 from models import polyline_length
 from traffic_testbed import RoadVehicleSimulation
+from walking_cache import WalkingRouteCache, walking_geometry_key
 
 
 def _positive(value, name, zero=False):
@@ -95,7 +96,7 @@ class TransitSimulation:
         self._next_departure = {}
         self.events = []
         self._walk_routes = {}
-        self._walk_cache = {}
+        self._walk_cache = WalkingRouteCache()
         self.vehicle_arrivals = deque()
         self.person_arrivals = deque()
         self.arrival_observer = None
@@ -170,9 +171,12 @@ class TransitSimulation:
         if dist(a, b) < 1e-7:
             return None
         key = (tuple(a), tuple(b))
-        if key not in self._walk_cache:
-            self._walk_cache[key] = self.city.find_pedestrian_route(a, b)
-        return self._walk_cache[key]
+        try:
+            return self._walk_cache[key]
+        except KeyError:
+            route = self.city.find_pedestrian_route(a, b)
+            self._walk_cache[key] = route
+            return route
 
     def record_vehicle_arrival(self, person_id, destination):
         """Reconcile a completed personal-car trip with an earlier walking trip."""
@@ -258,9 +262,10 @@ class TransitSimulation:
         if route is None:
             self._finish_walk(person)
             return
-        key = (route.points, route.first_crossing_fraction)
+        key = walking_geometry_key(route.points, route.first_crossing_fraction)
         if key not in self._walk_routes:
-            self._walk_routes[key] = self.engine.register_pedestrian_lane(*key)
+            self._walk_routes[key] = self.engine.register_pedestrian_lane(
+                route.points, route.first_crossing_fraction)
         self.engine.spawn_pedestrian(person.id, self._walk_routes[key], 4.4)
 
     def _finish_walk(self, person):

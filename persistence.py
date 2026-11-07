@@ -515,6 +515,7 @@ def world_from_dict(data: object) -> LoadedWorld:
         )
         buildable_state = _buildable_state_from_dict(
             building_data.get("buildable_state"), f"{path}.buildable_state",
+            operational_workers=_nonnegative_int(building_data.get("jobs"), f"{path}.jobs"),
         )
         if version < 7 and buildable_id is not None:
             if legacy_templates is None:
@@ -608,7 +609,7 @@ def _buildable_state_to_dict(buildable: Buildable) -> dict[str, Any]:
     }
 
 
-def _buildable_state_from_dict(value: object, path: str) -> dict[str, Any]:
+def _buildable_state_from_dict(value: object, path: str, *, operational_workers: int = 0) -> dict[str, Any]:
     state = _mapping(value, path)
     try:
         phase = BuildablePhase(_string(state.get("phase"), f"{path}.phase"))
@@ -647,9 +648,10 @@ def _buildable_state_from_dict(value: object, path: str) -> dict[str, Any]:
     assigned_workers = _nonnegative_int(
         state.get("assigned_workers", 0), f"{path}.assigned_workers",
     )
-    if assigned_workers > construction_workers:
+    worker_capacity = max(construction_workers, operational_workers) if phase == BuildablePhase.OPERATIONAL else construction_workers
+    if assigned_workers > worker_capacity:
         raise WorldFormatError(
-            f"{path}.assigned_workers cannot exceed construction_workers."
+            f"{path}.assigned_workers cannot exceed the active worker capacity."
         )
     raw_delivered = _mapping(
         state.get("construction_delivered", {}), f"{path}.construction_delivered",

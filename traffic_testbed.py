@@ -114,6 +114,7 @@ class RoutedRoadVehicle:
     _claimed_movement: LaneConnection | None = field(default=None, init=False, repr=False)
     cruise_speed_bound: float = field(default=TEST_CAR_SPEED_MPH*22/15, init=False)
     _merge_entry_speed: float | None = field(default=None, init=False, repr=False)
+    _road_stop_position: object = field(default=None, init=False, repr=False)
     signal_items: list[int] = field(default_factory=list, repr=False)
 
     def __setattr__(self, name, value):
@@ -296,6 +297,7 @@ class RoadVehicleSimulation:
     _occupancy_changes: dict[int, RoutedRoadVehicle] = field(
         default_factory=dict, init=False, repr=False,
     )
+    _lane_obstacles: dict = field(default_factory=dict, init=False, repr=False)
     occupancy: TrafficOccupancyIndex = field(
         default_factory=TrafficOccupancyIndex, repr=False,
     )
@@ -392,7 +394,7 @@ class RoadVehicleSimulation:
     def _ensure_occupancy(self):
         """Refresh Python's optional query index only when a consumer asks."""
         if self._occupancy_dirty:
-            self.occupancy.rebuild(self.cars)
+            self.occupancy.rebuild((*self.cars, *self._lane_obstacles.values()))
             self._occupancy_changes.clear()
             self._occupancy_dirty = False
         elif self._occupancy_changes:
@@ -594,6 +596,36 @@ class RoadVehicleSimulation:
             appearance=appearance, source_type=source_type, length=length, width=width,
             speed_cap_mph=speed_cap_mph, color=color)
 
+    def stop_vehicle_at_route_end(self, vehicle_id):
+        """Retain a completed body before the native driver's next substep."""
+        from truck_stops import route_end_position
+        car = self._vehicle(vehicle_id)
+        position = route_end_position(car.route)
+        if position is None:
+            raise ValueError('A loading stop must end on a vehicle lane')
+        self._native_backend().engine.stop_vehicle_at_route_end(vehicle_id)
+        car._road_stop_position = position
+        return position
+
+    def set_lane_obstacle(self, vehicle_id, lane_position, *, length, width, heading=None):
+        """Restore a stopped body; native rejection preserves previous occupancy."""
+        from truck_stops import LaneObstacle
+        obstacle = LaneObstacle(vehicle_id, lane_position, length, width, heading=heading)
+        backend = self._native_backend()
+        if backend.city is not None and not any(lane_position.lane is lane
+                for road in backend.city.roads for lane in road.lanes):
+            raise ValueError('A loading stop needs a current lane')
+        backend.engine.set_lane_obstacle(obstacle)
+        self._lane_obstacles[vehicle_id] = obstacle
+        self._occupancy_dirty = True
+
+    def remove_lane_obstacle(self, vehicle_id):
+        """Explicitly clear a loading body, including its optional query mirror."""
+        removed = self._native_backend().engine.remove_lane_obstacle(vehicle_id)
+        if self._lane_obstacles.pop(vehicle_id, None) is not None:
+            self._occupancy_dirty = True
+        return removed
+
     def update(self, city_map, elapsed_seconds):
         """Advance the sole C++ driver and return completed vehicle events."""
         self._validate_update_mode()
@@ -622,6 +654,9 @@ class RoadVehicleSimulation:
             car._claimed_movement = None
         with self._roster_revision.mutate():
             self._cars.clear()
+        if self._lane_obstacles:
+            self._lane_obstacles.clear()
+            self._occupancy_dirty = True
         self._publish_occupancy_changes(removed=removed)
         self.deadlock_resolver.reset()
         return removed
@@ -683,7 +718,7 @@ class RoadVehicleSimulation:
         with self._roster_revision.mutate():
             self._cars[:] = [by_id[item] for item in ids]
         # Explicit processing-order replacement also replaces occupancy tie order.
-        self.occupancy.rebuild(self.cars)
+        self.occupancy.rebuild((*self.cars, *self._lane_obstacles.values()))
         self._occupancy_changes.clear()
 
     def clear_cars(self) -> list[RoutedRoadVehicle]:

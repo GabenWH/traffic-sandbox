@@ -14,13 +14,18 @@ class CommutePolicy:
     checks_per_update: int=32
     route_submissions: int=4
     route_pending: int=128
+    parking_walk_queries: int=4
+    parking_walk_seconds: float=300.
+    fallback_trip_seconds: float=1800.
 
     def __post_init__(self):
         if not isfinite(self.departure_window) or not 0<=self.departure_window<=21600:
             raise ValueError('Departure window must be finite and within six hours')
         for value in (self.starts_per_second,self.cars_per_entrance_per_second):
             if not isfinite(value) or value<=0 or not isfinite(1/value):raise ValueError('Departure rates must be positive and finite')
-        for value in (self.burst,self.max_active_vehicles,self.checks_per_update,self.route_submissions,self.route_pending):
+        for value in (self.parking_walk_seconds,self.fallback_trip_seconds):
+            if not isfinite(value) or value<0:raise ValueError('Walking and fallback limits must be finite and nonnegative')
+        for value in (self.burst,self.max_active_vehicles,self.checks_per_update,self.route_submissions,self.route_pending,self.parking_walk_queries):
             if isinstance(value,bool) or not isinstance(value,int) or value<1:raise ValueError('Departure limits must be positive integers')
 
     def offset(self,person,workplace):

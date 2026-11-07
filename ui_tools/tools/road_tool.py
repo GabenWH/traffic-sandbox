@@ -298,9 +298,12 @@ class BuildingTool(CanvasTool):
         runtime = getattr(self.host.city_map, 'gameplay', None)
         claims = set()
         if runtime:
-            claims = {runtime.sites[site]['parking_lot'].id
+            # Overflow endpoints belong to the fleet without becoming economic
+            # building sites. Protect their parked and inbound claims too.
+            fleet_sites = runtime.fleet.sites
+            claims = {fleet_sites[site]['parking_lot'].id
                       for v in runtime.fleet.vehicles.values() for site in (v.site,v.destination)
-                      if site in runtime.sites and runtime.sites[site].get('parking_lot') is not None}
+                      if site in fleet_sites and fleet_sites[site].get('parking_lot') is not None}
         if any(not lot.inferred or lot.id in claims for lot in overlaps):
             if self.panel is not None:
                 self.panel.set_message('The building overlaps occupied or authored parking.',error=True)

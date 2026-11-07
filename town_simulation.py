@@ -184,8 +184,7 @@ class TownSimulation:
         for vid in self.fleet.arrivals:
             v = self.fleet.vehicles[vid]
             if v.kind == 'car':
-                self.transit.record_vehicle_arrival(v.driver,self.sites[v.site]['walk_point'])
-                self._arrive_person(self.residents[v.driver])
+                self._car_arrived(v)
             elif vid in self.jobs:
                 job = self.jobs[vid]
                 if job['stage'] == 'outbound':
@@ -197,6 +196,10 @@ class TownSimulation:
         self.fleet.arrivals.clear()
         while self.transit.person_arrivals:
             self._arrive_person(self.residents[self.transit.person_arrivals.popleft()])
+
+    def _car_arrived(self, vehicle):
+        self.transit.record_vehicle_arrival(vehicle.driver,self.sites[vehicle.site]['walk_point'])
+        self._arrive_person(self.residents[vehicle.driver])
 
     def update(self, seconds):
         if not isfinite(seconds) or seconds < 0:
