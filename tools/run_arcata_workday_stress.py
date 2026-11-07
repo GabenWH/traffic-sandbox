@@ -107,8 +107,10 @@ log(stage='assigned',workers=sum(p.worker for p in runtime.residents.values()),a
 runtime.time=runtime.transit.time=runtime.transit.traffic.elapsed_time=21600.0
 runtime.transit.engine._call('nt_clock',21600.0,0.0,0.0)
 runtime._last_economy=runtime._last_construction=runtime._last_construction_work=21600.0
+runtime._last_household_economy=21600.0
 import heapq
-runtime._events=[(max(t,21600.0),seq,kind,value) for t,seq,kind,value in runtime._events];heapq.heapify(runtime._events)
+from event_queue import EventQueue
+runtime._events=EventQueue((max(t,21600.0),seq,kind,value) for t,seq,kind,value in runtime._events)
 frames=[]
 watch_seconds=int(os.environ.get('STRESS_WATCH_SECONDS','0'))
 if watch_seconds:

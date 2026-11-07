@@ -29,7 +29,7 @@ def _tuples(value):
 
 def _walk_dump(route):
     if route is None:return None
-    return dict(points=route.points,length=route.length,crossing=route.first_crossing_fraction)
+    return dict(points=list(route.points),length=route.length,crossing=route.first_crossing_fraction)
 
 
 def _walk_load(data):
@@ -50,9 +50,9 @@ def _route_dump(route):
         v=edge.value
         if edge.kind=='lane':
             data=dict(kind='lane',lane=getattr(v,'lane',v).id)
-            if hasattr(v,'lane'):data['points']=v.points
+            if hasattr(v,'lane'):data['points']=list(v.points)
         elif edge.kind=='road_port':
-            data=dict(kind='road_port',lane=v.lane.id,port=v.port.id,points=v.points)
+            data=dict(kind='road_port',lane=v.lane.id,port=v.port.id,points=list(v.points))
         elif edge.kind=='lane_connection':data=dict(kind='lane_connection',connection=v.id)
         else:raise ValueError('Unsupported saved vehicle link: '+edge.kind)
         edges.append(data)
@@ -84,7 +84,7 @@ def dump_transport(transit, managed=None):
     for a in traffic.cars:
         if managed is not None and a.id not in managed and a.source_type!='test_traffic':continue
         actors.append(dict(id=a.id,source_id=a.source_id,destination_id=a.destination_id,
-            route=_route_dump(a.route),points=a.points,speed=a.speed,color=a.color,
+            route=_route_dump(a.route),points=list(a.points),speed=a.speed,color=a.color,
             appearance=asdict(a.appearance),source_type=a.source_type,speed_cap_mph=a.speed_cap_mph,
             length=a.length,width=a.width,distance=a.distance,brain=asdict(a.brain),
             merge_entry_speed=a._merge_entry_speed,position=a.position))
@@ -198,7 +198,7 @@ def dump_city(city):
     return dict(schema='city.gameplay.v1',time=city.time,resident_construction_started=city._resident_construction_started,
         residents=[asdict(p) for p in city.residents.values()],households=[asdict(h) for h in city.households.values()],
         fleet=[{f.name:getattr(v,f.name) for f in fields(v) if not f.name.startswith('_')} for v in city.fleet.vehicles.values()],
-        transport=dump_transport(city.transit,managed),events=deepcopy(city._events),scheduled=sorted(city._scheduled),
+        transport=dump_transport(city.transit,managed),events=deepcopy(list(city._events)),scheduled=sorted(city._scheduled),
         sequence=city._sequence,next_person=city._next_person,next_household=city._next_household,
         jobs=deepcopy(city.jobs),handling={k:list(v) for k,v in city.handling.items()},bay_active=deepcopy(city.bay_active),
         visits=deepcopy(city.visits),care_queue=list(city.care_queue),care_tasks=deepcopy(city.care_tasks),
@@ -210,7 +210,7 @@ def dump_city(city):
             departures=city._commute_departures,learning=city.fleet.routing.learning.to_dict(),
             travel=deepcopy(city.fleet._travel),work_start=city.work_start,work_end=city.work_end),
         suspended_walkers=city._suspended_walkers,resuming_vehicles=city._resuming_vehicles,resuming_buses=city._resuming_buses,
-        last_economy=city._last_economy,last_construction=city._last_construction,last_construction_work=city._last_construction_work,candidate_cursor=city._candidate_cursor)
+        last_economy=city._last_economy,last_household_economy=city._last_household_economy,last_construction=city._last_construction,last_construction_work=city._last_construction_work,candidate_cursor=city._candidate_cursor)
 
 
 def restore_city(city,raw):
@@ -237,7 +237,8 @@ def restore_city(city,raw):
         for sid,count in occupancy.items():
             if count>city.sites[sid]['building'].residents:raise ValueError('Housing capacity exceeded')
         if len(residents)!=len(data['residents']):raise ValueError('Duplicate resident ID')
-        city.residents,city.households=residents,households
+        from resident_arrays import ResidentTable
+        city.residents,city.households=ResidentTable(residents.values()),households
         city._membership={pid:h.id for h in households.values() for pid in h.members}
         city.time=data['time']
         actors=restore_transport(city.transit,data['transport'])
@@ -253,7 +254,8 @@ def restore_city(city,raw):
             if 'parking_space_id' not in info:legacy_parking.append(v.id)
         city.fleet.restore_parking(legacy_ids=legacy_parking,suspended_ids=data.get('resuming_vehicles',{}))
         city.fleet.restore_road_stops()
-        city._events=[tuple(e) for e in data['events']];heapq.heapify(city._events)
+        from event_queue import EventQueue
+        city._events=EventQueue(data['events'])
         city._scheduled=set(data['scheduled']);city._sequence=data['sequence']
         city._next_person=data['next_person'];city._next_household=data['next_household']
         city.jobs=data['jobs'];city.handling={sid:deque(v) for sid,v in data['handling'].items()}
@@ -264,6 +266,7 @@ def restore_city(city,raw):
         for key,value in data['metrics'].items():setattr(city,key,value)
         city.resource_journal=Counter(data.get('resource_journal',{}))
         city.counters=Counter(data['counters']);city._last_economy=data['last_economy']
+        city._last_household_economy=data.get('last_household_economy',city._last_economy)
         city._last_construction=data['last_construction'];city._last_construction_work=data.get('last_construction_work',data['last_construction']);city._candidate_cursor=data['candidate_cursor']
         city._suspended_walkers={int(k):v for k,v in data.get('suspended_walkers',{}).items()}
         city._resuming_vehicles=data.get('resuming_vehicles',{})

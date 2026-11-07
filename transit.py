@@ -6,7 +6,8 @@ walking estimates use the current inferred pedestrian network. Shared-stop
 transfers use an expected-time routing graph. No live delay prediction,
 mid-trip fleet save/load or idling fuel are modeled yet.
 """
-from collections import deque
+from collections import deque, OrderedDict
+from retention import EventHistory
 from dataclasses import dataclass, field
 from math import dist, isfinite
 
@@ -94,13 +95,19 @@ class TransitSimulation:
         self.legs, self.leg_lengths, self.queues = {}, {}, {}
         self.line_plans = {}
         self._next_departure = {}
-        self.events = []
-        self._walk_routes = {}
+        self.events = EventHistory()
+        self._walk_routes = OrderedDict()
+        self.walk_route_limit = 512
+        self._next_geometry_trim = self.time+60
+        self._walk_trim_size = 0
         self._walk_cache = WalkingRouteCache()
         self.vehicle_arrivals = deque()
         self.person_arrivals = deque()
         self.arrival_observer = None
         self.arrivals_listener = None
+        # Compile during service setup, rather than pausing a movement tick on
+        # the first walker. Caches belong to this immutable network revision.
+        if city.pedestrian_network.lanes:city.pedestrian_network.prepare()
 
     def _check_network(self):
         if self.city.mobility_revision != self.revision:
@@ -177,6 +184,12 @@ class TransitSimulation:
             route = self.city.find_pedestrian_route(a, b)
             self._walk_cache[key] = route
             return route
+
+    def walking_cost(self, origin, destination):
+        """Seconds on the same walking network, without materializing a route."""
+        self._check_network()
+        if dist(origin,destination)<1e-7:return 0.
+        return self.city.pedestrian_network.cost(origin,destination)/4.4
 
     def record_vehicle_arrival(self, person_id, destination):
         """Reconcile a completed personal-car trip with an earlier walking trip."""
@@ -266,7 +279,17 @@ class TransitSimulation:
         if key not in self._walk_routes:
             self._walk_routes[key] = self.engine.register_pedestrian_lane(
                 route.points, route.first_crossing_fraction)
+        self._walk_routes.move_to_end(key)
         self.engine.spawn_pedestrian(person.id, self._walk_routes[key], 4.4)
+        if len(self._walk_routes)>=max(self.walk_route_limit,self._walk_trim_size)+64:
+            self._trim_walk_routes()
+
+    def _trim_walk_routes(self):
+        if len(self._walk_routes)<=self.walk_route_limit:return
+        for key,lane in tuple(self._walk_routes.items()):
+            if len(self._walk_routes)<=self.walk_route_limit:break
+            if self.engine.release_pedestrian_lane(lane):del self._walk_routes[key]
+        self._walk_trim_size=len(self._walk_routes)
 
     def _finish_walk(self, person):
         if person.phase == 'walking_to_stop':
@@ -389,3 +412,7 @@ class TransitSimulation:
             if self.arrivals_listener is not None and (self.person_arrivals or self.vehicle_arrivals):
                 self.arrivals_listener(self.time)
             remaining -= dt
+        if self.time>=self._next_geometry_trim:
+            self._trim_walk_routes()
+            self.engine.trim_routes()
+            self._next_geometry_trim=self.time+60

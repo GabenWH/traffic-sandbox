@@ -47,8 +47,10 @@ struct NTProfile {
 // Immutable walking snapshots use the same SpawnGraph search as driving.
 struct NTWalkEdge { int source, destination, point_start, point_count, reverse; };
 struct NTWalkStep { int edge; double start, end; };
+struct NTWalkProjection { int lane; double distance; NTPoint point; };
 void* nt_walk_graph(const NTPoint*, int, const NTWalkEdge*, int, const NTPoint*, int);
 void nt_walk_destroy(void*);
+int nt_walk_project(void*, NTPoint, NTWalkProjection*);
 // Returns step count, 0 for unreachable, -1 for invalid input. Caller owns output.
 int nt_walk_query(void*, NTPoint, NTPoint, NTPoint*, NTWalkStep*, int);
 int nt_abi();
@@ -58,6 +60,8 @@ void nt_destroy(void*);
 int nt_network(void*, const NTConnection*, int, const unsigned char*, const unsigned char*);
 int nt_network_sparse(void*, const NTConnection*, int, const NTRelation*, int);
 int nt_route(void*, const NTPoint*, int, const NTSection*, int, const NTMovement*, int);
+int nt_route_release(void*, int);
+int nt_pedestrian_lane_release(void*, int);
 int nt_connection_key(void*, int, int);
 int nt_spawn(void*, const NTSpawn*, const char*, const char*, const char*);
 int nt_place(void*, int, double);
@@ -119,4 +123,5 @@ void nt_routing_graph_destroy(void*);
 void* nt_routing_tree(void*, const int*, const double*, int, const double*, int);
 void nt_routing_tree_destroy(void*);
 int nt_routing_path(void*, const int*, const double*, int, int*, int, int*, int*, double*);
+int nt_routing_cost(void*, const int*, const double*, int, double*);
 }

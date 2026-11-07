@@ -11,6 +11,9 @@ from models import polyline_length, slice_polyline
 from threading import Lock
 
 from native_walking import NativeWalkingGraph
+from numpy_storage import packed_points,PackedPoints
+import numpy as np
+from collections.abc import Sequence
 
 
 @dataclass(frozen=True)
@@ -25,6 +28,38 @@ class WalkingRoute:
     links: tuple
     length: float
     first_crossing_fraction: float
+
+    def __post_init__(self):
+        object.__setattr__(self,'points',packed_points(self.points))
+        if not isinstance(self.links,PackedWalkLinks):object.__setattr__(self,'links',PackedWalkLinks(self.links))
+
+
+class PackedWalkLinks(Sequence):
+    """Ragged walking-link coordinates share one numeric point allocation."""
+    __slots__=('kinds','kind_codes','offsets','points')
+    def __init__(self,links):
+        links=tuple(links);self.kinds=tuple(dict.fromkeys(link.kind for link in links))
+        codes={name:i for i,name in enumerate(self.kinds)}
+        self.kind_codes=np.fromiter((codes[link.kind] for link in links),dtype=np.int16,count=len(links))
+        sizes=np.fromiter((len(link.points) for link in links),dtype=np.int32,count=len(links))
+        self.offsets=np.empty(len(links)+1,dtype=np.int64);self.offsets[0]=0
+        np.cumsum(sizes,out=self.offsets[1:])
+        self.points=np.empty((int(self.offsets[-1]),2),dtype=np.float64)
+        for i,link in enumerate(links):self.points[self.offsets[i]:self.offsets[i+1]]=np.asarray(link.points).reshape(-1,2)
+        for data in (self.kind_codes,self.offsets,self.points):data.flags.writeable=False
+    def __len__(self):return len(self.kind_codes)
+    def __eq__(self,other):
+        if isinstance(other,PackedWalkLinks):
+            return (self.kinds==other.kinds and np.array_equal(self.kind_codes,other.kind_codes)
+                    and np.array_equal(self.offsets,other.offsets) and np.array_equal(self.points,other.points))
+        try:return tuple(self)==tuple(other)
+        except TypeError:return False
+    def __hash__(self):return hash(tuple(self))
+    def __getitem__(self,index):
+        if isinstance(index,slice):return tuple(self[i] for i in range(*index.indices(len(self))))
+        if index<0:index+=len(self)
+        if not 0<=index<len(self):raise IndexError(index)
+        return WalkLink(self.kinds[int(self.kind_codes[index])],PackedPoints._view(self.points[self.offsets[index]:self.offsets[index+1]]))
 
 
 def _node(lane, end):
@@ -53,7 +88,7 @@ class PedestrianNetwork:
                 self.layer.positions[a], self.layer.positions[b] = points[0], points[-1]
                 length = polyline_length(points)
                 self.layer.graph.add_edge(a, b, length, WalkLink('lane', points))
-                self.layer.graph.add_edge(b, a, length, WalkLink('lane', tuple(reversed(points))))
+                self.layer.graph.add_edge(b, a, length, WalkLink('lane', points[::-1]))
         for junction in intersections:
             endpoints = []
             for road in junction.connected_roads:
@@ -68,16 +103,23 @@ class PedestrianNetwork:
                 for destination, finish in endpoints:
                     if source != destination:
                         self.layer.graph.add_edge(source, destination, dist(start,finish),
-                                                  WalkLink('junction', (start,finish)))
+                                                  WalkLink('junction', packed_points((start,finish))))
+        self.layer.pack()
 
-    def route(self, start_point, destination_point):
+    def prepare(self):
         if not self.lanes:
             raise ValueError('No pedestrian lanes')
         # Build once per world revision, not once per origin/destination pair.
         with self._compile_lock:
             if self._native is None:
                 self._native = NativeWalkingGraph(self.layer)
-            native = self._native
+            return self._native
+
+    def cost(self, start_point, destination_point):
+        return self.prepare().cost(start_point,destination_point)
+
+    def route(self, start_point, destination_point):
+        native = self.prepare()
         (start, end), steps = native.route(start_point, destination_point)
         links = (WalkLink('access', (tuple(start_point), start)),
                  *(WalkLink(link.kind, _part(link.points, begin, finish))

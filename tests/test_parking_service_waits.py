@@ -1,5 +1,6 @@
 """A completed visitor must release admission ownership for the next waiter."""
 import unittest
+from unittest.mock import patch
 
 from commute_schedule import CommutePolicy
 from persistent_fleet import FleetVehicle
@@ -7,6 +8,18 @@ from tests.test_background_city import city_runtime, worker
 
 
 class ParkingServiceWaitTests(unittest.TestCase):
+    def test_failed_walking_service_return_does_not_inherit_car_full_status(self):
+        runtime=city_runtime(CommutePolicy(departure_window=0))
+        self.addCleanup(runtime.close)
+        person=worker(runtime,car=False)
+        runtime.visits[person.id]=dict(site='job',origin='a',purpose='meal',previous='home')
+        person.state='waiting_meal'
+        runtime.fleet.last_dispatch_status='full'
+        with patch.object(runtime.transit,'request_trip',side_effect=ValueError('no walk')):
+            runtime._leave_service(person.id)
+        self.assertNotIn(person.id,runtime.parking_trips.waits)
+        self.assertIn('service_return:'+str(person.id),runtime._scheduled)
+
     def test_later_capacity_release_admits_second_waiting_service_return(self):
         runtime = city_runtime(CommutePolicy(departure_window=0,
             parking_walk_seconds=0, fallback_trip_seconds=0))

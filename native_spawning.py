@@ -7,6 +7,7 @@ import ctypes as C
 from math import isfinite
 from time import perf_counter
 from types import SimpleNamespace
+from weakref import ref
 
 from native_traffic import NativeTrafficEngine, _Connection, _Point, _Spawn, _Section, _Movement, CONTROL
 from intersection_controls import SignalAspect
@@ -343,14 +344,12 @@ class NativeRoadSimulation:
         points = vehicle_route_points(route)
         if len(points) < 2 or polyline_length(points) <= 0:
             return None
-        retained = self.external_routes.get(id(route))
-        if retained is None:
-            proxy = SimpleNamespace(route=route, points=points, controlled_movements=_controlled_movement_ranges(route),
-                                    route_segments=_route_occupancy_segments(route), _route_cache=RouteState())
-            native_route = e.register_route(proxy)
-            self.external_routes[id(route)] = (route, native_route)
-        else:
-            native_route = retained[1]
+        proxy = SimpleNamespace(route=route, points=points, controlled_movements=_controlled_movement_ranges(route),
+                                route_segments=_route_occupancy_segments(route), _route_cache=RouteState())
+        native_route = e.register_route(proxy)
+        # Diagnostics may index live paths without owning those paths.
+        key=id(route)
+        self.external_routes[key] = (ref(route,lambda weak,key=key:self.external_routes.pop(key,None)),native_route)
         self.configure()
         if not color:
             color = sim.colors[e._call('nt_choice', len(sim.colors))]

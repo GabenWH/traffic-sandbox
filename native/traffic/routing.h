@@ -61,10 +61,9 @@ struct RoutingTree {
             }
         }
     }
-    int path(const int* sources,const double* initials,int count,int* edges,int capacity,
-             int* origin,int* target,double* total) const {
-        if(count<=0 || !sources || !initials || !edges || capacity<graph->nodes || !origin || !target || !total)
-            throw std::invalid_argument("invalid routing path buffer");
+    int locate(const int* sources,const double* initials,int count,int* origin,int* target,double* total) const {
+        if(count<=0 || !sources || !initials || !origin || !target || !total)
+            throw std::invalid_argument("invalid routing origin buffer");
         double best=std::numeric_limits<double>::infinity();int node=-1;*origin=-1;*target=-1;
         for(int i=0;i<count;++i) {
             int from=sources[i];double cost=initials[i];
@@ -74,7 +73,14 @@ struct RoutingTree {
             if(candidate<best) {best=candidate;node=from;*origin=i;}
         }
         if(node<0) return -2;
-        *target=root[node];*total=best;int length=0;
+        *target=root[node];*total=best;return node;
+    }
+    int path(const int* sources,const double* initials,int count,int* edges,int capacity,
+             int* origin,int* target,double* total) const {
+        if(!edges || capacity<graph->nodes) throw std::invalid_argument("invalid routing path buffer");
+        int node=locate(sources,initials,count,origin,target,total);
+        if(node<0) return -2;
+        int length=0;
         while(next[node]>=0) {
             if(length>=capacity) throw std::runtime_error("routing tree cycle");
             int edge=next[node];edges[length++]=edge;node=graph->edges[edge].destination;

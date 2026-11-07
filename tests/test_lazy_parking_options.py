@@ -45,11 +45,12 @@ class LazyParkingOptionsTests(unittest.TestCase):
         self.assertEqual(next(first), 'job')
         self.assertEqual(len(runtime.transit._walk_cache), 0)
         alternative = next(first)
-        self.assertEqual(len(runtime.transit._walk_cache), 1)
+        self.assertEqual(len(runtime.transit._walk_cache), 0,
+                         'Eligibility needs a shared distance, not cached route geometry')
         second = iter(runtime.parking_trips.options('job'))
         self.assertEqual(next(second), 'job')
         self.assertEqual(next(second), alternative)
-        self.assertEqual(len(runtime.transit._walk_cache), 1)
+        self.assertEqual(len(runtime.transit._walk_cache), 0)
         # Independently advancing iterators must not duplicate or skip sites.
         complete = list(runtime.parking_trips.options('job'))
         self.assertGreater(len(complete), 2)

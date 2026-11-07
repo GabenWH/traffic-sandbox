@@ -111,6 +111,7 @@ def build_scenario(city, *, cars=1000, seed=42, start_hour=6, population=None,co
     runtime.time=runtime.transit.time=runtime.transit.traffic.elapsed_time=start
     runtime.transit.engine._call('nt_clock',start,0.,0.)
     runtime._last_economy=runtime._last_construction=runtime._last_construction_work=start
+    runtime._last_household_economy=start
     drivers=[]
     for home in homes:
         for size in sizes[home.id]:
@@ -163,7 +164,7 @@ def build_scenario(city, *, cars=1000, seed=42, start_hour=6, population=None,co
 
 def _snapshot(runtime):
     report=runtime.report()
-    report['states']=dict(Counter(p.state for p in runtime.residents.values()))
+    report['states']=dict(runtime.resident_state_counts())
     report['clock_hour']=round(runtime.time/3600,5)
     cars=[v for v in runtime.fleet.vehicles.values() if v.kind=='car' and v.driver in runtime.residents]
     report['cars_parked_at_work']=sum(v.phase=='parked' and v.site==runtime.residents[v.driver].workplace for v in cars)

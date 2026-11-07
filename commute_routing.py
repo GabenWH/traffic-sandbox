@@ -11,6 +11,8 @@ from math import dist
 import os
 import sys
 import threading
+import numpy as np
+from numpy_storage import packed_points
 
 from mobility import (VEHICLE_LAYER,LaneTraversal,MobilityLink,lane_end_node,lane_start_node)
 from models import polyline_length,slice_polyline
@@ -67,19 +69,23 @@ class VehicleGraphSnapshot:
     def __init__(self,city,speed_mph):
         layer=city.mobility.layers[VEHICLE_LAYER];nodes=tuple(layer.graph.nodes)
         self.revision=city.mobility_revision;self.nodes=nodes;self.ids={n:i for i,n in enumerate(nodes)}
-        self.rows=tuple((source,t) for source in nodes for t in layer.graph.transitions_from(source))
-        self.keys=tuple(link_key(t.edge) for _,t in self.rows)
+        rows=tuple((source,t) for source in nodes for t in layer.graph.transitions_from(source))
+        self.sources=np.fromiter((self.ids[source] for source,_ in rows),dtype=np.int32,count=len(rows))
+        self.targets=np.fromiter((self.ids[t.destination] for _,t in rows),dtype=np.int32,count=len(rows))
+        self.links=tuple(t.edge for _,t in rows)
+        self.keys=tuple(link_key(link) for link in self.links)
         self.by_key={key:i for i,key in enumerate(self.keys)}
         self.lanes={};self.lane_edges={};self.geometry={};costs=[];edges=[]
-        for i,(source,t) in enumerate(self.rows):
-            link=t.edge;value=link.value
+        for i,(source,t) in enumerate(rows):
+            link=self.links[i];value=link.value
             lane=getattr(value,'lane',value) if link.kind in ('lane','road_port') else None
             mph=min(speed_mph,getattr(lane,'speed_limit_mph',None) or speed_mph)
             cost=t.cost/(mph*22/15);costs.append(cost)
             edges.append((self.ids[source],self.ids[t.destination],cost))
             if link.kind=='lane':
-                self.lanes[lane.id]=lane;self.lane_edges[lane.id]=i;self.geometry[lane.id]=tuple(lane.points)
-        self.defaults=tuple(costs);self.native=NativeRouteGraph(max(1,len(nodes)),edges)
+                self.lanes[lane.id]=lane;self.lane_edges[lane.id]=i;self.geometry[lane.id]=packed_points(lane.points)
+        self.defaults=np.asarray(costs,dtype=np.float64);self.native=NativeRouteGraph(max(1,len(nodes)),edges)
+        for data in (self.sources,self.targets,self.defaults):data.flags.writeable=False
 
     def endpoints(self,positions):
         result=[]
@@ -104,9 +110,8 @@ class VehicleGraphSnapshot:
                 return _Plan(oi,ti,(),self.partial(a,b.distance-a.distance,weights),True)
             indices=tuple(self.by_key[key] for key in habit['edges']);node=a.end
             for index in indices:
-                source,t=self.rows[index]
-                if self.ids[source]!=node:return None
-                node=self.ids[t.destination]
+                if int(self.sources[index])!=node:return None
+                node=int(self.targets[index])
             if node!=b.start:return None
             cost=self.partial(a,a.length-a.distance,weights)+sum(weights[i] for i in indices)+self.partial(b,b.distance,weights)
             return _Plan(oi,ti,indices,cost)
@@ -120,7 +125,7 @@ class VehicleGraphSnapshot:
         if plan.direct:return Path((start,end),(piece(a,a.distance,b.distance),),plan.cost)
         nodes=[start,self.nodes[a.end]];links=[piece(a,a.distance,a.length)]
         for index in plan.edges:
-            _,t=self.rows[index];nodes.append(t.destination);links.append(t.edge)
+            nodes.append(self.nodes[int(self.targets[index])]);links.append(self.links[index])
         nodes.append(end);links.append(piece(b,0,b.distance))
         return Path(tuple(nodes),tuple(links),plan.cost)
 
@@ -187,7 +192,8 @@ class BackgroundRoutes:
             self._ready.move_to_end(key);return self._ready[key]
         if day not in self._weights:
             learned=self.learning.costs_for(day)
-            self._weights[day]=tuple(max(cost,learned.get(link,cost)) for link,cost in zip(snapshot.keys,snapshot.defaults))
+            self._weights[day]=np.fromiter((max(cost,learned.get(link,cost)) for link,cost in zip(snapshot.keys,snapshot.defaults)),dtype=np.float64,count=len(snapshot.keys))
+            self._weights[day].flags.writeable=False
             if len(self._weights)>2:del self._weights[min(self._weights)]
         weights=self._weights[day]
         if key not in self._requests and key not in self._results:

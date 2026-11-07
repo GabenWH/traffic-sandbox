@@ -13,6 +13,11 @@ Run it with Python 3:
 python3 freeway_simulator.py
 ```
 
+Install `requirements.txt` first: NumPy owns the packed resident, event and
+compiled geometry buffers; Panda3D supplies the optional 3D road view.
+See [numeric runtime storage](docs/NUMPY_LAYOUT.md) for layouts and ownership.
+See [shared walking trees](docs/SHARED_WALKING.md) for walking caches and query budgets.
+
 Constructed-road traffic uses a single staged C++17 engine by default:
 
 ```bash

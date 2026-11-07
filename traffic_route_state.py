@@ -4,6 +4,7 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from math import dist
 from types import MappingProxyType
+import numpy as np
 
 from models import ManeuverType
 from simulation_cache import CachedValue, RevisionSource
@@ -135,7 +136,8 @@ class RouteGeometry:
 
     def __init__(self):
         self._points = None
-        self._segments = self._ends = ()
+        self._segments = np.empty((0,8),dtype=np.float64)
+        self._ends = np.empty(0,dtype=np.float64)
         self._index = 0
         self._last_distance = None
 
@@ -147,13 +149,15 @@ class RouteGeometry:
                 if not length:
                     continue
                 heading = ((end[0] - start[0]) / length, (end[1] - start[1]) / length)
-                segments.append((start, heading, length, total, end))
+                segments.append((*start,*heading,length,total,*end))
                 total += length
                 ends.append(total)
-            self._points, self._segments, self._ends = points, tuple(segments), tuple(ends)
+            self._points=points
+            self._segments=np.asarray(segments,dtype=np.float64).reshape(-1,8)
+            self._ends=np.asarray(ends,dtype=np.float64)
             self._last_distance = None
         distance = max(0.0, float(distance_along))
-        if not self._segments:
+        if not len(self._segments):
             return points[-1], (1.0, 0.0)
         if self._last_distance is None or distance < self._last_distance:
             self._index = bisect_left(self._ends, distance)
@@ -168,17 +172,16 @@ class RouteGeometry:
             if 0 <= boundary < len(self._ends) and abs(distance - self._ends[boundary]) <= 1e-8:
                 return self._boundary_position(distance, points)
         if self._index == len(self._segments):
-            return points[-1], self._segments[-1][1]
-        start, heading, _length, offset, _end = self._segments[self._index]
+            return points[-1], tuple(float(v) for v in self._segments[-1,2:4])
+        sx,sy,hx,hy,_length,offset,_ex,_ey=map(float,self._segments[self._index])
         remaining = distance - offset
-        return ((start[0] + heading[0] * remaining, start[1] + heading[1] * remaining),
-                heading)
+        return ((sx + hx * remaining, sy + hy * remaining),(hx,hy))
 
     def _boundary_position(self, remaining, points):
-        for start, heading, length, _offset, end in self._segments:
+        for row in self._segments:
+            sx,sy,hx,hy,length,_offset,ex,ey=map(float,row)
             if remaining <= length:
                 fraction = remaining / length
-                return ((start[0] + (end[0] - start[0]) * fraction,
-                         start[1] + (end[1] - start[1]) * fraction), heading)
+                return ((sx + (ex - sx) * fraction, sy + (ey - sy) * fraction),(hx,hy))
             remaining -= length
-        return points[-1], self._segments[-1][1]
+        return points[-1], tuple(float(v) for v in self._segments[-1,2:4])

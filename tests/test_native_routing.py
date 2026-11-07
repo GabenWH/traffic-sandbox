@@ -20,6 +20,14 @@ class NativeRoutingTests(unittest.TestCase):
         self.assertIsNone(tree.path([(4,0.)]))
         self.assertIsNone(graph.tree([(0,0.)]).path([(3,0.)]))
 
+    def test_cost_only_queries_match_paths_and_validate_origins(self):
+        tree=self.graph().tree([(1,10.),(3,1.)])
+        for origins in ([(0,8.),(2,0.)],[(3,4.)],[(4,0.)]):
+            path=tree.path(origins)
+            self.assertEqual(tree.cost(origins),path[3] if path else float('inf'))
+        for origins in ([],[(-1,0.)],[(0,float('inf'))]):
+            with self.assertRaises(ValueError):tree.cost(origins)
+
     def test_multiple_roots_and_initial_costs_choose_global_minimum(self):
         tree=self.graph().tree([(1,10.),(3,1.)])
         self.assertEqual(tree.path([(0,8.),(2,0.)]),(1,1,(3,),10.))

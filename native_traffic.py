@@ -16,6 +16,9 @@ import os
 import subprocess
 import sys
 import tempfile
+from collections import OrderedDict
+import numpy as np
+from numpy_storage import PackedPoints
 
 from car_brain import BehaviorState, SignalIntent
 from intersection_controls import movements_conflict, yields_to, StopArrival, SignalAspect
@@ -122,6 +125,8 @@ def _library():
         'nt_create': (C.c_void_p, [C.c_double]), 'nt_destroy': (None, [C.c_void_p]),
         'nt_network': (C.c_int, [C.c_void_p, C.POINTER(_Connection), C.c_int, C.POINTER(C.c_ubyte), C.POINTER(C.c_ubyte)]),
         'nt_route': (C.c_int, [C.c_void_p, C.POINTER(_Point), C.c_int, C.POINTER(_Section), C.c_int, C.POINTER(_Movement), C.c_int]),
+        'nt_route_release': (C.c_int, [C.c_void_p,C.c_int]),
+        'nt_pedestrian_lane_release': (C.c_int, [C.c_void_p,C.c_int]),
         'nt_connection_key': (C.c_int, [C.c_void_p, C.c_int, C.c_int]),
         'nt_spawn': (C.c_int, [C.c_void_p, C.POINTER(_Spawn), C.c_char_p, C.c_char_p, C.c_char_p]),
         'nt_yellow': (C.c_int, [C.c_void_p, C.c_int, C.c_int, C.c_int]),
@@ -182,7 +187,8 @@ class NativeTrafficEngine:
         self._signal_aspects = None
         self._keys = {}
         self._intersections = {}
-        self._routes = {}
+        self._routes = OrderedDict()
+        self.route_cache_limit = 4096
         self._shared_bindings = {}
 
     def _call(self, name, *args):
@@ -284,24 +290,36 @@ class NativeTrafficEngine:
                 lane = link.value
             if lane is not None and lane.speed_limit_mph is not None:
                 self._call('nt_key_speed', self._key(('lane', lane.id)), lane.speed_limit_mph)
-        signature = (id(car.points), id(car.route_segments), id(car.controlled_movements))
+        if isinstance(car.points,PackedPoints):
+            point_buffer=np.ascontiguousarray(car.points.data)
+            points=point_buffer.ctypes.data_as(C.POINTER(_Point))
+            point_signature=point_buffer.tobytes()
+        else:
+            points = (_Point * len(car.points))(*(_Point(*p) for p in car.points))
+            point_signature=bytes(points)
+        sections = (_Section * len(car.route_segments))(*(
+            _Section(start, end, offset, self._key(key)) for start, end, key, offset in car.route_segments))
+        state = _route_state(car)
+        movements = (_Movement * len(car.controlled_movements))(*(
+            _Movement(m[0], m[1], -1 if state.signal_start(m) is None else state.signal_start(m),
+                      self._connection_ids[id(m[2])], self._key(state.incoming(m)))
+            for m in car.controlled_movements))
+        # Exact compact value keys deduplicate separately materialized paths and
+        # never keep their Python object graphs alive.
+        signature = (point_signature,bytes(sections),bytes(movements))
         route = self._routes.get(signature)
         if route is None:
-            points = (_Point * len(car.points))(*(_Point(*p) for p in car.points))
-            sections = (_Section * len(car.route_segments))(*(
-                _Section(start, end, offset, self._key(key)) for start, end, key, offset in car.route_segments))
-            state = _route_state(car)
-            movements = (_Movement * len(car.controlled_movements))(*(
-                _Movement(m[0], m[1], -1 if state.signal_start(m) is None else state.signal_start(m),
-                          self._connection_ids[id(m[2])], self._key(state.incoming(m)))
-                for m in car.controlled_movements))
-            route = self._call('nt_route', points, len(points), sections, len(sections), movements, len(movements))
-            # Retain source tuples: identity keys must not be recycled by Python.
+            route = self._call('nt_route', points, len(car.points), sections, len(sections), movements, len(movements))
             self._routes[signature] = route
-            if not hasattr(self, '_route_sources'):
-                self._route_sources = []
-            self._route_sources.append((car.points, car.route_segments, car.controlled_movements))
+        self._routes.move_to_end(signature)
+        self.trim_routes(protect=route)
         return route
+
+    def trim_routes(self,*,protect=None):
+        if len(self._routes)<=self.route_cache_limit:return
+        for key,route in tuple(self._routes.items()):
+            if len(self._routes)<=self.route_cache_limit:break
+            if route!=protect and self._call('nt_route_release',route):del self._routes[key]
 
     def spawn(self, car):
         if car.id in self._handles:
@@ -347,9 +365,15 @@ class NativeTrafficEngine:
 
     def register_pedestrian_lane(self, points, crossing_fraction=-1.0):
         """Register a separate pedestrian-only route once; points are world feet."""
+        if isinstance(points,PackedPoints):
+            data=np.ascontiguousarray(points.data)
+            return self._call('nt_pedestrian_lane',data.ctypes.data_as(C.POINTER(_Point)),len(data),crossing_fraction)
         points = tuple(points)
         array = (_Point * len(points))(*(_Point(*point) for point in points))
         return self._call('nt_pedestrian_lane', array, len(points), crossing_fraction)
+
+    def release_pedestrian_lane(self,lane):
+        return bool(self._call('nt_pedestrian_lane_release',lane))
 
     def spawn_pedestrian(self, person_id, lane_id, speed):
         """Admit an active walker; movement occurs inside subsequent nt_step calls."""
@@ -463,6 +487,7 @@ class NativeTrafficEngine:
                 binding.detach()
             self._lib.nt_destroy(self._ptr)
             self._ptr = None
+            self._routes.clear()
 
     def __enter__(self):
         return self

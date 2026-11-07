@@ -16,27 +16,19 @@ from persistent_fleet import FleetVehicle, PersistentFleet
 from transit import Bus, BusLine, BusStop, TransitSimulation
 
 
-@dataclass
-class Resident:
-    id: int
-    home: str
-    worker: bool
-    mode: str = 'walk'
-    state: str = 'home'
-    car_id: str | None = None
-    return_due: bool = False
-    workplace: str = "work"
-    worksite: str | None = None
+from resident_arrays import Resident, ResidentTable
 
+
+from retention import EventHistory
 
 class TownSimulation:
     def __init__(self, city, sites, residents, *, work_start=27000, work_end=57600, traffic=None):
         self.city, self.sites = city, sites
-        self.residents = {p.id:p for p in residents}
+        self.residents = ResidentTable(residents)
         self.transit = TransitSimulation(city, traffic)
         self.fleet = PersistentFleet(self.transit, sites)
         self.work_start, self.work_end = work_start, work_end
-        self.events = []
+        self.events = EventHistory()
         self.jobs, self.handling = {}, {sid:deque() for sid in sites}
         self.bay_active = {}
         self.produced = self.consumed = self.unmet = self.fuel_used = 0.0
@@ -218,8 +210,11 @@ class TownSimulation:
             self.time = self.transit.time
             self._arrivals()
 
+    def resident_state_counts(self):
+        return Counter(self.residents.state_counts()) if isinstance(self.residents,ResidentTable) else Counter(p.state for p in self.residents.values())
+
     def report(self):
-        states = Counter(p.state for p in self.residents.values())
+        states = self.resident_state_counts()
         stock = sum(sum(s['building'].inventory.amounts.values()) for s in self.sites.values())
         cargo = sum(sum(v.cargo.values()) for v in self.fleet.vehicles.values())
         fuel = sum(v.fuel_liters for v in self.fleet.vehicles.values())+sum(b.fuel_liters for b in self.transit.buses.values())

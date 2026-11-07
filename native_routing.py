@@ -6,6 +6,7 @@ and graphs may be queried concurrently and never reference the live engine.
 import ctypes as C
 from functools import lru_cache
 from weakref import finalize
+import numpy as np
 
 
 class _Edge(C.Structure):
@@ -23,6 +24,7 @@ def _library():
         'nt_routing_tree_destroy':(None,[C.c_void_p]),
         'nt_routing_path':(C.c_int,[C.c_void_p,C.POINTER(C.c_int),C.POINTER(C.c_double),C.c_int,
                                    C.POINTER(C.c_int),C.c_int,C.POINTER(C.c_int),C.POINTER(C.c_int),C.POINTER(C.c_double)]),
+        'nt_routing_cost':(C.c_int,[C.c_void_p,C.POINTER(C.c_int),C.POINTER(C.c_double),C.c_int,C.POINTER(C.c_double)]),
     }
     for name,(result,args) in signatures.items():
         function=getattr(lib,name);function.restype,function.argtypes=result,args
@@ -41,16 +43,17 @@ class NativeRouteGraph:
             raise ValueError('Invalid routing node count')
         rows=tuple(edges);self.node_count=node_count;self.edge_count=len(rows)
         self._lib=_library()
-        self._handle=self._lib.nt_routing_graph(node_count,(_Edge*len(rows))(*(_Edge(*r) for r in rows)),len(rows))
+        data=np.fromiter(rows,dtype=np.dtype([('source','i4'),('destination','i4'),('cost','f8')],align=True),count=len(rows))
+        self._handle=self._lib.nt_routing_graph(node_count,data.ctypes.data_as(C.POINTER(_Edge)),len(rows))
         if not self._handle:raise ValueError(self._lib.nt_error().decode())
         self._release=finalize(self,self._lib.nt_routing_graph_destroy,self._handle)
 
     def tree(self,targets,*,costs=None):
         nodes,finals=_endpoints(targets)
         if costs is not None:
-            costs=tuple(costs)
-            if len(costs)!=self.edge_count:raise ValueError('Routing weights must cover every edge')
-        weights=(C.c_double*len(costs))(*costs) if costs is not None else None
+            costs=np.ascontiguousarray(costs,dtype=np.float64) if isinstance(costs,np.ndarray) else np.fromiter(costs,dtype=np.float64)
+            if costs.ndim!=1 or len(costs)!=self.edge_count:raise ValueError('Routing weights must cover every edge')
+        weights=costs.ctypes.data_as(C.POINTER(C.c_double)) if costs is not None else None
         ptr=self._lib.nt_routing_tree(self._handle,nodes,finals,len(nodes),weights,len(costs) if costs is not None else 0)
         if not ptr:raise ValueError(self._lib.nt_error().decode())
         return NativeRouteTree(self._lib,ptr,self.node_count)
@@ -60,6 +63,13 @@ class NativeRouteTree:
     def __init__(self,lib,handle,size):
         self._lib,self._handle,self._size=lib,handle,size
         self._release=finalize(self,lib.nt_routing_tree_destroy,handle)
+
+    def cost(self,origins):
+        """Read shared distances without allocating/reconstructing an edge path."""
+        nodes,initials=_endpoints(origins);cost=C.c_double()
+        found=self._lib.nt_routing_cost(self._handle,nodes,initials,len(nodes),C.byref(cost))
+        if found<0:raise ValueError(self._lib.nt_error().decode())
+        return cost.value if found else float('inf')
 
     def path(self,origins):
         nodes,initials=_endpoints(origins)

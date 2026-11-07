@@ -82,6 +82,10 @@ class Parcel(CityObject):
     footprints: list[list[tuple[float, float]]] = field(default_factory=list)
     inspection_title = "Parcel"
 
+    def __post_init__(self):
+        from numpy_storage import packed_points
+        self.footprints=[packed_points(ring) for ring in self.footprints]
+
     def contains(self, position: Point) -> bool:
         in_bounds = (
             self.x <= position[0] <= self.x + self.width

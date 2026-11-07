@@ -6,7 +6,6 @@ residents or housing at the movement frequency. Geometry edits notify sync.
 from collections import Counter, deque, OrderedDict
 from dataclasses import asdict
 from math import exp, isfinite, dist,ceil
-import heapq
 
 from building_operations import operation_for
 from construction import building_access_points
@@ -20,6 +19,7 @@ from town_simulation import Resident
 from transit import Bus, BusLine, BusStop
 from commute_schedule import CommutePolicy,DepartureLimits
 from parking_trips import ParkingTrips
+from event_queue import EventQueue
 
 
 class CitySimulation(ServiceTown):
@@ -45,7 +45,7 @@ class CitySimulation(ServiceTown):
         self._resuming_buses = {}
         self._membership = {}
         self._next_person = self._next_household = 0
-        self._events = []
+        self._events = EventQueue()
         self._scheduled = set()
         self.scene_revision = 0
         self._building_signature = None
@@ -60,6 +60,7 @@ class CitySimulation(ServiceTown):
         self.imported_resources = 0.0
         self.resource_journal = Counter()
         self._last_economy = self._last_construction = self._last_construction_work = self.time
+        self._last_household_economy = self.time
         self._construction_arrivals = []
         self.parking_trips = ParkingTrips(self)
         self._bind_arrivals()
@@ -108,6 +109,16 @@ class CitySimulation(ServiceTown):
             self._scheduled.add(key)
             self.schedule(when, kind, [key, value])
 
+    def schedule(self,when,kind,value):
+        # The base constructor creates a temporary queue before city setup.
+        if not isinstance(self._events,EventQueue):return super().schedule(when,kind,value)
+        self._sequence+=1
+        self._events.push((when,self._sequence,kind,value))
+
+    def cancel_event(self,key):
+        self._scheduled.discard(key)
+        return self._events.cancel(key)
+
     def _wake_economy(self):
         if self.residents or self.businesses or self.jobs:
             self._once('economy', self.time+60, 'economy')
@@ -116,6 +127,7 @@ class CitySimulation(ServiceTown):
         signature = tuple((b.id, b.phase, b.residents, b.jobs, b.parking_lot_id, repr(b.operation)) for b in self.city.buildings)
         if signature == self._building_signature:
             return
+        self._settle_households(self.time)
         self._settle_economy(self.time)
         ensure_parking(self.city)
         self._building_signature = tuple((b.id, b.phase, b.residents, b.jobs, b.parking_lot_id, repr(b.operation)) for b in self.city.buildings)
@@ -216,6 +228,7 @@ class CitySimulation(ServiceTown):
         return max(0,capacity-committed)
 
     def invite_household(self, home, size=4, *, car=False):
+        self._settle_households(self.time)
         self._settle_economy(self.time)
         if isinstance(size,bool) or not isinstance(size,int) or size<1 or size>4 or self.vacancy(home)<size:
             raise ValueError('Household needs 1..4 people and a suitable housing vacancy')
@@ -320,6 +333,7 @@ class CitySimulation(ServiceTown):
                 except ValueError:pass
 
     def relocate(self,hid,target):
+        self._settle_households(self.time)
         self._settle_economy(self.time)
         h=self.households[hid]
         if h.moving_to or target==h.home or self.vacancy(target)<len(h.members):
@@ -361,6 +375,8 @@ class CitySimulation(ServiceTown):
         if self.parking_trips.person_arrived(p):
             return
         self._settle_economy(self.time)
+        if p.state=='relocating' or (p.state=='visiting_return' and self.visits.get(p.id,{}).get('purpose')=='shopping'):
+            self._settle_households(self.time)
         if p.state=='relocating':
             h=self.households[self._membership[p.id]]
             if p.id not in h.arrived:h.arrived.append(p.id)
@@ -420,6 +436,7 @@ class CitySimulation(ServiceTown):
 
     def _travel_person(self,person,source,destination):
         if person.mode=='car' and person.car_id in self.fleet.vehicles:
+            self.fleet.last_dispatch_status=None
             return self.parking_trips.start(person,source,destination)
         return super()._travel_person(person,source,destination)
 
@@ -450,24 +467,34 @@ class CitySimulation(ServiceTown):
         if retry_needed:self._once('builders',self.time+60,'builders')
 
     def _safe_depart(self,p,returning=False):
+        return self._departure_attempt(p,returning)[0]
+
+    def _departure_attempt(self,p,returning=False):
+        """Return this attempt's result; another vehicle's status is irrelevant."""
         self._settle_economy(self.time)
-        if p.workplace is None:return False
-        if not returning and p.state!='home':return False
+        if p.workplace is None:return False,'unavailable'
+        if not returning and p.state!='home':return False,'unavailable'
         if self._inside_update and not self._admitting_departure:
             self.parking_trips.resolved(p.id)
             self._pending_departures[p.id]=(returning,self.time)
-            return False
+            return False,'planning'
         was_work=p.state=='work'
+        parking_attempt=p.mode=='car' and not (returning and p.worksite and p.id not in self.visits)
+        if parking_attempt:self.fleet.last_dispatch_status=None
         try:success=self._depart(p,returning)
-        except (ValueError,RuntimeError,KeyError):success=False
+        except (ValueError,RuntimeError,KeyError):
+            success=False
+            status='inaccessible' if parking_attempt else 'route_failed'
+        else:
+            status=(self.fleet.last_dispatch_status or 'inaccessible') if parking_attempt else ('walked' if success else 'route_failed')
         if (success and was_work) or returning:self._set_attendance(p,False)
         if not success and not self._admitting_departure:
-            if self.fleet.last_dispatch_status in ('full','inaccessible','no_fuel'):
-                self.parking_trips.defer(p.id,'commute',returning)
-                return False
+            if parking_attempt and status in ('full','inaccessible','no_fuel'):
+                self.parking_trips.defer(p.id,'commute',returning,reason=status)
+                return False,status
             retry='retry_site_return' if returning and p.worksite and not p.return_due else ('retry_return' if returning else 'retry_leave')
             self._once(retry+':'+str(p.id),self.time+60,retry,p.id)
-        return success
+        return success,status
 
     def _service_departures(self,epoch):
         self.parking_trips.wake_capacity()
@@ -493,15 +520,15 @@ class CitySimulation(ServiceTown):
             if ready>self.time+1e-8:
                 self._pending_departures[pid]=(returning,ready);continue
             self._admitting_departure=True
-            try:success=self._safe_depart(p,returning)
+            try:success,status=self._departure_attempt(p,returning)
             finally:self._admitting_departure=False
             if success:
                 self.parking_trips.resolved(pid)
-                if p.mode!='car' or self.fleet.last_dispatch_status!='departed':limits.consume(self.time)
+                if p.mode!='car' or status!='departed':limits.consume(self.time)
                 self._commute_departures+=1
             else:
-                if self.fleet.last_dispatch_status in ('full','inaccessible','no_fuel'):
-                    self.parking_trips.defer(pid,'commute',returning)
+                if status in ('full','inaccessible','no_fuel'):
+                    self.parking_trips.defer(pid,'commute',returning,reason=status)
                 else:self._pending_departures[pid]=(returning,self.time+.25)
 
     def _worker_resumed(self,person):
@@ -511,7 +538,9 @@ class CitySimulation(ServiceTown):
         self._safe_depart(person,True)
 
     def _defer_service_return(self,pid):
-        if self.fleet.last_dispatch_status in ('full','inaccessible','no_fuel'):
+        person=self.residents[pid]
+        if (person.mode=='car' and person.car_id in self.fleet.vehicles
+                and self.fleet.last_dispatch_status in ('full','inaccessible','no_fuel')):
             self.parking_trips.defer(pid,'service_return')
             return
         self._once('service_return:'+str(pid),self.time+60,'service_return',pid)
@@ -573,18 +602,28 @@ class CitySimulation(ServiceTown):
                 except (ValueError,RuntimeError):continue
 
     def _economy(self,dt):
-        super()._economy(dt)
+        super()._economy(dt,households=False)
+        self.counters['economy']+=1
+
+    def _before_meal_served(self):
+        self._settle_households(self.time)
+
+    def _settle_households(self,time):
+        dt=time-self._last_household_economy
+        if dt<=1e-8:return
+        self._last_household_economy=time
+        self._consume_households(dt)
         for h in self.households.values():
             if h.moving_to:
                 need=len(h.members)*3*dt/DAY
                 credit=min(need,h.meal_credit);h.meal_credit-=credit;need-=credit
                 used=min(need,h.cargo.get('food',0));h.cargo['food']=h.cargo.get('food',0)-used
                 self.consumed+=used;self.unmet+=need-used
-        self.counters['economy']+=1
 
     def _run_event(self,kind,value):
-        key,value=value;self._scheduled.discard(key)
+        key,value=value;self.cancel_event(key)
         if kind=='economy':
+            self._settle_households(self.time)
             self._settle_economy(self.time)
             self._logistics();self._wake_economy()
         elif kind=='construction':
@@ -642,7 +681,7 @@ class CitySimulation(ServiceTown):
         if self.construction:self.construction.completed_road_vehicles=[]
         while self.time<end-1e-8 or (self._events and self._events[0][0]<=self.time+1e-8):
             while self._events and self._events[0][0]<=self.time+1e-8:
-                _,_,kind,value=heapq.heappop(self._events);self._run_event(kind,value)
+                _,_,kind,value=self._events.pop_next();self._run_event(kind,value)
                 if self.transit.person_arrivals or self.transit.vehicle_arrivals:
                     self._transport_arrived(self.transit.time)
             if self.time>=end-1e-8:break
@@ -766,6 +805,7 @@ class CitySimulation(ServiceTown):
 
     def import_resources(self,site,resource,amount):
         if site not in self.sites or not isfinite(amount) or amount<=0:raise ValueError('Delivery requires a site and positive finite amount')
+        if resource=='food':self._settle_households(self.time)
         self._settle_economy(self.time)
         self.sites[site]['building'].inventory.add(resource,amount);self.imported_resources+=amount
         self._wake_economy()

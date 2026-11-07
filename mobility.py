@@ -60,6 +60,10 @@ class LaneTraversal:
     lane: Lane
     points: tuple[Point, ...]
 
+    def __post_init__(self):
+        from numpy_storage import packed_points
+        object.__setattr__(self,'points',packed_points(self.points))
+
 
 @dataclass(frozen=True)
 class PortTraversal:
@@ -68,6 +72,10 @@ class PortTraversal:
     port: RoadPort
     lane: Lane
     points: tuple[Point, ...]
+
+    def __post_init__(self):
+        from numpy_storage import packed_points
+        object.__setattr__(self,'points',packed_points(self.points))
 
 
 VehicleRouteEndpoint = LanePosition | Intersection
@@ -79,6 +87,11 @@ class MobilityLayer:
 
     graph: DirectedGraph[MobilityNode, MobilityLink] = field(default_factory=DirectedGraph)
     positions: dict[MobilityNode, Point] = field(default_factory=dict)
+
+    def pack(self):
+        from packed_graph import PackedGraph,PackedPositions
+        self.graph=PackedGraph(self.graph)
+        self.positions=PackedPositions(self.positions)
 
 
 @dataclass
@@ -226,6 +239,7 @@ def build_vehicle_layer(
                 movements.setdefault(connection.intersection_id, []).append(connection)
     for connections in movements.values():
         cache_movement_conflicts(connections)
+    layer.pack()
     return layer
 
 
@@ -295,7 +309,8 @@ def vehicle_route_points(route: Path[MobilityNode, MobilityLink]) -> tuple[Point
             result.extend(points[1:])
         else:
             result.extend(points)
-    return tuple(result)
+    from numpy_storage import packed_points
+    return packed_points(result)
 
 
 def find_vehicle_route_between(

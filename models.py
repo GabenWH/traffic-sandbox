@@ -348,6 +348,8 @@ def distance_to_polyline(points: list[Point], position: Point) -> float:
 
 def polyline_length(points: list[Point]) -> float:
     """Return cumulative length along a polyline."""
+    from numpy_storage import PackedPoints
+    if isinstance(points,PackedPoints):return points.length()
     return sum(dist(start, end) for start, end in zip(points, points[1:]))
 
 
@@ -418,6 +420,10 @@ class Lane:
     lane_index: int = 0
     speed_limit_mph: float | None = None
 
+    def __post_init__(self):
+        from numpy_storage import packed_points
+        self.points=packed_points(self.points)
+
     @property
     def id(self) -> str:
         """Return the lane's structural address, never an independent UUID."""
@@ -477,6 +483,10 @@ class PedestrianLane:
     side: str
     points: tuple[Point, ...]
 
+    def __post_init__(self):
+        from numpy_storage import packed_points
+        object.__setattr__(self,'points',packed_points(self.points))
+
     @property
     def id(self) -> str:
         return f"{self.road_id}:pedestrian:{self.side}"
@@ -517,6 +527,8 @@ class Road(Buildable):
             raise ValueError("Road elevations must match centerline points")
         if any(not isfinite(height) or height < 0 for height in self.elevations):
             raise ValueError("Road elevations must be finite and nonnegative")
+        from numpy_storage import packed_points
+        self.centerline=packed_points(self.centerline)
 
     def elevation_at(self, position: Point) -> float:
         """Interpolate height at the nearest point on the authored centerline."""
@@ -880,6 +892,10 @@ class LaneConnection(CityObject):
     _conflict_row: tuple[bool, ...] = field(default=(), init=False, repr=False, compare=False)
     inspection_title = "Lane connection"
 
+    def __post_init__(self):
+        from numpy_storage import packed_points
+        self.path=packed_points(self.path)
+
     @property
     def id(self) -> str:
         return (
@@ -890,7 +906,7 @@ class LaneConnection(CityObject):
 
     @property
     def length(self) -> float:
-        return sum(dist(start, end) for start, end in zip(self.path, self.path[1:]))
+        return polyline_length(self.path)
 
     def inspection_properties(self) -> tuple[CityInspectionProperty, ...]:
         return (

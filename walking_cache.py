@@ -41,7 +41,7 @@ class WalkingRouteCache(MutableMapping):
         if key in self._rows:
             del self[key]
         units = (len(route.points) + len(route.links)
-                 + sum(len(link.points) for link in route.links)) if route is not None else 1
+                 + (len(route.links.points) if hasattr(route.links,'offsets') else sum(len(link.points) for link in route.links))) if route is not None else 1
         if not self.max_entries or units > self.max_units:
             return
         while self._rows and (len(self._rows) >= self.max_entries
@@ -63,6 +63,9 @@ class WalkingRouteCache(MutableMapping):
 
 def walking_geometry_key(points, crossing):
     """Exact float geometry in an untracked byte buffer, with no hash collision."""
+    from numpy_storage import PackedPoints
+    if isinstance(points,PackedPoints):
+        return points.data.astype('<f8',copy=False).tobytes(order='C'),crossing
     values = array('d', chain.from_iterable(points))
     if sys.byteorder != 'little':
         values.byteswap()

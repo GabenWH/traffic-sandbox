@@ -4,6 +4,40 @@ from city_simulation import CitySimulation
 
 
 class ResidentResourceTests(unittest.TestCase):
+    def test_intermediate_economy_settlements_do_not_rescan_households(self):
+        from unittest.mock import patch
+        runtime,home,*_=neighborhood()
+        runtime.invite_household(home.id,1)
+        runtime.import_resources(home.id,'food',1)
+        with patch.object(runtime,'_consume_households',wraps=runtime._consume_households) as consume:
+            runtime.time=10;runtime._settle_economy(10)
+            runtime.time=20;runtime._settle_economy(20)
+            self.assertEqual(consume.call_count,0)
+            runtime.time=60;runtime._run_event('economy',['economy',None])
+            self.assertEqual(consume.call_count,1)
+            self.assertAlmostEqual(runtime.consumed,60*3/86400)
+
+    def test_household_consumption_batches_and_settles_before_food_arrives(self):
+        runtime,home,*_=neighborhood()
+        runtime.invite_household(home.id,1)
+        runtime.update(30)
+        self.assertEqual(runtime.unmet,0)
+        runtime.import_resources(home.id,'food',1)
+        self.assertAlmostEqual(runtime.unmet,30*3/86400)
+        runtime.update(30)
+        self.assertAlmostEqual(runtime.consumed,30*3/86400)
+        self.assertAlmostEqual(home.inventory.amounts['food'],1-30*3/86400)
+
+    def test_pending_household_consumption_survives_save(self):
+        runtime,home,*_=neighborhood()
+        runtime.invite_household(home.id,1)
+        runtime.import_resources(home.id,'food',1)
+        runtime.update(30)
+        restored=CitySimulation(roundtrip(runtime.city))
+        runtime.update(30);restored.update(30)
+        self.assertAlmostEqual(restored.consumed,60*3/86400)
+        self.assertAlmostEqual(runtime.consumed,restored.consumed)
+
     def test_shopping_reserves_stock_and_delivers_only_after_return(self):
         runtime,home,target,cafe,bakery,market=neighborhood()
         h=runtime.invite_household(target.id,1)

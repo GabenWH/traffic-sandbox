@@ -136,7 +136,7 @@ class RoutedRoadVehicle:
                 value._on_native_edit = self._on_native_edit
 
     def __post_init__(self) -> None:
-        self.total_length = polyline_length(list(self.points))
+        self.total_length = polyline_length(self.points)
         if len(self.points) < 2 or self.total_length <= 0:
             raise ValueError("A road vehicle needs a non-degenerate path")
         if not isfinite(self.speed) or self.speed <= 0:

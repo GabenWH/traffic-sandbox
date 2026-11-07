@@ -75,6 +75,22 @@ class BackgroundCityTests(unittest.TestCase):
         self.assertGreaterEqual(runtime.report()['commute_departures'],3)
         self.assertTrue(any(p.state=='home' for p in runtime.residents.values()))
 
+    def test_car_owner_walking_back_to_company_uses_departure_allowance(self):
+        from unittest.mock import patch
+        from commute_schedule import CommutePolicy
+        runtime=city_runtime(CommutePolicy(departure_window=0,starts_per_second=1,burst=1))
+        self.addCleanup(runtime.close)
+        person=worker(runtime)
+        person.state='work';person.worksite='b'
+        runtime._events.clear();runtime._scheduled.clear()
+        runtime._pending_departures[person.id]=(True,0.)
+        with patch.object(runtime.transit,'request_trip'):
+            runtime._service_departures(0)
+        self.assertEqual(person.state,'returning_company')
+        self.assertEqual(runtime._commute_departures,1)
+        self.assertFalse(runtime.fleet.admission.available(runtime.time),
+                         'A walking return by a car owner still consumes a departure slot')
+
     def test_completed_car_plan_gets_a_fair_slot_among_walking_departures(self):
         from commute_schedule import CommutePolicy
         from commute_routing import BackgroundRoutes

@@ -37,6 +37,7 @@ struct PedestrianLane {
     std::vector<double> ends;
     double length=0, crossing=-1;
     NTPoint crossing_point{};
+    int users=0;
 };
 struct Pedestrian {
     int id=0, lane=0;
@@ -94,7 +95,9 @@ public:
     std::vector<int> signal_block_counts, signal_entry_block_counts;
     std::vector<unsigned char> signal_aspects;
     std::vector<Route> routes;
+    std::vector<int> free_routes;
     std::vector<PedestrianLane> pedestrian_lanes;
+    std::vector<int> free_pedestrian_lanes;
     std::vector<Pedestrian> pedestrians;
     std::unordered_map<int,size_t> pedestrian_indices;
     std::vector<NTPedestrianState> pedestrian_output, pedestrian_completed;
@@ -664,6 +667,7 @@ public:
             }
             p.distance=next;pedestrian_position(p,lane);
             if(p.distance+1e-9>=lane.length && !p.waiting) {
+                --pedestrian_lanes[size_t(p.lane)].users;
                 pedestrian_completed.push_back(pedestrian_state(p));pedestrian_indices.erase(p.id);
                 if(i+1<pedestrians.size()){pedestrians[i]=pedestrians.back();pedestrian_indices[pedestrians[i].id]=i;}
                 pedestrians.pop_back();
@@ -1065,12 +1069,21 @@ int nt_routing_path(void* ptr,const int* sources,const double* initials,int coun
     return guarded([&] {require(ptr!=nullptr,"missing routing tree");
         return static_cast<const RoutingTree*>(ptr)->path(sources,initials,count,edges,capacity,origin,target,cost);});
 }
+int nt_routing_cost(void* ptr,const int* sources,const double* initials,int count,double* cost) {
+    return guarded([&] {require(ptr!=nullptr,"missing routing tree");int origin,target;
+        return static_cast<const RoutingTree*>(ptr)->locate(sources,initials,count,&origin,&target,cost)>=0?1:0;});
+}
 void* nt_walk_graph(const NTPoint* nodes,int n,const NTWalkEdge* edges,int m,const NTPoint* points,int count) {
     try {error.clear();return new WalkingGraph(nodes,n,edges,m,points,count);}
     catch(const std::exception& ex) {error=ex.what();return nullptr;}
     catch(...) {error="native walking allocation failure";return nullptr;}
 }
 void nt_walk_destroy(void* p) {delete static_cast<WalkingGraph*>(p);}
+int nt_walk_project(void* p,NTPoint point,NTWalkProjection* output) {
+    return guarded([&] {require(p && output,"invalid walking projection buffer");
+        auto end=static_cast<const WalkingGraph*>(p)->project(point);
+        *output={end.lane,end.distance,end.point};return 0;});
+}
 int nt_walk_query(void* p,NTPoint start,NTPoint finish,NTPoint* projections,NTWalkStep* steps,int capacity) {
     return guarded([&] {
         require(p && projections && steps && capacity>=0,"invalid walking query buffer");
@@ -1118,7 +1131,20 @@ int nt_route(void* p,const NTPoint* pts,int np,const NTSection* ss,int ns,const 
     for(auto& m:r.movements){require(m.connection>=0 && static_cast<size_t>(m.connection)<e.connections.size(),"unknown movement");check_finite(m.start);check_finite(m.end);check_finite(m.signal_start);}
     // Infer each connector's shared occupancy key from its end and section type.
     // Python sends its connection occupancy key in the explicit ABI registration below.
+    if(!e.free_routes.empty()){int id=e.free_routes.back();e.free_routes.pop_back();e.routes[size_t(id)]=std::move(r);return id;}
     e.routes.push_back(std::move(r));return static_cast<int>(e.routes.size()-1);});}
+int nt_route_release(void* p,int id){return guarded([&]{
+    auto& e=engine(p);require(id>=0 && size_t(id)<e.routes.size(),"unknown route");
+    if(e.routes[size_t(id)].length==0)return 1;
+    for(const auto& pair:e.cars)if(pair.second->s.route==id)return 0;
+    for(const auto& car:e.retired)if(car->s.route==id)return 0;
+    for(const auto& pair:e.spawn_routes)if(pair.second==id)return 0;
+    e.routes[size_t(id)]=Route{};e.free_routes.push_back(id);return 1;});}
+int nt_pedestrian_lane_release(void* p,int id){return guarded([&]{
+    auto& e=engine(p);require(id>=0 && size_t(id)<e.pedestrian_lanes.size(),"unknown pedestrian lane");
+    if(e.pedestrian_lanes[size_t(id)].length==0)return 1;
+    if(e.pedestrian_lanes[size_t(id)].users)return 0;
+    e.pedestrian_lanes[size_t(id)]=PedestrianLane{};e.free_pedestrian_lanes.push_back(id);return 1;});}
 int nt_connection_key(void* p,int connection,int key){return guarded([&]{engine(p).connection_keys.at(connection)=key;return 0;});}
 int nt_spawn(void* p,const NTSpawn* s,const char* id,const char* reason,const char* phantom){return guarded([&]{
     auto& e=engine(p);require(s!=nullptr && id!=nullptr,"missing spawn");e.insert(*s,id,reason,phantom);return 0;});}
@@ -1169,10 +1195,13 @@ int nt_pedestrian_lane(void* p,const NTPoint* points,int n,double crossing_fract
         if(!lane.points.empty()){lane.length+=std::hypot(points[i].x-lane.points.back().x,points[i].y-lane.points.back().y);lane.ends.push_back(lane.length);}lane.points.push_back(points[i]);}}
     require(lane.length>0,"degenerate pedestrian lane");
     if(crossing_fraction>=0){lane.crossing=lane.length*crossing_fraction;Pedestrian p{};p.distance=lane.crossing;Engine::pedestrian_position(p,lane);lane.crossing_point=p.position;}
+    if(!e.free_pedestrian_lanes.empty()){int id=e.free_pedestrian_lanes.back();e.free_pedestrian_lanes.pop_back();e.pedestrian_lanes[size_t(id)]=std::move(lane);return id;}
     e.pedestrian_lanes.push_back(std::move(lane));return int(e.pedestrian_lanes.size()-1);});}
 int nt_pedestrian_spawn(void* p,int id,int lane,double speed){return guarded([&]{auto& e=engine(p);check_finite(speed);
     require(id>=0 && lane>=0 && size_t(lane)<e.pedestrian_lanes.size() && speed>0,"invalid pedestrian spawn");require(!e.pedestrian_indices.count(id),"duplicate pedestrian ID");
+    require(e.pedestrian_lanes[size_t(lane)].length>0,"released pedestrian lane");
     Pedestrian walker{};walker.id=id;walker.lane=lane;walker.speed=speed;walker.position=e.pedestrian_lanes[size_t(lane)].points.front();
+    ++e.pedestrian_lanes[size_t(lane)].users;
     e.pedestrian_indices[id]=e.pedestrians.size();e.pedestrians.push_back(walker);return 0;});}
 int nt_pedestrian_place(void* ptr,int id,double distance,int waiting){return guarded([&]{
     auto& e=engine(ptr);check_finite(distance);auto found=e.pedestrian_indices.find(id);

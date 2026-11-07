@@ -1,5 +1,6 @@
 """Physical vehicle records outlive their transient native road actors."""
 from collections import Counter
+from retention import BoundedCache
 from dataclasses import dataclass, field
 from math import isfinite,dist,hypot
 from types import SimpleNamespace
@@ -63,7 +64,7 @@ class _VehicleIndex:
 class PersistentFleet:
     def __init__(self, transit, sites):
         self.transit, self.sites = transit, sites
-        self.vehicles, self.routes = {}, {}
+        self.vehicles, self.routes = {}, BoundedCache()
         self.arrivals = []
         self.routing=None
         self.background=False
@@ -469,7 +470,7 @@ class PersistentFleet:
             if road_stop is None:
                 self.last_dispatch_status = 'inaccessible'
                 return False
-        length = polyline_length(list(vehicle_route_points(route)))
+        length = polyline_length(vehicle_route_points(route))
         if v.fuel_liters + 1e-9 < length/5280*v.liters_per_mile:
             self.last_dispatch_status = 'no_fuel'
             return False

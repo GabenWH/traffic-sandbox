@@ -119,7 +119,7 @@ class ParkingTrips:
             seen.add(key)
             endpoint = r.fleet.sites[sid]['walk_point']
             try:
-                cost = r.transit.journey_path(endpoint, point, allow_bus=False).cost
+                cost = r.transit.walking_cost(endpoint, point)
             except ValueError:
                 yield None
                 continue
@@ -127,7 +127,9 @@ class ParkingTrips:
 
     def _walk_cost(self, origin, destination, *, allow_bus=False):
         try:
-            return self.runtime.transit.journey_path(origin, destination, allow_bus=allow_bus).cost
+            transit = self.runtime.transit
+            return (transit.journey_path(origin, destination).cost if allow_bus else
+                    transit.walking_cost(origin, destination))
         except ValueError:
             return float('inf')
 
@@ -315,6 +317,7 @@ class ParkingTrips:
     def _remove_wait(self, pid):
         wait = self.waits.pop(pid, None)
         if wait is not None:
+            self.runtime.cancel_event('trip_deadline:'+str(wait['serial']))
             for key in wait['lots']:
                 queue = self._lot_waiters.get(tuple(key))
                 if queue is not None:
@@ -330,7 +333,7 @@ class ParkingTrips:
             self._capacity_inflight.pop(key, None)
             self._dirty_lots.add(key)
 
-    def defer(self, pid, kind, returning=False):
+    def defer(self, pid, kind, returning=False, *, reason=None):
         r = self.runtime
         person = r.residents[pid]
         plan = self.plans.get(pid)
@@ -339,11 +342,17 @@ class ParkingTrips:
         since = previous['since'] if previous else (plan.get('waiting_since',r.time) if plan else r.time)
         self.resolved(pid)
         self._serial += 1
-        reason = r.fleet.last_dispatch_status or 'inaccessible'
+        reason = reason or r.fleet.last_dispatch_status or 'inaccessible'
         lots = []
+        pending = False
         if reason == 'full':
-            lots = list(dict.fromkeys(r.fleet._lot_key(sid) for sid in self.options(destination)
-                                     if r.fleet.sites[sid]['road_position'] is not None))
+            for sid in self.options(destination, bounded=r._inside_update):
+                if sid is _OPTIONS_PENDING:
+                    pending = True
+                    break
+                if r.fleet.sites[sid]['road_position'] is not None:
+                    lots.append(r.fleet._lot_key(sid))
+            lots = list(dict.fromkeys(lots))
         deadline = (plan['deadline'] if plan and 'deadline' in plan else
                     int(r.time//DAY)*DAY+r._shift_end(person) if kind == 'commute' and not returning else r.time+DAY)
         expired = bool(plan and plan.get('unmet'))
@@ -352,6 +361,12 @@ class ParkingTrips:
         if plan is not None:
             plan['waiting_since']=since
         self.waits[pid] = wait
+        if pending:
+            # An incomplete candidate list cannot become an idle capacity wait:
+            # retry the trip under the same quantum budget until it is complete.
+            self._wake(pid)
+            if kind == 'commute':r._pending_departures[pid]=(returning,r.time+.25)
+            return
         for key in lots:
             self._lot_waiters[key][pid] = None
         r._pending_departures.pop(pid, None)
@@ -489,6 +504,13 @@ class ParkingTrips:
                 raise ValueError('Invalid saved blocked trip')
             wait['lots'] = [tuple(key) for key in wait['lots']]
         self.plans, self.waits = plans, waits
+        # Old saves may contain deadlines for waits which have since resolved.
+        for event in tuple(r._events):
+            if event[2]!='trip_deadline':continue
+            pid,serial=event[3][1]
+            wait=waits.get(pid)
+            if wait is None or wait['serial']!=serial or wait.get('expired'):
+                r.cancel_event(event[3][0])
         self.preferences = preferences
         self.counts = Counter(data.get('counts', {}))
         self.last_unmet = {int(pid):deepcopy(outcome) for pid,outcome in data.get('last_unmet',{}).items()}
