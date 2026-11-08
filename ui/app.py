@@ -48,7 +48,7 @@ class FreewaySimulator(
 ):
     """Coordinate models, windows, tools, rendering, and simulation ticks."""
 
-    def __init__(self, root: tk.Tk, *, traffic_engine: str = "cpp") -> None:
+    def __init__(self, root: tk.Tk, *, traffic_engine: str = "cpp", viewer: str = "panda") -> None:
         self.root = root
         root.title("Freeway Simulator")
         root.report_callback_exception = self.report_callback_exception
@@ -80,6 +80,9 @@ class FreewaySimulator(
         self._pan_anchor: tuple[int, int] | None = None
         self.view3d_active = False
         self.view3d = None
+        if viewer not in ('panda','tk'):
+            raise ValueError('Unknown viewer')
+        self.native_view_active = viewer == 'panda'
         self._saved_3d_camera_state: dict[str, object] | None = None
 
         self.analytics_window: tk.Toplevel | None = None
@@ -132,6 +135,20 @@ class FreewaySimulator(
             highlightthickness=0, bg="#e83ccb",
         )
         self.canvas.pack(fill="both", expand=True)
+        if self.native_view_active:
+            from .view3d import PandaWorldView
+            from .native_canvas import NativeCanvas
+            self._tk_canvas = self.canvas
+            self.view3d = PandaWorldView(self.viewport_shell,mode='map')
+            self.view3d.map_view = self.viewport
+            self.view3d.set_callbacks(on_click=self._handle_3d_click,
+                on_right_click=self._handle_native_right_click,
+                on_motion=self._handle_3d_motion,on_key=self._handle_3d_key)
+            self._tk_canvas.pack_forget()
+            self.sidebar.pack(side='right',fill='y')
+            self.view3d.frame.pack(side='left',fill='both',expand=True)
+            self.canvas = NativeCanvas(self._tk_canvas,self.view3d)
+            self.view3d.overlay_canvas = self.canvas
         self._bind_canvas_events()
         self.root.after_idle(self.draw_scene)
         self.create_debug_window()
@@ -209,6 +226,13 @@ class FreewaySimulator(
         """Swap the map canvas for a 3D road view in the same Tk window."""
         if self.active_tool is not None:
             self.deactivate_tool(self.active_tool)
+        if getattr(self,'native_view_active',False):
+            self.view3d_active = not self.view3d_active
+            self.view3d.set_mode('perspective' if self.view3d_active else 'map')
+            self.view_button.configure(text='2D map' if self.view3d_active else '3D roads')
+            self.camera_label.configure(text=('Orbit: Alt+middle-drag · Pan: middle-drag · Zoom: wheel'
+                if self.view3d_active else 'Pan: middle-drag · Zoom: wheel'))
+            return
         if self.view3d_active:
             assert self.view3d is not None
             self.view3d.frame.pack_forget()
@@ -232,6 +256,7 @@ class FreewaySimulator(
             self.view3d = PandaWorldView(self.viewport_shell)
             self.view3d.set_callbacks(
                 on_click=self._handle_3d_click,
+                on_right_click=self._handle_native_right_click,
                 on_motion=self._handle_3d_motion,
                 on_key=self._handle_3d_key,
             )
@@ -287,6 +312,11 @@ class FreewaySimulator(
             return self.view3d.point_at_screen(event.x, event.y, elevation)
         return self.screen_to_world((event.x, event.y))
 
+    def world_to_screen(self, point):
+        if getattr(self,'native_view_active',False) and self.view3d_active:
+            return self.view3d.screen_position(point,0) or (-1e9,-1e9)
+        return ViewportMixin.world_to_screen(self,point)
+
     def screen_to_world(self, point: tuple[float, float]) -> tuple[float, float]:
         """Use the active view's camera when a shared tool receives a click."""
         if self.view3d_active and self.view3d is not None:
@@ -310,24 +340,23 @@ class FreewaySimulator(
         if self.active_tool is not None:
             self.handle_tool_motion(SimpleNamespace(x=x, y=y))
 
+    def _handle_native_right_click(self,x,y):
+        frame=self.view3d.frame
+        self.show_lane_menu(SimpleNamespace(x=x,y=y,x_root=frame.winfo_rootx()+x,
+                                            y_root=frame.winfo_rooty()+y))
+
     def _handle_3d_key(self, key: str) -> None:
-        from ui_tools.tools.road_tool import RoadTool
-        if not isinstance(self.active_tool, RoadTool):
-            return
-        if key == "page_up":
-            self.active_tool.adjust_elevation(1)
-        elif key == "page_down":
-            self.active_tool.adjust_elevation(-1)
-        elif key == "enter":
-            self.active_tool.finish()
-        elif key == "escape":
-            self.active_tool.cancel()
-        self.active_tool.refresh()
+        event={'page_up':'<Prior>','page_down':'<Next>','enter':'<Return>','escape':'<Escape>'}.get(key)
+        if event:self.root.event_generate(event)
 
     def redraw_world(self) -> None:
         FreewaySimulator._sync_road_network(self)
         if getattr(self,"city_simulation",None) is not None:
             self.city_simulation.sync_buildings()
+        if getattr(self,'native_view_active',False):
+            self.view3d.show_city(self.city_map)
+            self.view3d._apply_camera()
+            return
         RendererMixin.redraw_world(self)
         if self.view3d_active and self.view3d is not None:
             self.view3d.show_city(self.city_map)
@@ -337,7 +366,11 @@ class FreewaySimulator(
             self.view3d.orbit = OrbitCamera(
                 (self.city_map.width / 2, self.city_map.height / 2, 0),
             )
-            self.view3d.show_city(self.city_map)
+            self.view3d._apply_camera()
+            return
+        if getattr(self,'native_view_active',False):
+            self.camera_x,self.camera_y=city_builder_viewport_origin(self.city_map.height)
+            self.camera_zoom=1.;self.view3d._apply_camera()
             return
         ViewportMixin.reset_camera(self)
 
@@ -364,6 +397,8 @@ class FreewaySimulator(
                 runtime.update(elapsed_seconds*self.simulation_speed)
             if runtime.scene_revision != revision:
                 self.redraw_world()
+            if getattr(self,'native_view_active',False):
+                return
             self.draw_road_vehicles()
             self.draw_city_activity()
             return
@@ -416,7 +451,7 @@ class FreewaySimulator(
                     self.canvas.delete(car.item)
                 for item in car.signal_items:
                     self.canvas.delete(item)
-        if self.view3d_active and self.view3d is not None:
+        if (self.view3d_active or getattr(self,'native_view_active',False)) and self.view3d is not None:
             self.view3d.update_road_vehicles(self.road_vehicles)
             self.view3d.step()
         self.canvas.tag_raise(ROAD_VEHICLE_CAR_TAG)
@@ -428,6 +463,8 @@ class FreewaySimulator(
             self.inspector_tool.refresh()
         self.draw_merge_debug()
         if now - self.last_dashboard_refresh >= 1.0:
+            if getattr(self,'native_view_active',False):
+                self.draw_native_hud()
             self.draw_analytics()
             self.draw_recent_changes()
             self.last_dashboard_refresh = now
@@ -435,4 +472,5 @@ class FreewaySimulator(
             self.draw_performance_graph()
             self.draw_simulation_performance_graph()
             self.last_performance_refresh = now
-        self.root.after(16, self.tick)
+        remaining_ms=max(1,round(1000*(1/60-(time.perf_counter()-now))))
+        self.root.after(remaining_ms, self.tick)

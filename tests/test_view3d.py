@@ -47,8 +47,7 @@ class EmbeddedPandaTests(unittest.TestCase):
             road = city.add_road([(2400, 1750), (2600, 1750)])
             view.show_city(city)
             view.step()
-            self.assertFalse(view.base.render.find("**/terrain").isEmpty())
-            self.assertFalse(view.base.render.find(f"**/road:{road.id}").isEmpty())
+            self.assertGreater(view.native_scene.stats()["static_triangles"], 2)
             center = view.point_at_screen(
                 view.frame.winfo_width() / 2,
                 view.frame.winfo_height() / 2,
@@ -66,9 +65,9 @@ class EmbeddedPandaTests(unittest.TestCase):
                 (road.centerline[0], road.elevations[0]),
             )
             view.show_road_preview([(2400, 1750)], [0], (2600, 1750), 20)
-            self.assertFalse(view.base.render.find("**/road-preview").isEmpty())
+            self.assertGreater(view.preview_scene.stats()["static_lines"], 0)
             view.clear_preview()
-            self.assertTrue(view.base.render.find("**/road-preview").isEmpty())
+            self.assertEqual(view.preview_scene.stats()["static_lines"], 0)
             keys: list[str] = []
             view.set_callbacks(on_key=keys.append)
             view.base.messenger.send("page_up")

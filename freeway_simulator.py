@@ -10,13 +10,15 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--traffic-engine', choices=('cpp',), default='cpp',
                         help='Constructed-road vehicle simulation engine')
+    parser.add_argument('--viewer',choices=('panda','tk'),default='panda',
+                        help='Native shared Panda viewer (default) or legacy Tk map')
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     options = parse_args(argv)
     app = tk.Tk()
-    FreewaySimulator(app, traffic_engine=options.traffic_engine)
+    FreewaySimulator(app, traffic_engine=options.traffic_engine,viewer=options.viewer)
     app.mainloop()
 
 

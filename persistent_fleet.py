@@ -82,6 +82,7 @@ class PersistentFleet:
         self._parking_changes = set()
         self._lane_revision = None
         self._lanes_by_id = {}
+        self._presentation_revision = 0
 
     def add(self, vehicle):
         if not vehicle.id or vehicle.id in self.vehicles or vehicle.site not in self.sites:
@@ -175,6 +176,7 @@ class PersistentFleet:
 
     def vehicle_changed(self, vehicle_id):
         """Refresh one changed record; bulk editors may call rebuild_indexes()."""
+        self._presentation_revision += 1
         self._dirty_vehicles.discard(vehicle_id)
         previous = self._indexed.get(vehicle_id)
         vehicle = self.vehicles.get(vehicle_id)
@@ -198,6 +200,7 @@ class PersistentFleet:
 
     def rebuild_indexes(self):
         """Rebuild derived state after loading, editing sites, or road rebinding."""
+        self._presentation_revision += 1
         previous = self._indexed.copy()
         self._indexed.clear()
         self._driving.clear()

@@ -521,7 +521,7 @@ class InspectTool(CanvasTool):
         # coordinates, so panning and zooming never move the UI overlay.
         parent = (
             self.host.sidebar
-            if getattr(self.host, "view3d_active", False)
+            if getattr(self.host, "native_view_active", False) or getattr(self.host, "view3d_active", False)
             else self.host.canvas
         )
         self.panel = tk.Frame(

@@ -129,6 +129,9 @@ class RoutedRoadVehicle:
                 callback()
         previous_brain = self.__dict__.get('brain') if name == 'brain' else None
         object.__setattr__(self, name, value)
+        if name in ('appearance','color','length','width','route','points'):
+            visual_changed=self.__dict__.get('_on_visual_edit')
+            if visual_changed is not None:visual_changed()
         if name == 'brain':
             if previous_brain is not None and previous_brain is not value:
                 previous_brain._on_native_edit = None
@@ -313,6 +316,7 @@ class RoadVehicleSimulation:
     update_mode: str = "cpp"
     native_output_mode: str = "copy"
     _native_controller: object = field(default=None, init=False, repr=False, compare=False)
+    _scene_metadata_revision: int = field(default=0, init=False, repr=False)
 
     colors = ("#ff5b72", "#37e6ff", "#f7d154", "#7fea8c", "#c98cff")
 
@@ -369,6 +373,10 @@ class RoadVehicleSimulation:
     def _watch_native_edits(self, car):
         callback = partial(self._native_input_changed, car)
         car._on_native_edit = car.brain._on_native_edit = callback
+        car._on_visual_edit = self._visual_changed
+
+    def _visual_changed(self):
+        self._scene_metadata_revision += 1
 
     def _native_input_changed(self, car=None):
         controller = self._native_controller

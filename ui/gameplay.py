@@ -69,6 +69,9 @@ class CityGameplayMixin:
         except ValueError as error:messagebox.showerror('Refuel',str(error),parent=self.root)
 
     def draw_city_activity(self):
+        if getattr(self,'native_view_active',False):
+            self.draw_native_hud()
+            return
         runtime=self.city_simulation
         self.canvas.delete('town-activity')
         states=runtime.transit.engine.pedestrian_states()
@@ -85,8 +88,14 @@ class CityGameplayMixin:
             f'{int(runtime.time%DAY//3600):02d}:{int(runtime.time%3600//60):02d}   '
             f'{len(runtime.residents)} people · {len(runtime.households)} households'),
             fill='#243545',tags='town-activity')
-        if self.view3d_active and self.view3d is not None:
-            self.view3d.update_pedestrians(states)
+
+    def draw_native_hud(self):
+        runtime=self.city_simulation
+        self.canvas.delete('town-activity')
+        self.canvas.create_text(12,42,anchor='nw',text=(f'Day {int(runtime.time//DAY)+1}  '
+            f'{int(runtime.time%DAY//3600):02d}:{int(runtime.time%3600//60):02d}   '
+            f'{len(runtime.residents)} people · {len(runtime.households)} households'),
+            fill='#243545',tags='town-activity')
 
     def draw_passenger_bus(self,bus_actor):
         x,y=bus_actor.position;hx,hy=bus_actor.heading

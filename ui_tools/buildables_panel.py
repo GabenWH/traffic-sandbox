@@ -41,7 +41,7 @@ class BuildablesPanel:
             self._render_selection()
             return
 
-        docked = bool(getattr(self.host, "view3d_active", False))
+        docked = bool(getattr(self.host, "native_view_active", False) or getattr(self.host, "view3d_active", False))
         self.panel = tk.Frame(
             self.host.sidebar if docked else self.host.canvas,
             bg="#e8edf2",

@@ -157,43 +157,17 @@ class Scene3DTests(unittest.TestCase):
         self.assertTrue(crew_node.isEmpty())
         self.assertEqual(nodes, {})
 
-    def test_city_trees_appear_at_existing_positions_in_3d(self) -> None:
-        from panda3d.core import NodePath
-        from city import CityMap, Terrain
-        from ui.scene3d import SceneRegistry, TerrainFeature, TreeFeature, draw_terrain, draw_tree
-        from ui.view3d import PandaWorldView
-
-        view = PandaWorldView.__new__(PandaWorldView)
-        view.base = SimpleNamespace(setBackgroundColor=lambda *_color: None)
-        view.city = None
-        view.orbit = type("Orbit", (), {"target": (0, 0, 0)})()
-        view.scene = SceneRegistry(NodePath("city"))
-        view.scene.register(TerrainFeature, draw_terrain)
-        view.scene.register(TreeFeature, draw_tree)
-        view._apply_camera = lambda: None
-        city = CityMap(terrain=Terrain(trees=[
-            (100, 200), (300, 400), (500, 600), (700, 800),
-        ]))
-
-        view.show_city(city)
-
-        trees = view.scene.root.findAllMatches("**/tree:*")
-        self.assertEqual(trees.getNumPaths(), 4)
-        by_position = {
-            (tree.getX(), tree.getY()): (
-                tree.getName(), tree.findAllMatches("**/+GeomNode").getNumPaths(),
-            )
-            for tree in trees
-        }
-        self.assertEqual(by_position, {
-            (100, 200): ("tree:redwood", 10),
-            (300, 400): ("tree:pine", 2),
-            (500, 600): ("tree:pine", 2),
-            (700, 800): ("tree:pine", 2),
-        })
+    def test_city_trees_appear_at_existing_positions_in_3d(self):
+        import numpy as np
+        from city import CityMap,Terrain
+        from ui.scene_buffers import compile_city
+        city=CityMap(terrain=Terrain(trees=[(100,200),(300,400),(500,600),(700,800)]))
+        triangles,_=compile_city(city)
+        for apex in [(100,200,55),(300,400,30),(500,600,30),(700,800,30)]:
+            self.assertTrue(np.any(np.all(np.isclose(triangles[:,:3],apex),axis=1)))
         city.terrain.trees.pop()
-        view.show_city(city)
-        self.assertEqual(view.scene.root.findAllMatches("**/tree:*").getNumPaths(), 3)
+        without,_=compile_city(city)
+        self.assertEqual(len(triangles)-len(without),144)
 
     def test_registered_road_produces_visible_mesh_node(self) -> None:
         from panda3d.core import NodePath
@@ -210,93 +184,49 @@ class Scene3DTests(unittest.TestCase):
         self.assertFalse(node.isEmpty())
         self.assertGreater(node.findAllMatches("**/+GeomNode").getNumPaths(), 0)
 
-    def test_city_scene_draws_a_marker_for_each_regional_land_port(self) -> None:
+    def test_city_scene_draws_a_marker_for_each_regional_land_port(self):
+        import numpy as np
+        from city import CityMap,Terrain
+        from ui.scene_buffers import compile_city
+        city=CityMap(width=500,height=300,terrain=Terrain(trees=[]))
+        city.add_road([(0,100),(300,100)])
+        _,lines=compile_city(city)
+        self.assertTrue(np.any(np.all(np.isclose(lines[:,:3],(12,86,34)),axis=1)))
+        self.assertTrue(np.any(np.all(np.isclose(lines[:,:3],(12,114,34)),axis=1)))
+
+    def test_new_world_3d_camera_targets_the_regional_connector(self):
         from panda3d.core import NodePath
-        from city import CityMap, Terrain
-        from ui.scene3d import (
-            RegionalLandPortFeature, SceneRegistry, TerrainFeature,
-            draw_regional_land_port, draw_terrain,
-        )
-        from ui.view3d import PandaWorldView
-
-        view = PandaWorldView.__new__(PandaWorldView)
-        view.base = SimpleNamespace(setBackgroundColor=lambda *_color: None)
-        view.city = None
-        view.orbit = type("Orbit", (), {"target": (0, 0, 0)})()
-        view.scene = SceneRegistry(NodePath("city"))
-        view.scene.register(TerrainFeature, draw_terrain)
-        view.scene.register(RegionalLandPortFeature, draw_regional_land_port)
-        view._apply_camera = lambda: None
-        city = CityMap(width=500, height=300, terrain=Terrain(trees=[]))
-        city.add_road([(0, 100), (300, 100)])
-
-        view.show_city(city)
-
-        marker = view.scene.root.find("**/regional-land-port:0")
-        self.assertFalse(marker.isEmpty())
-        self.assertEqual((marker.getX(), marker.getY()), (0, 100))
-        self.assertGreater(marker.findAllMatches("**/+GeomNode").getNumPaths(), 0)
-
-    def test_new_world_3d_camera_targets_the_regional_connector(self) -> None:
-        from panda3d.core import NodePath
-        from city import CityMap, Terrain
+        from city import CityMap,Terrain
         from land_ports import ensure_western_land_port
-        from ui.scene3d import SceneRegistry, TerrainFeature, draw_terrain
+        from native_viewer import NativeScene
         from ui.view3d import PandaWorldView
+        city=CityMap(terrain=Terrain(trees=[]));ensure_western_land_port(city)
+        view=object.__new__(PandaWorldView)
+        view.base=SimpleNamespace(setBackgroundColor=lambda *args:None)
+        view.city=None;view.orbit=SimpleNamespace(target=(0,0,0))
+        view.native_scene=NativeScene(NodePath('world'))
+        view.presenter=SimpleNamespace(invalidate=lambda:None);view._apply_camera=lambda:None
+        try:
+            view.show_city(city)
+            self.assertEqual(view.orbit.target,(250.,1750.,0))
+        finally:view.native_scene.close()
 
-        city = CityMap(terrain=Terrain(trees=[]))
-        ensure_western_land_port(city)
-        view = PandaWorldView.__new__(PandaWorldView)
-        view.base = SimpleNamespace(setBackgroundColor=lambda *_color: None)
-        view.city = None
-        view.orbit = type("Orbit", (), {"target": (0, 0, 0)})()
-        view.scene = SceneRegistry(NodePath("city"))
-        view.scene.register(TerrainFeature, draw_terrain)
-        view._apply_camera = lambda: None
-
-        view.show_city(city)
-
-        self.assertEqual(view.orbit.target, (250.0, 1750.0, 0))
-
-    def test_city_scene_draws_buildings_with_construction_scaffolding(self) -> None:
-        from panda3d.core import NodePath
-        from city import Building, CityMap, Parcel, Terrain
-        from models import BuildablePhase, WorkType
-        from ui.scene3d import (
-            SceneRegistry, TerrainFeature, draw_building, draw_terrain,
-        )
-        from ui.view3d import PandaWorldView
-
-        view = PandaWorldView.__new__(PandaWorldView)
-        view.base = SimpleNamespace(setBackgroundColor=lambda *_color: None)
-        view.city = None
-        view.orbit = type("Orbit", (), {"target": (0, 0, 0)})()
-        view.scene = SceneRegistry(NodePath("city"))
-        view.scene.register(TerrainFeature, draw_terrain)
-        view.scene.register(Building, draw_building)
-        view._apply_camera = lambda: None
-        city = CityMap(terrain=Terrain(trees=[]))
-        building = Building(
-            "House", Parcel(100, 120, 40, 30),
-            phase=BuildablePhase.UNDER_CONSTRUCTION,
-        )
-        building.begin_work(WorkType.CONSTRUCTION, 100)
-        building.perform_work(40)
+    def test_city_scene_draws_buildings_with_construction_scaffolding(self):
+        import numpy as np
+        from city import Building,CityMap,Parcel,Terrain
+        from models import BuildablePhase,WorkType
+        from ui.scene_buffers import compile_city
+        city=CityMap(terrain=Terrain(trees=[]))
+        building=Building('House',Parcel(100,120,40,30),phase=BuildablePhase.UNDER_CONSTRUCTION)
+        building.begin_work(WorkType.CONSTRUCTION,100);building.perform_work(40)
         city.buildings.append(building)
-
-        view.show_city(city)
-
-        node = view.scene.root.find(f"**/building:{building.id}")
-        self.assertFalse(node.isEmpty())
-        self.assertFalse(node.find("**/building-body").isEmpty())
-        self.assertFalse(node.find("**/construction-scaffold").isEmpty())
-
+        unfinished,lines=compile_city(city)
+        orange=np.asarray((1.,176/255,0.))
+        self.assertTrue(np.any(np.all(np.isclose(lines[:,3:6],orange),axis=1)))
         building.perform_work(60)
-        view.show_city(city)
-        completed = view.scene.root.find(f"**/building:{building.id}")
-        self.assertTrue(completed.find("**/construction-scaffold").isEmpty())
-        self.assertFalse(completed.find("**/building-roof").isEmpty())
-        self.assertFalse(completed.find("**/building-windows").isEmpty())
+        finished,lines=compile_city(city)
+        self.assertFalse(np.any(np.all(np.isclose(lines[:,3:6],orange),axis=1)))
+        self.assertGreater(float(finished[:,2].max()),float(unfinished[:,2].max()))
 
     def test_roundabout_draws_colored_outer_band(self) -> None:
         from panda3d.core import NodePath

@@ -61,6 +61,9 @@ class RendererMixin:
     """Render model state using the host's canvas and viewport API."""
 
     def draw_scene(self) -> None:
+        if getattr(self,'native_view_active',False):
+            self.view3d.show_city(self.city_map)
+            return
         """Replace the static world layer for the current camera view."""
         canvas = self.canvas
         canvas.delete(STATIC_TAG)
@@ -261,6 +264,7 @@ class RendererMixin:
 
     def draw_road_vehicles(self) -> None:
         """Refresh every city road user through the same vehicle collection."""
+        if getattr(self,'native_view_active',False):return
         self.canvas.delete(CONSTRUCTION_TRUCK_TAG)
         self._draw_parked_vehicles()
         road_vehicles = getattr(self, "road_vehicles", None)
