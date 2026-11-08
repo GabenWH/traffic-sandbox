@@ -5,6 +5,7 @@ from __future__ import annotations
 import traceback
 import tkinter as tk
 from collections.abc import Iterable, Sequence
+from itertools import islice
 
 from config import DEFAULT_SPEED_LIMIT_MPH
 from simulation_profiler import SimulationTickSample
@@ -13,7 +14,7 @@ from units import mph_to_display, speed_unit
 from .base import window_exists
 
 
-def routed_car_debug_lines(cars: list[object]) -> list[str]:
+def routed_car_debug_lines(cars: Iterable[object]) -> list[str]:
     """Format compact, live decision state for constructed-road cars."""
     lines: list[str] = []
     for car in cars:
@@ -704,12 +705,13 @@ class DashboardMixin:
         if trace_summary is not None:
             lines.extend(("", trace_summary))
         road_vehicles = getattr(self, "road_vehicles", self.test_traffic)
-        routed_lines = routed_car_debug_lines(
+        cars = (
             road_vehicles.vehicles if hasattr(road_vehicles, "vehicles")
             else road_vehicles.cars
         )
+        routed_lines = routed_car_debug_lines(islice(cars, 8))
         if routed_lines:
-            lines.extend(("", "ROUTED CAR BRAINS:", *routed_lines[:8]))
+            lines.extend(("", "ROUTED CAR BRAINS:", *routed_lines))
         if self.recent_errors:
             lines.extend(("", "PYTHON ERRORS:", *self.recent_errors[-1].splitlines()[-3:]))
         self.debug_canvas.create_text(

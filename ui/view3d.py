@@ -41,6 +41,7 @@ class PandaWorldView:
         self._orthographic=OrthographicLens();self._orthographic.setNearFar(1,40000)
         self._perspective=PerspectiveLens();self._perspective.setNearFar(1,20000)
         self.on_click=self.on_right_click=self.on_motion=self.on_key=None
+        self.on_camera_change=self.on_before_render=None;self._camera_stamp=None
         self._last_pointer=None;self._drag_mode=None
         self.base.accept('mouse1',self._click)
         self.base.accept('mouse3',self._right_click)
@@ -51,12 +52,19 @@ class PandaWorldView:
         self.base.accept('wheel_down',lambda:self._wheel(ZOOM_STEP))
         for key in ('page_up','page_down','enter','escape'):self.base.accept(key,self._emit_key,[key])
         self.frame.bind('<Configure>',self._resize)
+        self._presentation_task_name=f'native-viewer-{id(self)}'
+        self.base.taskMgr.add(self._before_render_task,self._presentation_task_name,sort=49)
         if self.base.win is not None:self._apply_camera()
 
-    def set_callbacks(self,*,on_click=None,on_right_click=None,on_motion=None,on_key=None):
+    def set_callbacks(self,*,on_click=None,on_right_click=None,on_motion=None,on_key=None,
+                      on_camera_change=None,on_before_render=None):
         self.on_click,self.on_right_click,self.on_motion,self.on_key=on_click,on_right_click,on_motion,on_key
+        self.on_camera_change,self.on_before_render=on_camera_change,on_before_render
 
     def _open(self):
+        # Tk and Panda use separate X connections. Realize/flush the parent
+        # before Panda creates its child (startup now opens the native view).
+        self.frame.update_idletasks()
         properties=WindowProperties()
         properties.setParentWindow(NativeWindowHandle.makeInt(self.frame.winfo_id()))
         properties.setOrigin(0,0)
@@ -73,9 +81,13 @@ class PandaWorldView:
 
     def step(self):
         if self.base.win is None:self._open()
-        self._process_pointer()
-        if self.overlay_canvas is not None:self.overlay_canvas.flush()
         self.base.taskMgr.step()
+
+    def _before_render_task(self,task):
+        self._process_pointer()
+        if self.on_before_render is not None:self.on_before_render()
+        if self.overlay_canvas is not None:self.overlay_canvas.flush()
+        return task.cont
 
     def _pointer(self):
         watcher=self.base.mouseWatcherNode
@@ -160,6 +172,12 @@ class PandaWorldView:
             self.base.camera.lookAt(Point3(*map_to_panda(self.orbit.target)),up)
             self.native_scene.set_bounds(None)
         self.base.cam.node().setLens(lens);self.base.camLens=lens
+        stamp=(self.mode,width,height,self.map_view.x,self.map_view.y,self.map_view.zoom,
+               self.orbit.target,self.orbit.yaw,self.orbit.pitch,self.orbit.distance)
+        if stamp!=getattr(self,'_camera_stamp',None):
+            self._camera_stamp=stamp
+            callback=getattr(self,'on_camera_change',None)
+            if callback is not None:callback()
 
     def point_at_screen(self,screen_x,screen_y,elevation):
         if self.base.win is None:return None
@@ -197,5 +215,10 @@ class PandaWorldView:
         buf=GeometryBuffer();self.preview_scene.replace_static(*buf.arrays())
 
     def close(self):
+        if getattr(self,'_closed',False):return
+        self._closed=True
+        self.base.taskMgr.remove(self._presentation_task_name)
         self.native_scene.close();self.overlay_scene.close();self.preview_scene.close()
+        if self.base.win is not None:self.base.closeWindow(self.base.win)
+        self.base.graphicsEngine.renderFrame();self.base.graphicsEngine.syncFrame()
         self.base.destroy()

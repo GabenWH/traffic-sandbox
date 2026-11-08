@@ -67,7 +67,9 @@ std::vector<NVVertex> nv_model(const NVVisual& v){
             for(float x:{-.41f,.41f})box(out,x,-.15,.49,.035,.58,.2,.66,.69,.71);
             if(v.load>0){float h=(v.cargo==1?.06f:.08f)*std::max(.25f,v.load);
                 float r=v.cargo==1?.74f:.55f,g=v.cargo==1?.54f:.58f,b=v.cargo==1?.34f:.62f;
-                for(float x:{-.24f,0.f,.24f})box(out,x,-.15,.47+h/2,.13,.42*std::max(.25f,v.load),h,r,g,b);
+                if(v.cargo==2){
+                    for(float x:{-.20f,.20f})for(float y:{-.27f,-.06f})box(out,x,y,.47+h/2,.22,.14,h,r,g,b);
+                }else for(float x:{-.24f,0.f,.24f})box(out,x,-.15,.47+h/2,.13,.42*std::max(.25f,v.load),h,r,g,b);
             }
         }else{
             box(out,0,-.15,.55,.86,.58,.52,.93,.88,.78);
@@ -77,6 +79,8 @@ std::vector<NVVertex> nv_model(const NVVisual& v){
         box(out,0,.28,.58,.84,.36,.58,1,1,1,0);
         box(out,0,.465,.61,.62,.025,.25,.10,.17,.22);
         for(float x:{-.29f,.29f})box(out,x,.48,.42,.16,.025,.10,1,1,1,3);
+        box(out,-.50,.48,.42,.08,.025,.10,1,1,1,4);
+        box(out,.50,.48,.42,.08,.025,.10,1,1,1,5);
     }
     return out;
 }
@@ -118,6 +122,15 @@ void ViewerScene::upload(std::map<std::array<int,6>,NVBatch>& groups,int kind){
         if(!n){b.node.hide();continue;}
         auto handle=b.data->modify_array(1)->modify_handle();handle->set_num_rows(n);
         std::memcpy(handle->get_write_pointer(),b.instances.data(),b.instances.size()*sizeof(NVInstance));
+        if(&groups==&parked_batches){
+            LPoint3 low(1e30f,1e30f,1e30f),high(-1e30f,-1e30f,-1e30f);
+            for(const auto& in:b.instances){
+                float radius=std::max(in.heading_size[1],in.heading_size[2]);
+                low.set(std::min(low[0],in.pose[0]-radius),std::min(low[1],in.pose[1]-radius),std::min(low[2],in.pose[2]));
+                high.set(std::max(high[0],in.pose[0]+radius),std::max(high[1],in.pose[1]+radius),std::max(high[2],in.pose[2]+in.heading_size[3]));
+            }
+            b.node.node()->set_bounds(new BoundingBox(low,high));
+        }
         b.node.set_instance_count(n);b.node.show();
     }
     for(auto it=groups.begin();it!=groups.end();){

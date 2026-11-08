@@ -144,6 +144,8 @@ class FileActionsMixin:
             for tool in toolbar_tool.iter_canvas_tools():
                 tool.reset()
         self.reset_camera()
+        if getattr(self,'native_view_active',False) or getattr(self,'view3d_active',False):
+            self.redraw_world()
 
     def load_state(self) -> None:
         path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])

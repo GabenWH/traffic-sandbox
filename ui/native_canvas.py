@@ -55,9 +55,13 @@ class NativeCanvas:
     def itemcget(self,ident,key):return self._items[ident][2].get(key,'')
     def gettags(self,ident):return self._items[ident][2]['tags'] if ident in self._items else ()
     def tag_raise(self,tag,*args):
+        before=tuple(self._items)
         for ident in self.find_withtag(tag):self._items[ident]=self._items.pop(ident)
+        if tuple(self._items)!=before:self._dirty=True
     def tag_lower(self,tag,*args):
+        before=tuple(self._items)
         ids=self.find_withtag(tag);self._items={**{i:self._items[i] for i in ids},**self._items}
+        if tuple(self._items)!=before:self._dirty=True
     lift=tag_raise
     lower=tag_lower
     def bbox(self,tag):
@@ -95,9 +99,9 @@ class NativeCanvas:
                 points=[(x+(c-a)/2*cos(i*2*pi/24),y+(d-b)/2*sin(i*2*pi/24)) for i in range(24)]
             vertices=[(x,0,-y) for x,y in points]
             if kind=='line':
-                if fill:buf.line(vertices,fill)
+                if fill:buf.stroke(vertices,fill,float(o.get('width',1)),o.get('dash',()),plane='xz')
             else:
                 if fill and len(vertices)>2:buf.faces([(vertices[0],vertices[i],vertices[i+1]) for i in range(1,len(vertices)-1)],fill)
-                if outline:buf.line(vertices,outline,True)
+                if outline:buf.stroke(vertices+vertices[:1],outline,float(o.get('width',1)),o.get('dash',()),plane='xz')
         self.view.overlay_scene.replace_static(*buf.arrays())
         self.view.overlay_scene.replace_texts(texts);self._dirty=False

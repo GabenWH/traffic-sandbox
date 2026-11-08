@@ -22,5 +22,39 @@ User authorized implementation and specified 2D controls as authoritative.
 - Task 3: shared native map/perspective window, retained editor overlays and 2D
   control precedence implemented. Focused combined run: 36 tests passed.
 - Headless EGL rendered both projections and native overlay text successfully.
-- Virtual desktop attempt encountered denied Unix socket listeners; trying a local
-  TCP X display to verify the embedded Tk/Panda behavior without escalation.
+- Embedded Tk/Panda verified using a virtual X display over local TCP. The final
+  GUI run passed 12 checks, including elevated construction, endpoint snapping,
+  saved camera restoration, new-world replacement and retained route overlays
+  following perspective camera changes.
+- Independent review completed once against the whole migration. Its five
+  Important findings were elevated roundabout heights, camera-driven overlay
+  invalidation, missing map pavement/markings, parked appearance invalidation and
+  missing bus queue labels. All were fixed with reproduction tests.
+- Review's two smaller findings (editor stroke width/dash and truck/bus turn
+  indicators) were also fixed. Width/dash affects road placement feedback;
+  indicators communicate vehicle intent, so neither was deferred.
+- Additional inspection found the live debug panel formatted every vehicle each
+  frame to display eight. A failing ninth-record access test reproduced this;
+  the formatter now receives only the eight displayed vehicles.
+- Review-fix focused checks: 45 passed, followed by 17 checks covering the debug
+  bound, truck/bus lamp geometry, blink buffers and existing car-brain behavior.
+- Final whole-suite run: 880 tests in 249.473 seconds; 877 passed and three
+  display-only tests skipped. All three passed in the separate 12-check embedded
+  Tk/Panda run. No final review findings remain deferred.
+- Python compile checks and `git diff --check` pass.
+- Final matched benchmark runs both adapter orders, 80 samples per order, with
+  real fixed fleets and pose parity assertions. Native steady-state means:
+  1 car 0.00391 ms; 60 cars 0.00566 ms; 250 cars 0.01433 ms; 1,000 cars 0.05032 ms.
+  Height-supplied legacy means: 0.01331 / 0.79220 / 3.67010 / 18.97803 ms.
+  Initial publication is separate (1,000 cars: 5.88 ms); native p95 at 1,000 is
+  0.08486 ms. These are presentation CPU measurements, excluding graphics.
+- Final Arcata render inspected in both projections: 1,181 roads, 4,500 buildings,
+  2,964 parking lots; 1,273 local static meshes, 310,866 triangles, 40,053 lines.
+  Static compilation/upload 1.365 s; llvmpipe render/sync means 9.35 ms map and
+  14.22 ms perspective at 960x640. No active actors in those graphics cases.
+- Raw samples, source hash and runtime identity are committed at
+  benchmarks/native-viewer-2026-11-08.json. Linux EGL/GLX verified; macOS graphics
+  and target desktop GPU frame time remain unmeasured. The setup guide records
+  matching SDK/Eigen requirements and the current compiler/platform boundary.
+- Delivery stays on feature/native-panda-viewer; keep the isolated worktree.
+  No remote push, merge or PR is authorized in this request.

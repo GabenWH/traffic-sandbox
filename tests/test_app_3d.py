@@ -12,6 +12,24 @@ from unittest.mock import patch
     "Panda3D and an X display are required",
 )
 class App3DTests(unittest.TestCase):
+    def test_perspective_camera_reprojects_retained_route_overlays(self):
+        from ui import FreewaySimulator
+        from ui_tools.tools.route_test_tool import RouteTestTool,ROUTE_TEST_TAG
+        root=tk.Tk();root.geometry('1200x800');app=None
+        try:
+            app=FreewaySimulator(root);root.update();app.toggle_3d_view()
+            tool=RouteTestTool(app);app.active_tool=tool
+            lane=app.city_map.roads[0].lanes[0]
+            tool.route=app.city_map.find_vehicle_route(lane,lane);tool.refresh()
+            first=next(i for i in app.canvas.find_withtag(ROUTE_TEST_TAG) if app.canvas._items[i][0]=='line')
+            before=app.canvas.coords(first)
+            app.view3d.orbit.rotate(30,0);app.view3d._apply_camera();app.view3d.step()
+            first=next(i for i in app.canvas.find_withtag(ROUTE_TEST_TAG) if app.canvas._items[i][0]=='line')
+            self.assertNotEqual(app.canvas.coords(first),before)
+        finally:
+            if app is not None:app.view3d.close()
+            root.destroy()
+
     def test_road_tool_builds_an_elevated_road_in_embedded_view(self) -> None:
         from ui import FreewaySimulator
         from ui_tools.tools.road_tool import RoadTool
@@ -20,6 +38,7 @@ class App3DTests(unittest.TestCase):
         root.geometry("1000x700")
         try:
             app = FreewaySimulator(root)
+            starting_roads=len(app.city_map.roads)
             root.update()
             app.toggle_3d_view()
             root.update()
@@ -40,10 +59,10 @@ class App3DTests(unittest.TestCase):
             app._handle_3d_click(400, 250)
             road_tool.finish()
 
-            self.assertEqual(len(app.city_map.roads), 1)
-            self.assertEqual(app.city_map.roads[0].elevations, [10, 10])
-            self.assertFalse(app.view3d.base.render.find("**/road:*").isEmpty())
-            built_road = app.city_map.roads[0]
+            self.assertEqual(len(app.city_map.roads), starting_roads+1)
+            self.assertEqual(app.city_map.roads[-1].elevations, [10, 10])
+            self.assertGreater(app.view3d.native_scene.stats()['static_triangles'],2)
+            built_road = app.city_map.roads[-1]
             endpoint = app.view3d.screen_position(
                 built_road.centerline[0], built_road.elevations[0],
             )
@@ -59,7 +78,8 @@ class App3DTests(unittest.TestCase):
             self.assertEqual(app.camera_3d_state(), camera_state)
             with patch("ui.files.messagebox.askyesno", return_value=True):
                 app.new_world()
-            self.assertTrue(app.view3d.base.render.find("**/road:*").isEmpty())
+            self.assertIs(app.view3d.city,app.city_map)
+            self.assertEqual(len(app.city_map.roads),starting_roads)
         finally:
             if "app" in locals() and getattr(app, "view3d", None) is not None:
                 app.view3d.close()

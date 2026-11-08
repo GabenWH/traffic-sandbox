@@ -96,6 +96,17 @@ class CityGameplayMixin:
             f'{int(runtime.time%DAY//3600):02d}:{int(runtime.time%3600//60):02d}   '
             f'{len(runtime.residents)} people · {len(runtime.households)} households'),
             fill='#243545',tags='town-activity')
+        self.draw_native_bus_labels()
+
+    def draw_native_bus_labels(self):
+        self.canvas.delete('native-bus-stops')
+        transit=self.city_simulation.transit
+        waiting={}
+        for (_line,stop),queue in transit.queues.items():waiting[stop]=waiting.get(stop,0)+len(queue)
+        for sid,stop in transit.stops.items():
+            x,y=self.world_to_screen(stop.walk_point)
+            self.canvas.create_text(x,y-12,text=f'BUS · {waiting.get(sid,0)} waiting',
+                                    fill='#634b09',tags='native-bus-stops')
 
     def draw_passenger_bus(self,bus_actor):
         x,y=bus_actor.position;hx,hy=bus_actor.heading

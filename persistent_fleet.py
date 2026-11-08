@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from mobility import nearest_lane_position, vehicle_route_points,LaneTraversal,lane_position_at_distance
 from models import polyline_length
 from vehicle import VehicleAppearance
+from fleet_cargo import VehicleCargo
 
 
 @dataclass
@@ -41,11 +42,14 @@ class FleetVehicle:
                               'parking_space_id', 'reserved_space_id',
                               'road_stop_lane_id', 'road_stop_distance',
                               'reserved_road_stop_lane_id', 'reserved_road_stop_distance'))
+    _PRESENTATION_FIELDS = frozenset(('cargo','capacity','length','width','kind',
+                                    'truck_spec_id','road_stop_position','road_stop_heading'))
 
     def __setattr__(self, name, value):
         previous = self.__dict__.get(name)
+        if name=='cargo':value=VehicleCargo(value,self)
         object.__setattr__(self, name, value)
-        if name in self._INDEX_FIELDS and previous != value:
+        if (name in self._INDEX_FIELDS or name in self._PRESENTATION_FIELDS) and previous != value:
             changed = self.__dict__.get('_on_fleet_change')
             if changed is not None:
                 changed(self.id)

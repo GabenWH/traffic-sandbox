@@ -600,6 +600,8 @@ class RendererMixin:
         )
 
     def _circle_is_visible(self, point: tuple[float, float], radius: float) -> bool:
+        if getattr(self,'native_view_active',False) and getattr(self,'view3d_active',False):
+            return True  # The projected overlay is clipped by the native viewport.
         if not hasattr(self, "visible_world_bounds"):
             return True
         left, top, right, bottom = self.visible_world_bounds()

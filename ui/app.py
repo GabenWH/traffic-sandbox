@@ -83,6 +83,7 @@ class FreewaySimulator(
         if viewer not in ('panda','tk'):
             raise ValueError('Unknown viewer')
         self.native_view_active = viewer == 'panda'
+        self._native_overlays_dirty=True
         self._saved_3d_camera_state: dict[str, object] | None = None
 
         self.analytics_window: tk.Toplevel | None = None
@@ -143,7 +144,8 @@ class FreewaySimulator(
             self.view3d.map_view = self.viewport
             self.view3d.set_callbacks(on_click=self._handle_3d_click,
                 on_right_click=self._handle_native_right_click,
-                on_motion=self._handle_3d_motion,on_key=self._handle_3d_key)
+                on_motion=self._handle_3d_motion,on_key=self._handle_3d_key,
+                on_camera_change=self._native_camera_changed,on_before_render=self._refresh_native_overlays)
             self._tk_canvas.pack_forget()
             self.sidebar.pack(side='right',fill='y')
             self.view3d.frame.pack(side='left',fill='both',expand=True)
@@ -266,7 +268,7 @@ class FreewaySimulator(
         self.view3d_active = True
         self.view_button.configure(text="2D map")
         self.camera_label.configure(
-            text="Orbit: right-drag · Pan: middle-drag · Zoom: wheel · Height: Page Up/Down",
+            text="Orbit: Alt+middle-drag · Pan: middle-drag · Zoom: wheel · Height: Page Up/Down",
         )
         self.root.update_idletasks()
         self.view3d.step()
@@ -345,6 +347,23 @@ class FreewaySimulator(
         self.show_lane_menu(SimpleNamespace(x=x,y=y,x_root=frame.winfo_rootx()+x,
                                             y_root=frame.winfo_rooty()+y))
 
+    def _native_camera_changed(self):
+        self._native_overlays_dirty=True
+        tool=self.active_tool
+        if tool is not None:
+            if hasattr(tool,'_camera_state'):tool._camera_state=None
+            if hasattr(tool,'_dirty'):tool._dirty=True
+            if hasattr(tool,'_preview_dirty'):tool._preview_dirty=True
+
+    def _refresh_native_overlays(self):
+        if not self._native_overlays_dirty:return
+        self._native_overlays_dirty=False
+        self.draw_test_traffic_sources();self.draw_speed_limits();self.draw_native_bus_labels()
+        tool=self.active_tool
+        if tool is not None:
+            tool.refresh()
+            if hasattr(tool,'_draw_preview') and not hasattr(tool,'_preview_dirty'):tool._draw_preview()
+
     def _handle_3d_key(self, key: str) -> None:
         event={'page_up':'<Prior>','page_down':'<Next>','enter':'<Return>','escape':'<Escape>'}.get(key)
         if event:self.root.event_generate(event)
@@ -356,6 +375,7 @@ class FreewaySimulator(
         if getattr(self,'native_view_active',False):
             self.view3d.show_city(self.city_map)
             self.view3d._apply_camera()
+            self._native_camera_changed()
             return
         RendererMixin.redraw_world(self)
         if self.view3d_active and self.view3d is not None:

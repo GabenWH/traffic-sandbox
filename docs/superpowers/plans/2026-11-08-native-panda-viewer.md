@@ -37,10 +37,10 @@ Interfaces: NativeScene(root, overlay_root, camera), replace_static(triangles,
 lines), register_vehicle(handle, visual, heights), update_native(engine,time),
 replace_parked(records), stats(), close().
 
-- [ ] Write and run failing real-scene tests for map replacement/batching,
+- [x] Write and run failing real-scene tests for map replacement/batching,
   native actor buffers and route-height interpolation.
-- [ ] Implement SDK discovery, safe ABI validation, native batching and instancing.
-- [ ] Run the real-scene tests against the installed runtime; record evidence.
+- [x] Implement SDK discovery, safe ABI validation, native batching and instancing.
+- [x] Run the real-scene tests against the installed runtime; record evidence.
 
 ### Task 2: Model compilation and revision-based synchronization
 
@@ -50,10 +50,10 @@ traffic_testbed.py, tests/test_scene_presenter.py.
 Interfaces: compile_city(city) -> triangle/line arrays; route_heights(city,car)
 -> distance/height array; ScenePresenter(scene).update(city,simulation).
 
-- [ ] Write failing tests for ramps, overpasses, roster invalidation, appearance
+- [x] Write failing tests for ramps, overpasses, roster invalidation, appearance
   changes, parked state and clearing/replacing the native engine.
-- [ ] Implement static compilation and change-driven metadata publication.
-- [ ] Verify unchanged fleet updates consume native buffers without Python actor reads.
+- [x] Implement static compilation and change-driven metadata publication.
+- [x] Verify unchanged fleet updates consume native buffers without Python actor reads.
 
 ### Task 3: Shared viewer and editor integration
 
@@ -64,18 +64,18 @@ freeway_simulator.py, tests/test_native_view_controls.py.
 Interfaces: shared PandaWorldView with map/perspective modes, retained canvas
 overlay API, existing editor callbacks and saved camera state.
 
-- [ ] Write failing control/projection and hidden-world-drawing regression tests.
-- [ ] Switch native mode to one scene and camera projections; preserve the editor
+- [x] Write failing control/projection and hidden-world-drawing regression tests.
+- [x] Switch native mode to one scene and camera projections; preserve the editor
   overlay/panel contract and use 2D controls where behavior conflicts.
-- [ ] Remove hidden canvas actor work and unconditional extra frame delay.
-- [ ] Verify existing GUI wiring, picking, preview, save and mode-switch behavior.
+- [x] Remove hidden canvas actor work and unconditional extra frame delay.
+- [x] Verify existing GUI wiring, picking, preview, save and mode-switch behavior.
 
 ### Task 4: Rendering, performance and delivery
 
 Files: tools/benchmark_native_viewer.py, docs/NATIVE_VIEWER.md, README.md.
 
-- [ ] Render both camera modes through real headless Panda/EGL and inspect output.
-- [ ] Measure fixed active fleets and Arcata geometry with separate native-update
+- [x] Render both camera modes through real headless Panda/EGL and inspect output.
+- [x] Measure fixed active fleets and Arcata geometry with separate native-update
   and graphics timings; verify instance and geometry counts.
-- [ ] Run the complete regression suite and review the whole change independently.
-- [ ] Commit the completed work locally and report measurements and remaining gaps.
+- [x] Run the complete regression suite and review the whole change independently.
+- [x] Commit the completed work locally and report measurements and remaining gaps.

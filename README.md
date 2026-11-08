@@ -1,7 +1,8 @@
 # Lane Simulator
 
-An interactive Python city and traffic simulator. The 2D view uses Tkinter; an
-embedded Panda3D view adds freely rotating 3D roads and overpasses. The current
+An interactive city and traffic simulator. One C++ Panda3D scene supplies both
+the top-down 2D map and freely rotating 3D roads and overpasses. Python retains
+editing, gameplay orchestration and Tk panels. The current
 city-builder foundation supports authored polyline roads with generated lane
 children and versioned JSON world saves. The older fixed freeway merge remains
 in the traffic engine while its behavior is migrated onto constructed roads;
@@ -13,8 +14,9 @@ Run it with Python 3:
 python3 freeway_simulator.py
 ```
 
-Install `requirements.txt` first: NumPy owns the packed resident, event and
-compiled geometry buffers; Panda3D supplies the optional 3D road view.
+Install `requirements.txt` and the matching Panda3D C++ SDK development headers
+first; see [native viewer setup](native/viewer/README.md). NumPy owns packed
+resident, event and compiled geometry buffers; C++ owns scene presentation.
 See [numeric runtime storage](docs/NUMPY_LAYOUT.md) for layouts and ownership.
 See [shared walking trees](docs/SHARED_WALKING.md) for walking caches and query budgets.
 
@@ -26,20 +28,22 @@ python3 freeway_simulator.py --traffic-engine cpp
 
 This requires a local C++17 compiler. See [native engine usage and parity tests](native/traffic/README.md).
 
-To use the 3D road view, install Panda3D first:
+Install Python dependencies before configuring the native SDK:
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-Click **3D roads** in the existing Tkinter window. Right-drag to orbit,
-middle-drag to pan, and use the wheel to zoom. Choose **Build road** and click
+Click **3D roads** to switch the shared scene to perspective. Alt+middle-drag
+orbits; middle-drag pans, the wheel zooms toward the pointer, and right-click
+opens the context menu in both modes. Choose **Build road** and click
 vertices. Page Up and Page Down raise or lower the next vertex by 10 feet;
 Enter finishes the road and Escape cancels it. Clicking an existing elevated
 road end starts at that end's height. Crossings at different heights remain
 separate for routing. Road elevations and the 3D camera are saved with the
-world. The other construction and inspection tools currently use the 2D map;
-selecting one switches back to it.
+world. Construction and inspection retain the shared editor controls. See
+[shared viewer behavior](docs/NATIVE_VIEWER.md). Use `--viewer tk` explicitly for
+the legacy Tk map.
 
 Use the **Units** menu to switch between Imperial (mph/feet) and Metric
 (km/h/metres). Change `DEFAULT_UNIT_SYSTEM` in `config.py` to select the default
@@ -120,7 +124,8 @@ runtime and canvas item IDs are intentionally not persisted.
 Use the **File** and **Simulation** dropdown tools just as before. **Inspect** opens its panel in the bottom-left corner of the main canvas; while it is active, left-click a car, speed-limit sign, or lane to inspect and edit supported fields, or click empty space for global stats. Fields use sliders, validated text input, or read-only labels. The toolbar order and enabled tools are editable in [`ui_tools/toolbar.json`](ui_tools/toolbar.json); each tool has its own module in `ui_tools/tools/`. Starting the app automatically runs `ui_tools.sync_toolbar`, which appends newly discovered tools without changing existing order or enabled settings. See [`docs/TOOLS.md`](docs/TOOLS.md) for the full tool workflow.
 
 Requires Python with tkinter (included by default with most desktop Python installations).
-The 3D road view additionally requires Panda3D from `requirements.txt`.
+The default map and perspective viewer require Panda3D and its matching C++ SDK;
+the explicit `--viewer tk` map can run without the viewer SDK.
 
 Run the model and persistence tests with:
 

@@ -1,5 +1,10 @@
 # UI reference
 
+The default is now the [shared native Panda viewer](NATIVE_VIEWER.md). Tk supplies
+the toolbar and side panels; C++ owns both world projections and presentation.
+The canvas implementation below remains the explicit `--viewer tk` mode. Native
+editor overlays retain its small drawing interface without duplicating actors.
+
 The `ui/` package contains the Tkinter presentation layer. `ui.app.FreewaySimulator`
 is the small coordinator; focused mixins provide rendering, viewport behavior,
 traffic interactions, file actions, and secondary windows. `ui.__init__`
