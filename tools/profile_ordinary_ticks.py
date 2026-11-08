@@ -21,7 +21,7 @@ class SampleClock(Base):
   import native_shared
   for cls,methods,prefix in [
    (NativeRoadSimulation,('update','publish_random'),'bridge'),
-   (NativeTrafficEngine,('profile_snapshot','sync','completed_pedestrians','pedestrian_count'),'engine_io'),
+   (NativeTrafficEngine,('profile_snapshot','completed_pedestrians','pedestrian_count'),'engine_io'),
    (RoadVehicleSimulation,('update','sync_network','_prepare_signal_frame','_signal_step_limit','_native_backend'),'road'),
    (TransitSimulation,('_check_network','_finish_walk','_service','_trim_walk_routes'),'transit_detail'),
    (SimulationProfiler,('record_tick',),'diagnostics')]:

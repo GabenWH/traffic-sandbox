@@ -152,7 +152,7 @@ class TrafficTestbedTests(unittest.TestCase):
         self.assertEqual(sample.entity_counts["cars"], 1)
         self.assertAlmostEqual(sample.elapsed_seconds, 0.02)
         self.assertTrue({'native_configuration', 'native_spawning', 'spawn_views',
-                         'native_movement', 'vehicle_state_sync', 'bookkeeping_sync',
+                         'native_movement', 'completion_views', 'bookkeeping_sync',
                          'occupancy_sync', 'observe', 'intent', 'resolve', 'apply',
                          'total'}.issubset(sample.timings_ms))
         self.assertTrue(all(value >= 0 for value in sample.timings_ms.values()))

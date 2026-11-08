@@ -311,7 +311,7 @@ class RoadVehicleSimulation:
         default_factory=SoftDeadlockResolver, repr=False,
     )
     update_mode: str = "cpp"
-    native_output_mode: str = "copy"
+    native_output_mode: str = "shared"
     _native_controller: object = field(default=None, init=False, repr=False, compare=False)
 
     colors = ("#ff5b72", "#37e6ff", "#f7d154", "#7fea8c", "#c98cff")
@@ -322,6 +322,8 @@ class RoadVehicleSimulation:
         return self.cars
 
     def __setattr__(self, name, value):
+        if name == "native_output_mode" and value != "shared":
+            raise ValueError("Native vehicle state uses shared views; copy mode has been retired")
         if name in ("cars", "active_junction_ids") and isinstance(
                 self.__dict__.get(name), _ReadOnlySequence):
             raise AttributeError(f"{name} is read-only; use the simulation mutation APIs")
@@ -418,8 +420,8 @@ class RoadVehicleSimulation:
         return False
 
     def _validate_update_mode(self) -> None:
-        if self.native_output_mode not in ("copy", "shared"):
-            raise ValueError("Native output mode must be copy or shared")
+        if self.native_output_mode != "shared":
+            raise ValueError("Native vehicle state must use shared views")
         if self.update_mode != "cpp":
             raise ValueError("Traffic update mode must be cpp")
 

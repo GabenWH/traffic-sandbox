@@ -1,0 +1,318 @@
+{
+  "notes": "Shared-only default; independent single runs on Ryzen 5 5600. No rendering. Ordinary profiler wrappers installed. All ticks and pauses retained in means/maxima; percentiles are interval values, not whole-run percentiles. Moving counts, speeds, and vehicle completions not collected by this runner. Not a controlled speedup comparison.",
+  "python": "3.14.9",
+  "runs": [
+    {
+      "case": "no-buses",
+      "ticks": 102000,
+      "simulated_seconds": 5100.0,
+      "mean_tick_ms": 0.6504252232064877,
+      "max_tick_ms": 419.8179310001251,
+      "ticks_over_50ms": 1,
+      "final": {
+        "population": 16000,
+        "active_road_vehicles": 62,
+        "at_work": 1241,
+        "commuting": 2127,
+        "commute_departures": 3368,
+        "bus_count": 0,
+        "bus_passengers": 0,
+        "resource_balance_error": 0.0
+      },
+      "intervals": [
+        {
+          "simulated_seconds": 300.0,
+          "tick_mean_ms": 0.2033921725032239,
+          "tick_p95_ms": 0.20080600006622262,
+          "tick_p99_ms": 0.273525000011432,
+          "tick_max_ms": 419.8179310001251,
+          "active_road_vehicles": 0
+        },
+        {
+          "simulated_seconds": 600.0,
+          "tick_mean_ms": 0.1274188633375767,
+          "tick_p95_ms": 0.199042000076588,
+          "tick_p99_ms": 0.2318550000381947,
+          "tick_max_ms": 24.685652000243863,
+          "active_road_vehicles": 0
+        },
+        {
+          "simulated_seconds": 900.0,
+          "tick_mean_ms": 0.13193235499716138,
+          "tick_p95_ms": 0.20380099977046484,
+          "tick_p99_ms": 0.23492099990107818,
+          "tick_max_ms": 27.216522000344412,
+          "active_road_vehicles": 0
+        },
+        {
+          "simulated_seconds": 1200.0,
+          "tick_mean_ms": 0.1350582456667932,
+          "tick_p95_ms": 0.2049430004262831,
+          "tick_p99_ms": 0.2611220002108894,
+          "tick_max_ms": 23.0810510001902,
+          "active_road_vehicles": 0
+        },
+        {
+          "simulated_seconds": 1500.0,
+          "tick_mean_ms": 0.12814671317005377,
+          "tick_p95_ms": 0.20112700030949782,
+          "tick_p99_ms": 0.22761699983675499,
+          "tick_max_ms": 21.492180000223016,
+          "active_road_vehicles": 0
+        },
+        {
+          "simulated_seconds": 1800.0,
+          "tick_mean_ms": 0.13343228666569,
+          "tick_p95_ms": 0.20599600020432263,
+          "tick_p99_ms": 0.2584859998933098,
+          "tick_max_ms": 21.36456599964731,
+          "active_road_vehicles": 0
+        },
+        {
+          "simulated_seconds": 2100.0,
+          "tick_mean_ms": 0.18089479150027424,
+          "tick_p95_ms": 0.26409799966131686,
+          "tick_p99_ms": 0.44790000038119615,
+          "tick_max_ms": 21.49913400035075,
+          "active_road_vehicles": 3
+        },
+        {
+          "simulated_seconds": 2400.0,
+          "tick_mean_ms": 0.2697459864969005,
+          "tick_p95_ms": 0.4294339996704366,
+          "tick_p99_ms": 1.925346999996691,
+          "tick_max_ms": 22.33770500015453,
+          "active_road_vehicles": 8
+        },
+        {
+          "simulated_seconds": 2700.0,
+          "tick_mean_ms": 0.28713911182982577,
+          "tick_p95_ms": 0.42302200017729774,
+          "tick_p99_ms": 2.391301999978168,
+          "tick_max_ms": 20.1291640000818,
+          "active_road_vehicles": 11
+        },
+        {
+          "simulated_seconds": 3000.0,
+          "tick_mean_ms": 0.42144589983316416,
+          "tick_p95_ms": 1.0255490001327416,
+          "tick_p99_ms": 2.965855000184092,
+          "tick_max_ms": 25.552878999860695,
+          "active_road_vehicles": 14
+        },
+        {
+          "simulated_seconds": 3300.0,
+          "tick_mean_ms": 0.5951062998336358,
+          "tick_p95_ms": 1.7099029996643367,
+          "tick_p99_ms": 3.814635999788152,
+          "tick_max_ms": 30.7385080000131,
+          "active_road_vehicles": 23
+        },
+        {
+          "simulated_seconds": 3600.0,
+          "tick_mean_ms": 0.6426464338348978,
+          "tick_p95_ms": 1.7893070003083267,
+          "tick_p99_ms": 3.247215999635955,
+          "tick_max_ms": 22.050065999792423,
+          "active_road_vehicles": 24
+        },
+        {
+          "simulated_seconds": 3900.0,
+          "tick_mean_ms": 0.8161618413373617,
+          "tick_p95_ms": 2.2826429999440734,
+          "tick_p99_ms": 4.199155000151222,
+          "tick_max_ms": 26.672302999941166,
+          "active_road_vehicles": 29
+        },
+        {
+          "simulated_seconds": 4200.0,
+          "tick_mean_ms": 0.9059761891657369,
+          "tick_p95_ms": 2.1779329999844776,
+          "tick_p99_ms": 4.0879510002014285,
+          "tick_max_ms": 22.032673000012437,
+          "active_road_vehicles": 39
+        },
+        {
+          "simulated_seconds": 4500.0,
+          "tick_mean_ms": 1.6923768786698474,
+          "tick_p95_ms": 3.2605219998913526,
+          "tick_p99_ms": 5.46759100006966,
+          "tick_max_ms": 24.859745999947336,
+          "active_road_vehicles": 34
+        },
+        {
+          "simulated_seconds": 4800.0,
+          "tick_mean_ms": 1.8666571763367301,
+          "tick_p95_ms": 3.734101999725681,
+          "tick_p99_ms": 6.015243000092596,
+          "tick_max_ms": 27.383646000089357,
+          "active_road_vehicles": 40
+        },
+        {
+          "simulated_seconds": 5100.0,
+          "tick_mean_ms": 2.5196975493314158,
+          "tick_p95_ms": 4.400442000132898,
+          "tick_p99_ms": 7.5358349999987695,
+          "tick_max_ms": 25.547009000092658,
+          "active_road_vehicles": 62
+        }
+      ]
+    },
+    {
+      "case": "with-buses",
+      "ticks": 102000,
+      "simulated_seconds": 5100.0,
+      "mean_tick_ms": 0.8134930913537279,
+      "max_tick_ms": 423.8847940000596,
+      "ticks_over_50ms": 1,
+      "final": {
+        "population": 16000,
+        "active_road_vehicles": 72,
+        "at_work": 1239,
+        "commuting": 2129,
+        "commute_departures": 3368,
+        "bus_count": 12,
+        "bus_passengers": 0,
+        "resource_balance_error": 0.0
+      },
+      "intervals": [
+        {
+          "simulated_seconds": 300.0,
+          "tick_mean_ms": 0.2927575714987446,
+          "tick_p95_ms": 0.26902499985226314,
+          "tick_p99_ms": 2.59185000004436,
+          "tick_max_ms": 423.8847940000596,
+          "active_road_vehicles": 3
+        },
+        {
+          "simulated_seconds": 600.0,
+          "tick_mean_ms": 0.17201167316640448,
+          "tick_p95_ms": 0.26734199991551577,
+          "tick_p99_ms": 0.3367599997545767,
+          "tick_max_ms": 22.33401800003776,
+          "active_road_vehicles": 6
+        },
+        {
+          "simulated_seconds": 900.0,
+          "tick_mean_ms": 0.18116636033634373,
+          "tick_p95_ms": 0.27331299997968017,
+          "tick_p99_ms": 0.34883200032709283,
+          "tick_max_ms": 23.81697400005578,
+          "active_road_vehicles": 9
+        },
+        {
+          "simulated_seconds": 1200.0,
+          "tick_mean_ms": 0.1912973508325043,
+          "tick_p95_ms": 0.2838030000020808,
+          "tick_p99_ms": 0.38761399991926737,
+          "tick_max_ms": 23.303571999804262,
+          "active_road_vehicles": 10
+        },
+        {
+          "simulated_seconds": 1500.0,
+          "tick_mean_ms": 0.18889429533517915,
+          "tick_p95_ms": 0.28377200032991823,
+          "tick_p99_ms": 0.36525300038192654,
+          "tick_max_ms": 23.722623999674397,
+          "active_road_vehicles": 10
+        },
+        {
+          "simulated_seconds": 1800.0,
+          "tick_mean_ms": 0.20167050900022332,
+          "tick_p95_ms": 0.28895199966427754,
+          "tick_p99_ms": 0.4072800002177246,
+          "tick_max_ms": 24.94455599980938,
+          "active_road_vehicles": 10
+        },
+        {
+          "simulated_seconds": 2100.0,
+          "tick_mean_ms": 0.2364581826675476,
+          "tick_p95_ms": 0.338773000294168,
+          "tick_p99_ms": 0.7308960002774256,
+          "tick_max_ms": 25.288406000072428,
+          "active_road_vehicles": 13
+        },
+        {
+          "simulated_seconds": 2400.0,
+          "tick_mean_ms": 0.35112119683526544,
+          "tick_p95_ms": 0.5700000001525041,
+          "tick_p99_ms": 2.7377430001251923,
+          "tick_max_ms": 22.051923000162788,
+          "active_road_vehicles": 18
+        },
+        {
+          "simulated_seconds": 2700.0,
+          "tick_mean_ms": 0.3592180913336354,
+          "tick_p95_ms": 0.5239050001364376,
+          "tick_p99_ms": 2.658448000147473,
+          "tick_max_ms": 22.14287900005729,
+          "active_road_vehicles": 21
+        },
+        {
+          "simulated_seconds": 3000.0,
+          "tick_mean_ms": 0.4954791634983546,
+          "tick_p95_ms": 1.3684509999620786,
+          "tick_p99_ms": 3.429939999932685,
+          "tick_max_ms": 24.241542000254412,
+          "active_road_vehicles": 24
+        },
+        {
+          "simulated_seconds": 3300.0,
+          "tick_mean_ms": 0.6260010353337293,
+          "tick_p95_ms": 1.7664350002633,
+          "tick_p99_ms": 3.8777159998062416,
+          "tick_max_ms": 28.22380499992505,
+          "active_road_vehicles": 32
+        },
+        {
+          "simulated_seconds": 3600.0,
+          "tick_mean_ms": 0.7172216843295397,
+          "tick_p95_ms": 2.005147000090801,
+          "tick_p99_ms": 3.5979530002805404,
+          "tick_max_ms": 32.86579899986464,
+          "active_road_vehicles": 34
+        },
+        {
+          "simulated_seconds": 3900.0,
+          "tick_mean_ms": 0.8747554064992377,
+          "tick_p95_ms": 2.3463570000785694,
+          "tick_p99_ms": 4.903962999833311,
+          "tick_max_ms": 32.393164000041,
+          "active_road_vehicles": 39
+        },
+        {
+          "simulated_seconds": 4200.0,
+          "tick_mean_ms": 1.0436818475055436,
+          "tick_p95_ms": 2.402854000138177,
+          "tick_p99_ms": 5.2026160001332755,
+          "tick_max_ms": 27.290754000205197,
+          "active_road_vehicles": 49
+        },
+        {
+          "simulated_seconds": 4500.0,
+          "tick_mean_ms": 2.197756096001664,
+          "tick_p95_ms": 4.097916999853624,
+          "tick_p99_ms": 6.883194000238291,
+          "tick_max_ms": 35.38049600001614,
+          "active_road_vehicles": 44
+        },
+        {
+          "simulated_seconds": 4800.0,
+          "tick_mean_ms": 2.424035340670571,
+          "tick_p95_ms": 4.856628000197816,
+          "tick_p99_ms": 8.081383999979153,
+          "tick_max_ms": 32.9771849997087,
+          "active_road_vehicles": 50
+        },
+        {
+          "simulated_seconds": 5100.0,
+          "tick_mean_ms": 3.275856748168887,
+          "tick_p95_ms": 5.794814000182669,
+          "tick_p99_ms": 9.844900000189227,
+          "tick_max_ms": 39.0727720000541,
+          "active_road_vehicles": 72
+        }
+      ]
+    }
+  ]
+}

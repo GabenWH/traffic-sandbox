@@ -1,7 +1,7 @@
-"""Compare eager Python mirrors with live reads of C++ vehicle memory.
+"""Measure live native vehicle state with and without display consumption.
 
 Includes the original generated crossing and fixed fleets on a longer crossing.
-All modes retain Python occupancy, bookkeeping, RNG and source publication.
+Runs retain Python occupancy, bookkeeping, RNG and source publication.
 Display consumption reads every car's position, heading and signal per update;
 this models state access, not window drawing or GPU rendering.
 """
@@ -25,7 +25,7 @@ from tools.benchmark_native_spawning import make_city, summarize
 from traffic_testbed import RoadVehicleSimulation, RoutedRoadVehicle
 
 
-def setup(city, controllers, mode, fleet, seed):
+def setup(city, controllers, fleet, seed):
     cars = []
     if fleet:
         ends = city.cul_de_sacs
@@ -40,7 +40,7 @@ def setup(city, controllers, mode, fleet, seed):
                                     '#37e6ff', id=f'fleet-{i:06d}')
             car.place(car.controlled_movements[0][0] - 60 - (i//len(routes))*36)
             cars.append(car)
-    traffic = RoadVehicleSimulation(update_mode='cpp', native_output_mode=mode,
+    traffic = RoadVehicleSimulation(update_mode='cpp',
                                     rng=random.Random(seed), spawn_interval=.8,
                                     max_cars=max(60, fleet), cars=cars)
     traffic.signal_controllers.update(controllers)
@@ -71,8 +71,8 @@ def fingerprint(traffic, completed):
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
-def run(city, controllers, mode, fleet, reads, args):
-    traffic = setup(city, controllers, mode, fleet, args.seed)
+def run(city, controllers, fleet, reads, args):
+    traffic = setup(city, controllers, fleet, args.seed)
     try:
         for _ in range(round(args.warmup / args.dt)):
             traffic.update(city, args.dt)
@@ -97,7 +97,7 @@ def run(city, controllers, mode, fleet, reads, args):
                             'phases_ms': dict(traffic.profiler.samples[-1].timings_ms)})
         phases = {k: summarize([s['phases_ms'][k] for s in samples])
                   for k in samples[0]['phases_ms']}
-        return {'mode': mode, 'fleet': fleet, 'display_reads': reads,
+        return {'mode': 'shared', 'fleet': fleet, 'display_reads': reads,
                 'mean_active': statistics.fmean(s['active_cars'] for s in samples),
                 'peak_active': max(s['active_cars'] for s in samples),
                 'spawned': traffic._spawned_count, 'completed': len(completed),
@@ -129,26 +129,17 @@ def main():
         for reads in (False, True):
             selected = []
             for repeat in range(args.repeats):
-                order = ('copy', 'shared') if repeat % 2 == 0 else ('shared', 'copy')
-                pair = [run(city, controllers, mode, fleet, reads, args) for mode in order]
-                if (pair[0]['final_fingerprint'] != pair[1]['final_fingerprint'] or
-                        pair[0]['display_checksum'] != pair[1]['display_checksum'] or
-                        [s['active_cars'] for s in pair[0]['samples']] != [s['active_cars'] for s in pair[1]['samples']]):
-                    raise RuntimeError(f'Behavior differs: fleet={fleet}, reads={reads}, repeat={repeat}')
-                for r in pair:
-                    r['repeat'] = repeat + 1
-                    r['road_length'] = road_length
-                runs.extend(pair)
-                selected.extend(pair)
-            means = {mode: statistics.fmean(r['cpu_ms']['mean'] for r in selected if r['mode'] == mode)
-                     for mode in ('copy', 'shared')}
-            comparison = {'fleet': fleet, 'display_reads': reads, 'cpu_ms': means,
-                          'shared_cpu_reduction': 1-means['shared']/means['copy'],
-                          'parity': True,
+                result = run(city, controllers, fleet, reads, args)
+                result['repeat'] = repeat + 1
+                result['road_length'] = road_length
+                runs.append(result)
+                selected.append(result)
+            comparison = {'fleet': fleet, 'display_reads': reads,
+                          'cpu_ms': statistics.fmean(r['cpu_ms']['mean'] for r in selected),
                           'mean_active': statistics.fmean(r['mean_active'] for r in selected)}
             comparisons.append(comparison)
             print(json.dumps(comparison), flush=True)
-    report = {'method': 'Counterbalanced paired C++ runs; only output representation changes; phase timers enabled in both.',
+    report = {'method': 'Shared-state C++ runs with and without per-tick display field reads; phase timers enabled. This measures field consumption, not rendering.',
               'sources_sha256': hashlib.sha256(b''.join((ROOT/path).read_bytes() for path in ('native/traffic/engine.cpp', 'native/traffic/engine.h', 'native_traffic.py', 'native_shared.py', 'native_spawning.py', 'tools/benchmark_native_shared.py'))).hexdigest(),
               'python': sys.version, 'platform': platform.platform(), 'arguments': vars(args) | {'output': str(args.output)},
               'comparisons': comparisons, 'runs': runs}

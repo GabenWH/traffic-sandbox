@@ -20,6 +20,7 @@ class App3DTests(unittest.TestCase):
         root.geometry("1000x700")
         try:
             app = FreewaySimulator(root)
+            initial_roads = {road.id for road in app.city_map.roads}
             root.update()
             app.toggle_3d_view()
             root.update()
@@ -40,10 +41,12 @@ class App3DTests(unittest.TestCase):
             app._handle_3d_click(400, 250)
             road_tool.finish()
 
-            self.assertEqual(len(app.city_map.roads), 1)
-            self.assertEqual(app.city_map.roads[0].elevations, [10, 10])
-            self.assertFalse(app.view3d.base.render.find("**/road:*").isEmpty())
-            built_road = app.city_map.roads[0]
+            # The new world already contains the western land-port road.
+            built = [road for road in app.city_map.roads if road.id not in initial_roads]
+            self.assertEqual(len(built), 1)
+            built_road = built[0]
+            self.assertEqual(built_road.elevations, [10, 10])
+            self.assertFalse(app.view3d.base.render.find(f"**/road:{built_road.id}").isEmpty())
             endpoint = app.view3d.screen_position(
                 built_road.centerline[0], built_road.elevations[0],
             )
@@ -59,7 +62,8 @@ class App3DTests(unittest.TestCase):
             self.assertEqual(app.camera_3d_state(), camera_state)
             with patch("ui.files.messagebox.askyesno", return_value=True):
                 app.new_world()
-            self.assertTrue(app.view3d.base.render.find("**/road:*").isEmpty())
+            self.assertTrue(app.view3d.base.render.find(f"**/road:{built_road.id}").isEmpty())
+            self.assertEqual(len(app.city_map.roads), len(initial_roads))
         finally:
             if "app" in locals() and getattr(app, "view3d", None) is not None:
                 app.view3d.close()

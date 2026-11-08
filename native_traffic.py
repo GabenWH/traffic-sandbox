@@ -3,7 +3,8 @@
 The small ctypes ABI keeps compiler dependencies out of Python packaging. Topology
 and routes cross the boundary at admission; step() runs without Python callbacks.
 vehicle_views() is a borrowed native buffer, valid until the next engine operation.
-Use snapshot() for an owned, ID-keyed copy or sync() for existing UI vehicles.
+Use snapshot() for an owned, ID-keyed diagnostic snapshot. Application vehicles
+read native storage through native_shared bindings.
 """
 from __future__ import annotations
 
@@ -418,25 +419,6 @@ class NativeTrafficEngine:
             s.distance, s.speed, (s.x, s.y), (s.hx, s.hy), STATES[s.state].value, SIGNALS[s.signal].value,
             s.reason.decode(), s.desired, s.dwell, None if s.claim < 0 else self._connections[s.claim].id,
             bool(s.alive), s.phantom.decode()) for s in self.vehicle_views() if s.alive or include_completed}
-
-    def sync(self, cars):
-        """Explicit output-only synchronization for render/debug consumers."""
-        by_id = {c.id: c for c in cars}
-        completed = []
-        for s in self.vehicle_views():
-            car = by_id[self._ids[s.handle]]
-            car.__dict__.update(distance=s.distance, speed=s.speed,
-                position=(s.x, s.y), heading=(s.hx, s.hy),
-                _merge_entry_speed=None if s.entry < 0 else s.entry,
-                _claimed_movement=None if s.claim < 0 else self._connections[s.claim])
-            car.brain.__dict__.update(state=STATES[s.state], signal_intent=SIGNALS[s.signal],
-                wait_reason=s.reason.decode(), phantom_target=s.phantom.decode(),
-                desired_speed=s.desired, stopped_elapsed=s.dwell,
-                _yellow_movement_id=None if s.yellow_movement < 0 else self._connections[s.yellow_movement].id,
-                _yellow_go=bool(s.yellow_go))
-            if not s.alive:
-                completed.append(car)
-        return completed
 
     def place(self, vehicle_id, distance):
         self._call('nt_place', self._handles[vehicle_id], distance)

@@ -182,7 +182,7 @@ class NativeExtendedParityTests(unittest.TestCase):
                 native.remove(circulating.id)
         self.drive(city, traffic, 50, edit=remove_blocker)
 
-    def test_sync_updates_existing_render_vehicles_and_reports_completion(self):
+    def test_owned_diagnostic_snapshot_survives_later_steps_and_completion(self):
         city = CityMap(terrain=Terrain(trees=[]))
         city.add_road([(0, 0), (100, 0)])
         traffic = TestTrafficSimulation(spawn_interval=1000)
@@ -190,14 +190,15 @@ class NativeExtendedParityTests(unittest.TestCase):
         with NativeTrafficEngine.from_simulation(traffic) as native:
             native.step(0.1)
             state = native.snapshot()[car.id]
-            self.assertEqual(native.sync([car]), [])
-            self.assertEqual(car.position, state.position)
-            self.assertEqual(car.distance, state.distance)
-            self.assertEqual(car.brain.desired_speed, state.desired_speed)
+            self.assertTrue(state.alive)
+            self.assertGreater(state.distance, car.distance)
+            distance = state.distance
             native.place(car.id, car.total_length - 0.1)
             native.step(0.2)
-            self.assertEqual(native.sync([car]), [car])
-            self.assertEqual(car.position, car.points[-1])
+            completed = native.snapshot(include_completed=True)[car.id]
+            self.assertFalse(completed.alive)
+            self.assertEqual(completed.position, car.points[-1])
+            self.assertEqual(state.distance, distance)
 
     def test_uploaded_slip_lane_and_roundabout_maps(self):
         for filename in ('slip_lanes.json', 'roundabout_test.json'):

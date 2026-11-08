@@ -1,4 +1,4 @@
-"""Dense moving-vehicle and signal-queue benchmark; copy/shared state modes."""
+"""Dense moving-vehicle and signal-queue benchmark; shared vehicle state."""
 import argparse,json,sys,time,statistics,random
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -9,7 +9,7 @@ from traffic_testbed import RoadVehicleSimulation,RoutedRoadVehicle
 from tools.benchmark_native_shared import setup
 from tools.benchmark_native_spawning import make_city,summarize
 parser=argparse.ArgumentParser(description='Dense active traffic, no economy or renderer; 5-second warmup and diagnostic phase timers.')
-parser.add_argument('--mode',choices=('copy','shared'),default='copy')
+parser.add_argument('--mode',choices=('shared',),default='shared')
 parser.add_argument('--seconds',type=float,default=300)
 parser.add_argument('--output',type=Path,required=True)
 args=parser.parse_args()
@@ -28,18 +28,17 @@ def platoons(fleet):
   for i in range(fleet//20):
    car=RoutedRoadVehicle(str(row),str(row)+'-end',route,points,25*22/15,'#37e6ff',id=f'platoon-{row}-{i}')
    car.place(1000+i*36);cars.append(car)
- traffic=RoadVehicleSimulation(update_mode='cpp',native_output_mode=args.mode,rng=random.Random(42),cars=cars,max_cars=fleet)
+ traffic=RoadVehicleSimulation(update_mode='cpp',rng=random.Random(42),cars=cars,max_cars=fleet)
  traffic._native_backend(city);traffic.update(city,0)
  return city,traffic
 
 results=[]
-for label,fleet in [('platoons',1000),('signals',250),('signals',1000)]:
- if args.mode=='shared' and fleet==250:continue
+for label,fleet in [('platoons',1000),('signals',1000)]:
  print(json.dumps({'stage':'setup','case':label,'fleet':fleet}),flush=True)
  if label=='platoons':city,traffic=platoons(fleet)
  else:
   city,controllers=make_city('signalized-crossing',42,max(1200,2*((fleet+3)//4*36+150)))
-  traffic=setup(city,controllers,args.mode,fleet,42)
+  traffic=setup(city,controllers,fleet,42)
  try:
   for _ in range(100):traffic.update(city,.05)
   wall=[];phases={};completed=0;rows=[];active_sum=0;peak_active=0;over50=0

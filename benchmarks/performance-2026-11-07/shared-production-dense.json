@@ -1,0 +1,1288 @@
+[
+  {
+    "case": "platoons",
+    "initial_fleet": 1000,
+    "seconds": 300.0,
+    "warmup_seconds": 5,
+    "ticks": 6000,
+    "output_mode": "shared",
+    "mean_active": 1000.0,
+    "peak_active": 1000,
+    "final_active": 1000,
+    "completed": 0,
+    "moving_threshold_feet_per_second": 1,
+    "mean_moving_sampled": 1000.0,
+    "final_moving": 1000,
+    "mean_speed_mph_sampled": 22.44225294947335,
+    "tick_ms": {
+      "mean": 0.533907531,
+      "median": 0.508866,
+      "p95": 0.661075,
+      "p99": 0.755254,
+      "max": 1.834553
+    },
+    "ticks_over_50ms": 0,
+    "phases_mean_ms": {
+      "native_configuration": 0.02911865433611638,
+      "native_spawning": 0.0014153594985752231,
+      "spawn_views": 0.009601374665938541,
+      "native_movement": 0.45359501916944583,
+      "completion_views": 0.0026566744951045016,
+      "bookkeeping_sync": 0.01634261200236627,
+      "occupancy_sync": 0.0006844693374053653,
+      "output_sync": 0.019683755834876138,
+      "total": 0.5134141635049522,
+      "observe": 0.09329782383333299,
+      "intent": 0.09791677166666642,
+      "decision": 0.09791677166666642,
+      "resolve": 0.1792097185000006,
+      "apply": 0.05381838166666669,
+      "resolution": 0.23302810016666728
+    },
+    "rows": [
+      {
+        "seconds": 5.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 10.902594708924187,
+        "completed": 0,
+        "mean_tick_ms": 0.53107858,
+        "max_tick_ms": 0.735336
+      },
+      {
+        "seconds": 10.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 11.652705347593773,
+        "completed": 0,
+        "mean_tick_ms": 0.52252077,
+        "max_tick_ms": 0.715919
+      },
+      {
+        "seconds": 15.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 12.396197700037213,
+        "completed": 0,
+        "mean_tick_ms": 0.5213052499999999,
+        "max_tick_ms": 0.687986
+      },
+      {
+        "seconds": 20.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 13.138497263205842,
+        "completed": 0,
+        "mean_tick_ms": 0.51785474,
+        "max_tick_ms": 0.636569
+      },
+      {
+        "seconds": 25.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 13.877972808963534,
+        "completed": 0,
+        "mean_tick_ms": 0.51778722,
+        "max_tick_ms": 0.598226
+      },
+      {
+        "seconds": 30.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 14.616640690744894,
+        "completed": 0,
+        "mean_tick_ms": 0.52170536,
+        "max_tick_ms": 0.63213
+      },
+      {
+        "seconds": 35.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 15.354157791246358,
+        "completed": 0,
+        "mean_tick_ms": 0.54323495,
+        "max_tick_ms": 1.452719
+      },
+      {
+        "seconds": 40.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 16.09094264698373,
+        "completed": 0,
+        "mean_tick_ms": 0.55010081,
+        "max_tick_ms": 0.802053
+      },
+      {
+        "seconds": 45.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 16.826671513944564,
+        "completed": 0,
+        "mean_tick_ms": 0.53921646,
+        "max_tick_ms": 0.689108
+      },
+      {
+        "seconds": 50.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 17.56004216612722,
+        "completed": 0,
+        "mean_tick_ms": 0.53315289,
+        "max_tick_ms": 0.672948
+      },
+      {
+        "seconds": 55.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 18.285540916360556,
+        "completed": 0,
+        "mean_tick_ms": 0.57173817,
+        "max_tick_ms": 1.57477
+      },
+      {
+        "seconds": 60.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 18.996129167474734,
+        "completed": 0,
+        "mean_tick_ms": 0.54750486,
+        "max_tick_ms": 0.953581
+      },
+      {
+        "seconds": 65.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 19.681085075573723,
+        "completed": 0,
+        "mean_tick_ms": 0.51413553,
+        "max_tick_ms": 0.726169
+      },
+      {
+        "seconds": 70.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 20.339921385630195,
+        "completed": 0,
+        "mean_tick_ms": 0.52420847,
+        "max_tick_ms": 1.705989
+      },
+      {
+        "seconds": 75.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 20.95224193882208,
+        "completed": 0,
+        "mean_tick_ms": 0.59992022,
+        "max_tick_ms": 1.834553
+      },
+      {
+        "seconds": 80.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 21.51433697087798,
+        "completed": 0,
+        "mean_tick_ms": 0.53240743,
+        "max_tick_ms": 0.743672
+      },
+      {
+        "seconds": 85.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 22.02452672740151,
+        "completed": 0,
+        "mean_tick_ms": 0.52199156,
+        "max_tick_ms": 0.727101
+      },
+      {
+        "seconds": 90.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 22.483075057111048,
+        "completed": 0,
+        "mean_tick_ms": 0.55269636,
+        "max_tick_ms": 0.81632
+      },
+      {
+        "seconds": 95.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 22.891466061317388,
+        "completed": 0,
+        "mean_tick_ms": 0.51657381,
+        "max_tick_ms": 0.693818
+      },
+      {
+        "seconds": 100.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 23.251913794855422,
+        "completed": 0,
+        "mean_tick_ms": 0.5422715499999999,
+        "max_tick_ms": 0.752368
+      },
+      {
+        "seconds": 105.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 23.567067345620952,
+        "completed": 0,
+        "mean_tick_ms": 0.53253607,
+        "max_tick_ms": 0.827141
+      },
+      {
+        "seconds": 110.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 23.839841099820685,
+        "completed": 0,
+        "mean_tick_ms": 0.5392634900000001,
+        "max_tick_ms": 0.836758
+      },
+      {
+        "seconds": 115.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.07331950072353,
+        "completed": 0,
+        "mean_tick_ms": 0.5196251199999999,
+        "max_tick_ms": 0.688047
+      },
+      {
+        "seconds": 120.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.270703411548265,
+        "completed": 0,
+        "mean_tick_ms": 0.52120853,
+        "max_tick_ms": 0.693737
+      },
+      {
+        "seconds": 125.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.435277084499944,
+        "completed": 0,
+        "mean_tick_ms": 0.5151928800000001,
+        "max_tick_ms": 0.677877
+      },
+      {
+        "seconds": 130.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.570381952116904,
+        "completed": 0,
+        "mean_tick_ms": 0.52321535,
+        "max_tick_ms": 0.727031
+      },
+      {
+        "seconds": 135.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.679387896356243,
+        "completed": 0,
+        "mean_tick_ms": 0.51370125,
+        "max_tick_ms": 0.636439
+      },
+      {
+        "seconds": 140.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.765655839992256,
+        "completed": 0,
+        "mean_tick_ms": 0.5177125,
+        "max_tick_ms": 0.680081
+      },
+      {
+        "seconds": 145.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.832488488107966,
+        "completed": 0,
+        "mean_tick_ms": 0.5147507499999999,
+        "max_tick_ms": 0.618845
+      },
+      {
+        "seconds": 150.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.88306938525295,
+        "completed": 0,
+        "mean_tick_ms": 0.5211243799999999,
+        "max_tick_ms": 0.709297
+      },
+      {
+        "seconds": 155.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.920394157219814,
+        "completed": 0,
+        "mean_tick_ms": 0.5298142299999999,
+        "max_tick_ms": 0.665153
+      },
+      {
+        "seconds": 160.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.947201290455588,
+        "completed": 0,
+        "mean_tick_ms": 0.52752142,
+        "max_tick_ms": 0.68438
+      },
+      {
+        "seconds": 165.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.965912028560055,
+        "completed": 0,
+        "mean_tick_ms": 0.5218816199999999,
+        "max_tick_ms": 0.713184
+      },
+      {
+        "seconds": 170.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.978588885021463,
+        "completed": 0,
+        "mean_tick_ms": 0.51878809,
+        "max_tick_ms": 0.715939
+      },
+      {
+        "seconds": 175.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.986919456644344,
+        "completed": 0,
+        "mean_tick_ms": 0.58779278,
+        "max_tick_ms": 1.215839
+      },
+      {
+        "seconds": 180.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.992227321078886,
+        "completed": 0,
+        "mean_tick_ms": 0.55332863,
+        "max_tick_ms": 1.051607
+      },
+      {
+        "seconds": 185.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.995506419622572,
+        "completed": 0,
+        "mean_tick_ms": 0.55660642,
+        "max_tick_ms": 1.111962
+      },
+      {
+        "seconds": 190.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.997471292106066,
+        "completed": 0,
+        "mean_tick_ms": 0.5576479,
+        "max_tick_ms": 0.846528
+      },
+      {
+        "seconds": 195.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.99861399665907,
+        "completed": 0,
+        "mean_tick_ms": 0.52939407,
+        "max_tick_ms": 0.732541
+      },
+      {
+        "seconds": 200.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.99925952381704,
+        "completed": 0,
+        "mean_tick_ms": 0.54083486,
+        "max_tick_ms": 0.854853
+      },
+      {
+        "seconds": 205.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.9996140871694,
+        "completed": 0,
+        "mean_tick_ms": 0.53616513,
+        "max_tick_ms": 0.778689
+      },
+      {
+        "seconds": 210.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999803635714514,
+        "completed": 0,
+        "mean_tick_ms": 0.53814843,
+        "max_tick_ms": 0.796021
+      },
+      {
+        "seconds": 215.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.99990236675063,
+        "completed": 0,
+        "mean_tick_ms": 0.56793422,
+        "max_tick_ms": 1.190731
+      },
+      {
+        "seconds": 220.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999952525844098,
+        "completed": 0,
+        "mean_tick_ms": 0.5287676299999999,
+        "max_tick_ms": 0.722712
+      },
+      {
+        "seconds": 225.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999977405949792,
+        "completed": 0,
+        "mean_tick_ms": 0.53840931,
+        "max_tick_ms": 0.733393
+      },
+      {
+        "seconds": 230.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.99998946706796,
+        "completed": 0,
+        "mean_tick_ms": 0.5375965500000001,
+        "max_tick_ms": 0.730097
+      },
+      {
+        "seconds": 235.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999995186617674,
+        "completed": 0,
+        "mean_tick_ms": 0.52904088,
+        "max_tick_ms": 0.844113
+      },
+      {
+        "seconds": 240.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999997842202234,
+        "completed": 0,
+        "mean_tick_ms": 0.53992,
+        "max_tick_ms": 0.788818
+      },
+      {
+        "seconds": 245.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.99999905042432,
+        "completed": 0,
+        "mean_tick_ms": 0.5307884,
+        "max_tick_ms": 0.755254
+      },
+      {
+        "seconds": 250.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999999589520247,
+        "completed": 0,
+        "mean_tick_ms": 0.5208711,
+        "max_tick_ms": 0.646437
+      },
+      {
+        "seconds": 255.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999999825591548,
+        "completed": 0,
+        "mean_tick_ms": 0.54185843,
+        "max_tick_ms": 0.903185
+      },
+      {
+        "seconds": 260.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999999927119493,
+        "completed": 0,
+        "mean_tick_ms": 0.52142762,
+        "max_tick_ms": 0.699107
+      },
+      {
+        "seconds": 265.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999999970031983,
+        "completed": 0,
+        "mean_tick_ms": 0.52298444,
+        "max_tick_ms": 0.712633
+      },
+      {
+        "seconds": 270.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.99999998786855,
+        "completed": 0,
+        "mean_tick_ms": 0.51565713,
+        "max_tick_ms": 0.667728
+      },
+      {
+        "seconds": 275.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999999995163474,
+        "completed": 0,
+        "mean_tick_ms": 0.52608328,
+        "max_tick_ms": 0.674391
+      },
+      {
+        "seconds": 280.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999999998100794,
+        "completed": 0,
+        "mean_tick_ms": 0.51876172,
+        "max_tick_ms": 0.631659
+      },
+      {
+        "seconds": 285.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.999999999265643,
+        "completed": 0,
+        "mean_tick_ms": 0.5167762899999999,
+        "max_tick_ms": 0.674912
+      },
+      {
+        "seconds": 290.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.99999999972066,
+        "completed": 0,
+        "mean_tick_ms": 0.56335078,
+        "max_tick_ms": 0.808846
+      },
+      {
+        "seconds": 295.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.99999999989569,
+        "completed": 0,
+        "mean_tick_ms": 0.55692604,
+        "max_tick_ms": 0.72176
+      },
+      {
+        "seconds": 300.0,
+        "active": 1000,
+        "moving": 1000,
+        "stopped": 0,
+        "mean_speed_mph": 24.9999999999618,
+        "completed": 0,
+        "mean_tick_ms": 0.51963915,
+        "max_tick_ms": 0.896393
+      }
+    ]
+  },
+  {
+    "case": "signals",
+    "initial_fleet": 1000,
+    "seconds": 300.0,
+    "warmup_seconds": 5,
+    "ticks": 6000,
+    "output_mode": "shared",
+    "mean_active": 998.331,
+    "peak_active": 1000,
+    "final_active": 980,
+    "completed": 20,
+    "moving_threshold_feet_per_second": 1,
+    "mean_moving_sampled": 892.5,
+    "final_moving": 858,
+    "mean_speed_mph_sampled": 6.799515648972745,
+    "tick_ms": {
+      "mean": 1.130615604,
+      "median": 0.7954060000000001,
+      "p95": 1.863379,
+      "p99": 2.133391,
+      "max": 3.876181
+    },
+    "ticks_over_50ms": 0,
+    "phases_mean_ms": {
+      "native_configuration": 0.03524980533264473,
+      "native_spawning": 0.00162637349982712,
+      "spawn_views": 0.011886844330092572,
+      "native_movement": 1.0067098726675188,
+      "completion_views": 0.0037418995019227927,
+      "bookkeeping_sync": 0.026998015834882,
+      "occupancy_sync": 0.0013093124982030229,
+      "output_sync": 0.03204922783500782,
+      "total": 1.0875221236650912,
+      "observe": 0.1018882673333335,
+      "intent": 0.18711981599999986,
+      "decision": 0.18711981599999986,
+      "resolve": 0.6240349761666653,
+      "apply": 0.05951932116666656,
+      "resolution": 0.6835542973333317
+    },
+    "rows": [
+      {
+        "seconds": 5.0,
+        "active": 1000,
+        "moving": 990,
+        "stopped": 10,
+        "mean_speed_mph": 9.284466126535778,
+        "completed": 0,
+        "mean_tick_ms": 1.038286,
+        "max_tick_ms": 1.819414
+      },
+      {
+        "seconds": 10.0,
+        "active": 1000,
+        "moving": 982,
+        "stopped": 18,
+        "mean_speed_mph": 9.218303272927017,
+        "completed": 0,
+        "mean_tick_ms": 1.3953530299999999,
+        "max_tick_ms": 1.783237
+      },
+      {
+        "seconds": 15.0,
+        "active": 1000,
+        "moving": 973,
+        "stopped": 27,
+        "mean_speed_mph": 9.11340376879757,
+        "completed": 0,
+        "mean_tick_ms": 0.83458762,
+        "max_tick_ms": 2.399857
+      },
+      {
+        "seconds": 20.0,
+        "active": 1000,
+        "moving": 966,
+        "stopped": 34,
+        "mean_speed_mph": 9.049571810131015,
+        "completed": 0,
+        "mean_tick_ms": 1.51730338,
+        "max_tick_ms": 2.6221
+      },
+      {
+        "seconds": 25.0,
+        "active": 1000,
+        "moving": 955,
+        "stopped": 45,
+        "mean_speed_mph": 8.94653688938892,
+        "completed": 0,
+        "mean_tick_ms": 0.83846965,
+        "max_tick_ms": 1.767075
+      },
+      {
+        "seconds": 30.0,
+        "active": 1000,
+        "moving": 953,
+        "stopped": 47,
+        "mean_speed_mph": 8.88452486671992,
+        "completed": 0,
+        "mean_tick_ms": 1.5164075600000002,
+        "max_tick_ms": 2.328001
+      },
+      {
+        "seconds": 35.0,
+        "active": 1000,
+        "moving": 942,
+        "stopped": 58,
+        "mean_speed_mph": 8.781537052665145,
+        "completed": 0,
+        "mean_tick_ms": 0.8173539200000001,
+        "max_tick_ms": 1.896261
+      },
+      {
+        "seconds": 40.0,
+        "active": 1000,
+        "moving": 938,
+        "stopped": 62,
+        "mean_speed_mph": 8.711184882033002,
+        "completed": 0,
+        "mean_tick_ms": 1.52358826,
+        "max_tick_ms": 2.843099
+      },
+      {
+        "seconds": 45.0,
+        "active": 1000,
+        "moving": 930,
+        "stopped": 70,
+        "mean_speed_mph": 8.609176356763264,
+        "completed": 0,
+        "mean_tick_ms": 0.8056819900000001,
+        "max_tick_ms": 1.840074
+      },
+      {
+        "seconds": 50.0,
+        "active": 1000,
+        "moving": 925,
+        "stopped": 75,
+        "mean_speed_mph": 8.548411987850898,
+        "completed": 0,
+        "mean_tick_ms": 1.4815512100000001,
+        "max_tick_ms": 2.319154
+      },
+      {
+        "seconds": 55.0,
+        "active": 1000,
+        "moving": 916,
+        "stopped": 84,
+        "mean_speed_mph": 8.452063571241968,
+        "completed": 0,
+        "mean_tick_ms": 0.8534892399999999,
+        "max_tick_ms": 1.941096
+      },
+      {
+        "seconds": 60.0,
+        "active": 1000,
+        "moving": 921,
+        "stopped": 79,
+        "mean_speed_mph": 8.38125878383721,
+        "completed": 0,
+        "mean_tick_ms": 1.41859634,
+        "max_tick_ms": 2.119825
+      },
+      {
+        "seconds": 65.0,
+        "active": 1000,
+        "moving": 910,
+        "stopped": 90,
+        "mean_speed_mph": 8.285088576994491,
+        "completed": 0,
+        "mean_tick_ms": 0.77916387,
+        "max_tick_ms": 1.731197
+      },
+      {
+        "seconds": 70.0,
+        "active": 1000,
+        "moving": 918,
+        "stopped": 82,
+        "mean_speed_mph": 8.22047767307577,
+        "completed": 0,
+        "mean_tick_ms": 1.49511412,
+        "max_tick_ms": 2.151866
+      },
+      {
+        "seconds": 75.0,
+        "active": 1000,
+        "moving": 905,
+        "stopped": 95,
+        "mean_speed_mph": 8.11735469145379,
+        "completed": 0,
+        "mean_tick_ms": 0.79726973,
+        "max_tick_ms": 1.760964
+      },
+      {
+        "seconds": 80.0,
+        "active": 1000,
+        "moving": 907,
+        "stopped": 93,
+        "mean_speed_mph": 8.05074405518596,
+        "completed": 0,
+        "mean_tick_ms": 1.44881609,
+        "max_tick_ms": 2.098525
+      },
+      {
+        "seconds": 85.0,
+        "active": 1000,
+        "moving": 906,
+        "stopped": 94,
+        "mean_speed_mph": 7.958813022148559,
+        "completed": 0,
+        "mean_tick_ms": 0.78891761,
+        "max_tick_ms": 1.816449
+      },
+      {
+        "seconds": 90.0,
+        "active": 1000,
+        "moving": 899,
+        "stopped": 101,
+        "mean_speed_mph": 7.887446871802015,
+        "completed": 0,
+        "mean_tick_ms": 1.47574074,
+        "max_tick_ms": 2.618603
+      },
+      {
+        "seconds": 95.0,
+        "active": 1000,
+        "moving": 899,
+        "stopped": 101,
+        "mean_speed_mph": 7.7924797972791,
+        "completed": 0,
+        "mean_tick_ms": 0.79701588,
+        "max_tick_ms": 2.148199
+      },
+      {
+        "seconds": 100.0,
+        "active": 1000,
+        "moving": 893,
+        "stopped": 107,
+        "mean_speed_mph": 7.715203016168335,
+        "completed": 0,
+        "mean_tick_ms": 1.4346098699999998,
+        "max_tick_ms": 2.328472
+      },
+      {
+        "seconds": 105.0,
+        "active": 1000,
+        "moving": 886,
+        "stopped": 114,
+        "mean_speed_mph": 7.613471639679573,
+        "completed": 0,
+        "mean_tick_ms": 0.8199109400000001,
+        "max_tick_ms": 2.60712
+      },
+      {
+        "seconds": 110.0,
+        "active": 1000,
+        "moving": 895,
+        "stopped": 105,
+        "mean_speed_mph": 7.558534954387835,
+        "completed": 0,
+        "mean_tick_ms": 1.4746511,
+        "max_tick_ms": 2.172586
+      },
+      {
+        "seconds": 115.0,
+        "active": 1000,
+        "moving": 891,
+        "stopped": 109,
+        "mean_speed_mph": 7.453944665929407,
+        "completed": 0,
+        "mean_tick_ms": 0.80941816,
+        "max_tick_ms": 1.99021
+      },
+      {
+        "seconds": 120.0,
+        "active": 1000,
+        "moving": 882,
+        "stopped": 118,
+        "mean_speed_mph": 7.3808932483499055,
+        "completed": 0,
+        "mean_tick_ms": 1.47838377,
+        "max_tick_ms": 2.341837
+      },
+      {
+        "seconds": 125.0,
+        "active": 1000,
+        "moving": 883,
+        "stopped": 117,
+        "mean_speed_mph": 7.284507454854448,
+        "completed": 0,
+        "mean_tick_ms": 0.84975348,
+        "max_tick_ms": 2.017331
+      },
+      {
+        "seconds": 130.0,
+        "active": 1000,
+        "moving": 885,
+        "stopped": 115,
+        "mean_speed_mph": 7.223944801488217,
+        "completed": 0,
+        "mean_tick_ms": 1.46533397,
+        "max_tick_ms": 3.461212
+      },
+      {
+        "seconds": 135.0,
+        "active": 1000,
+        "moving": 877,
+        "stopped": 123,
+        "mean_speed_mph": 7.111113546788489,
+        "completed": 0,
+        "mean_tick_ms": 0.8121288,
+        "max_tick_ms": 2.101531
+      },
+      {
+        "seconds": 140.0,
+        "active": 1000,
+        "moving": 883,
+        "stopped": 117,
+        "mean_speed_mph": 7.061724584717239,
+        "completed": 0,
+        "mean_tick_ms": 1.45122344,
+        "max_tick_ms": 2.393004
+      },
+      {
+        "seconds": 145.0,
+        "active": 1000,
+        "moving": 866,
+        "stopped": 134,
+        "mean_speed_mph": 6.9467309612016095,
+        "completed": 0,
+        "mean_tick_ms": 0.80406507,
+        "max_tick_ms": 1.741226
+      },
+      {
+        "seconds": 150.0,
+        "active": 1000,
+        "moving": 882,
+        "stopped": 118,
+        "mean_speed_mph": 6.890495596172088,
+        "completed": 0,
+        "mean_tick_ms": 1.41389255,
+        "max_tick_ms": 1.8637
+      },
+      {
+        "seconds": 155.0,
+        "active": 1000,
+        "moving": 874,
+        "stopped": 126,
+        "mean_speed_mph": 6.790271015098597,
+        "completed": 0,
+        "mean_tick_ms": 0.80299875,
+        "max_tick_ms": 2.145735
+      },
+      {
+        "seconds": 160.0,
+        "active": 1000,
+        "moving": 887,
+        "stopped": 113,
+        "mean_speed_mph": 6.714150577074384,
+        "completed": 0,
+        "mean_tick_ms": 1.4508331300000001,
+        "max_tick_ms": 2.333752
+      },
+      {
+        "seconds": 165.0,
+        "active": 1000,
+        "moving": 875,
+        "stopped": 125,
+        "mean_speed_mph": 6.629776055156685,
+        "completed": 0,
+        "mean_tick_ms": 0.7876922399999999,
+        "max_tick_ms": 1.960844
+      },
+      {
+        "seconds": 170.0,
+        "active": 1000,
+        "moving": 883,
+        "stopped": 117,
+        "mean_speed_mph": 6.557529175211442,
+        "completed": 0,
+        "mean_tick_ms": 1.40553838,
+        "max_tick_ms": 2.056656
+      },
+      {
+        "seconds": 175.0,
+        "active": 1000,
+        "moving": 872,
+        "stopped": 128,
+        "mean_speed_mph": 6.455267507682274,
+        "completed": 0,
+        "mean_tick_ms": 0.78679406,
+        "max_tick_ms": 2.273167
+      },
+      {
+        "seconds": 180.0,
+        "active": 1000,
+        "moving": 873,
+        "stopped": 127,
+        "mean_speed_mph": 6.387493806340408,
+        "completed": 0,
+        "mean_tick_ms": 1.38567219,
+        "max_tick_ms": 2.057988
+      },
+      {
+        "seconds": 185.0,
+        "active": 1000,
+        "moving": 875,
+        "stopped": 125,
+        "mean_speed_mph": 6.29457092507721,
+        "completed": 0,
+        "mean_tick_ms": 0.81724897,
+        "max_tick_ms": 1.665582
+      },
+      {
+        "seconds": 190.0,
+        "active": 1000,
+        "moving": 864,
+        "stopped": 136,
+        "mean_speed_mph": 6.222493529636787,
+        "completed": 0,
+        "mean_tick_ms": 1.43142068,
+        "max_tick_ms": 2.061024
+      },
+      {
+        "seconds": 195.0,
+        "active": 1000,
+        "moving": 871,
+        "stopped": 129,
+        "mean_speed_mph": 6.113615352221794,
+        "completed": 0,
+        "mean_tick_ms": 0.81026608,
+        "max_tick_ms": 1.966013
+      },
+      {
+        "seconds": 200.0,
+        "active": 1000,
+        "moving": 876,
+        "stopped": 124,
+        "mean_speed_mph": 6.052267660295353,
+        "completed": 0,
+        "mean_tick_ms": 1.3949791500000002,
+        "max_tick_ms": 1.873628
+      },
+      {
+        "seconds": 205.0,
+        "active": 1000,
+        "moving": 867,
+        "stopped": 133,
+        "mean_speed_mph": 5.951136411718923,
+        "completed": 0,
+        "mean_tick_ms": 0.79452453,
+        "max_tick_ms": 1.760844
+      },
+      {
+        "seconds": 210.0,
+        "active": 1000,
+        "moving": 872,
+        "stopped": 128,
+        "mean_speed_mph": 5.8853318086439295,
+        "completed": 0,
+        "mean_tick_ms": 1.40149637,
+        "max_tick_ms": 1.980592
+      },
+      {
+        "seconds": 215.0,
+        "active": 1000,
+        "moving": 868,
+        "stopped": 132,
+        "mean_speed_mph": 5.777545545910315,
+        "completed": 0,
+        "mean_tick_ms": 0.8382371500000001,
+        "max_tick_ms": 1.717511
+      },
+      {
+        "seconds": 220.0,
+        "active": 1000,
+        "moving": 874,
+        "stopped": 126,
+        "mean_speed_mph": 5.730059936207828,
+        "completed": 0,
+        "mean_tick_ms": 1.39336641,
+        "max_tick_ms": 1.792955
+      },
+      {
+        "seconds": 225.0,
+        "active": 1000,
+        "moving": 870,
+        "stopped": 130,
+        "mean_speed_mph": 5.619617641240396,
+        "completed": 0,
+        "mean_tick_ms": 0.81704731,
+        "max_tick_ms": 1.760242
+      },
+      {
+        "seconds": 230.0,
+        "active": 1000,
+        "moving": 878,
+        "stopped": 122,
+        "mean_speed_mph": 5.56749196828988,
+        "completed": 0,
+        "mean_tick_ms": 1.4807551899999998,
+        "max_tick_ms": 3.331717
+      },
+      {
+        "seconds": 235.0,
+        "active": 1000,
+        "moving": 867,
+        "stopped": 133,
+        "mean_speed_mph": 5.451351522110218,
+        "completed": 0,
+        "mean_tick_ms": 0.7803168100000001,
+        "max_tick_ms": 1.894728
+      },
+      {
+        "seconds": 240.0,
+        "active": 1000,
+        "moving": 876,
+        "stopped": 124,
+        "mean_speed_mph": 5.390445482888897,
+        "completed": 0,
+        "mean_tick_ms": 1.3880541400000002,
+        "max_tick_ms": 2.061134
+      },
+      {
+        "seconds": 245.0,
+        "active": 1000,
+        "moving": 863,
+        "stopped": 137,
+        "mean_speed_mph": 5.286160150313919,
+        "completed": 0,
+        "mean_tick_ms": 0.78869341,
+        "max_tick_ms": 1.738572
+      },
+      {
+        "seconds": 250.0,
+        "active": 999,
+        "moving": 873,
+        "stopped": 126,
+        "mean_speed_mph": 5.200390066029064,
+        "completed": 1,
+        "mean_tick_ms": 1.42801726,
+        "max_tick_ms": 3.079458
+      },
+      {
+        "seconds": 255.0,
+        "active": 998,
+        "moving": 879,
+        "stopped": 119,
+        "mean_speed_mph": 5.086245832093817,
+        "completed": 2,
+        "mean_tick_ms": 0.80418797,
+        "max_tick_ms": 1.986292
+      },
+      {
+        "seconds": 260.0,
+        "active": 996,
+        "moving": 880,
+        "stopped": 116,
+        "mean_speed_mph": 4.977066934379373,
+        "completed": 4,
+        "mean_tick_ms": 1.54766618,
+        "max_tick_ms": 2.451274
+      },
+      {
+        "seconds": 265.0,
+        "active": 994,
+        "moving": 877,
+        "stopped": 117,
+        "mean_speed_mph": 4.856203804244597,
+        "completed": 6,
+        "mean_tick_ms": 0.80306159,
+        "max_tick_ms": 1.808935
+      },
+      {
+        "seconds": 270.0,
+        "active": 992,
+        "moving": 862,
+        "stopped": 130,
+        "mean_speed_mph": 4.736434675479147,
+        "completed": 8,
+        "mean_tick_ms": 1.42805342,
+        "max_tick_ms": 2.186733
+      },
+      {
+        "seconds": 275.0,
+        "active": 990,
+        "moving": 856,
+        "stopped": 134,
+        "mean_speed_mph": 4.5807144820612855,
+        "completed": 10,
+        "mean_tick_ms": 0.80797173,
+        "max_tick_ms": 2.104828
+      },
+      {
+        "seconds": 280.0,
+        "active": 988,
+        "moving": 856,
+        "stopped": 132,
+        "mean_speed_mph": 4.473036528101302,
+        "completed": 12,
+        "mean_tick_ms": 1.4076881,
+        "max_tick_ms": 2.207222
+      },
+      {
+        "seconds": 285.0,
+        "active": 986,
+        "moving": 860,
+        "stopped": 126,
+        "mean_speed_mph": 4.331969792242465,
+        "completed": 14,
+        "mean_tick_ms": 0.86175001,
+        "max_tick_ms": 3.876181
+      },
+      {
+        "seconds": 290.0,
+        "active": 984,
+        "moving": 861,
+        "stopped": 123,
+        "mean_speed_mph": 4.225220254077834,
+        "completed": 16,
+        "mean_tick_ms": 1.34844567,
+        "max_tick_ms": 2.279699
+      },
+      {
+        "seconds": 295.0,
+        "active": 982,
+        "moving": 845,
+        "stopped": 137,
+        "mean_speed_mph": 4.092159498700224,
+        "completed": 18,
+        "mean_tick_ms": 0.81998054,
+        "max_tick_ms": 1.82718
+      },
+      {
+        "seconds": 300.0,
+        "active": 980,
+        "moving": 858,
+        "stopped": 122,
+        "mean_speed_mph": 4.001512473267822,
+        "completed": 20,
+        "mean_tick_ms": 1.38810143,
+        "max_tick_ms": 2.28519
+      }
+    ]
+  }
+]

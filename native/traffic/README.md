@@ -85,9 +85,10 @@ query output buffers, permitting concurrent readers. Python world rebuilds
 replace snapshots; Python still selects services and bus itineraries.
 
 `vehicle_views()` borrows native records until the next engine operation.
-`snapshot()` returns owned Python values. `sync()` explicitly copies output into
-existing display vehicles; it is not called by the differential driver before
-comparison, so Python reference state cannot mask a native discrepancy.
+`snapshot()` returns owned Python values for diagnostics. Application vehicles
+and brains read native fields directly through `native_shared` bindings. Bindings
+are materialized into ordinary Python objects before removal or engine close;
+completed objects remain readable after subsequent steps and rebuilds.
 
 The C ABI is version 4; borrowed route, event, bookkeeping, profile and trace records also
 expire on engine mutation. Python returns owned `Path` objects for application
@@ -131,11 +132,16 @@ queries. Native ticks mark it dirty without checking or updating every car.
 A query may rebuild a current snapshot once; further queries reuse it until
 another tick or edit. Private index internals are not an up-to-date query API.
 
-Copy and shared output representations remain available through
-`native_output_mode`; both use the same C++ driver. World edits to public vehicle
+Shared output is the sole application representation. `native_output_mode`
+defaults to `shared` and rejects retired `copy` requests immediately. World edits to public vehicle
 or driver state invalidate/reimport native state through callbacks. Yellow
 commitment is included in ABI 4 output/import so backend recreation retains the
 decision. Coordinator reservations owned by external IDs are imported as native
 world blockers; reservation edits also notify the native owner.
+
+Run `python tools/benchmark_dense_vehicles.py --seconds 300 --output /tmp/dense.json`
+for packed and signalized 1,000-car workloads. `tools/benchmark_native_shared.py`
+measures shared state with and without display field consumption; it does not draw
+windows. Copy-mode measurements in older reports describe historical commits.
 
 See `docs/cpp-consolidation.md` for behavior provenance and validation.

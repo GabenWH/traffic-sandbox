@@ -3,6 +3,19 @@
 Repository: GabenWH/traffic-sandbox
 Branch: fix/parking-cache-preference-scaffold
 
+## Current runtime after shared-state promotion
+
+Shared state is now the sole application path. Copy requests are rejected;
+eager vehicle/brain mirroring and the copy/shared runtime comparison have been
+removed. Use `python tools/benchmark_dense_vehicles.py --seconds 300 --output
+/tmp/dense-shared-new.json` for current measurements. The results and commands
+below are historical evidence for commit 091eab9 and should be reproduced from
+that commit when a copy-mode comparison is needed. Current coverage includes
+live field reads, retained completions, removal, brain replacement, engine close,
+road rebuilds, transport save/load and actual scene position consumption.
+See [production shared state](shared-vehicle-state.md) for the migration,
+fresh measurements, validation and visual viewer command.
+
 ## Goal and current changes
 
 Reduce simulation update CPU toward 0.20 ms, measuring the actual active workload.

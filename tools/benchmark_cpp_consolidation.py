@@ -9,7 +9,7 @@ import sys
 # Child processes isolate imported code and compiler caches. Canonical phase
 # grouping uses geometry so generated connection IDs cannot change the load.
 CHILD = r'''
-import json, sys
+import inspect, json, sys
 from types import SimpleNamespace
 sys.path.insert(0, sys.argv[1])
 from tools.benchmark_native_spawning import make_city
@@ -30,7 +30,11 @@ for c in sorted(connections.values(),key=lambda c:(c.source_output.position,c.so
     else: groups.append([c])
 controller=FixedTimeSignalController(SignalPlan(tuple(SignalPhase(8,{c.id for c in g},1.5,.5) for g in groups)))
 a=SimpleNamespace(seed=42,warmup=5,seconds=30,dt=.05)
-r=run(city,{'profile-signal':controller},'copy',fleet,True,a)
+# Older checkouts expose an explicit mode argument; both sides use shared state.
+if 'mode' in inspect.signature(run).parameters:
+    r=run(city,{'profile-signal':controller},'shared',fleet,True,a)
+else:
+    r=run(city,{'profile-signal':controller},fleet,True,a)
 r.pop('samples')
 print(json.dumps(r))
 '''
@@ -66,7 +70,7 @@ def main():
         summary={'initial_cars':fleet,'cpu_ms_per_update':cpu,'cpu_reduction':1-cpu['cpp']/cpu['before'],'matching_counts_and_display_checksum':True}
         comparisons.append(summary)
         print(json.dumps(summary),flush=True)
-    report={'method':'3 counterbalanced pairs, 30 measured simulated seconds + 5 warmup, dt .05; native copy output with display reads, canonical geometry-based signal groups, compilation/setup excluded',
+    report={'method':'3 counterbalanced pairs, 30 measured simulated seconds + 5 warmup, dt .05; native shared output with display reads, canonical geometry-based signal groups, compilation/setup excluded',
             'baseline_root':str(a.baseline_root),'current_root':str(current),'comparisons':comparisons,'runs':runs}
     a.output.parent.mkdir(parents=True,exist_ok=True)
     a.output.write_text(json.dumps(report,indent=2)+'\n')

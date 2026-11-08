@@ -1,4 +1,4 @@
-"""Experimental read-through views of the C++ engine's actual vehicle fields.
+"""Live Python views of the C++ engine's vehicle fields.
 
 No IPC segment is needed: ctypes loads the engine into Python's process. C++
 alone writes during a step, and Python reads between steps. A view is attached
@@ -51,7 +51,7 @@ class SharedBinding:
         self.engine = controller.engine
         self.car_class, self.brain_class = type(car), type(car.brain)
         if self.car_class is not RoutedRoadVehicle or self.brain_class is not CarBrain:
-            raise TypeError('Shared-memory experiment requires standard vehicle and brain types')
+            raise TypeError('Native views require standard vehicle and brain types')
         view = _SharedVehicle()
         self.engine._call('nt_shared_vehicle', handle, C.byref(view))
         self.motion, self.position, self.heading = view.motion.contents, view.position.contents, view.heading.contents

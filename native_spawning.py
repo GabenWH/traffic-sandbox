@@ -102,7 +102,6 @@ class NativeRoadSimulation:
         self._published_rng_bytes = None
         self._configured_signal_states = None
         self.publishing = False
-        self.shared = simulation.native_output_mode == 'shared'
         try:
             if city is not None:
                 self.bind_city(city)
@@ -111,15 +110,17 @@ class NativeRoadSimulation:
             self.engine.enable_profile(True)
             for car in simulation.cars:
                 self.watch_edits(car)
-            if self.shared:
-                from native_shared import SharedBinding
-                for car in simulation.cars:
-                    SharedBinding(self, car, self.engine._handles[car.id])
+            from native_shared import SharedBinding
+            for car in simulation.cars:
+                SharedBinding(self, car, self.engine._handles[car.id])
         except BaseException:
             self.engine.close()
             raise
 
     def watch_edits(self, car):
+        # Save restoration can populate the roster without using admission.
+        # Every imported actor needs ownership for edit invalidation as well.
+        car._on_occupancy_change = self.sim._mark_occupancy_changed
         self.sim._watch_native_edits(car)
 
     def invalidate(self):
@@ -346,9 +347,8 @@ class NativeRoadSimulation:
         self.watch_edits(car)
         e._ids[handle], e._handles[car.id] = car.id, handle
         e._next_handle = max(e._next_handle, handle + 1)
-        if self.shared:
-            from native_shared import SharedBinding
-            SharedBinding(self, car, handle)
+        from native_shared import SharedBinding
+        SharedBinding(self, car, handle)
 
     def receive_generated(self):
         from traffic_testbed import RoutedRoadVehicle
@@ -528,12 +528,9 @@ class NativeRoadSimulation:
         # writes from being mistaken for user edits that invalidate C++ state.
         self.publishing = True
         try:
-            if self.shared:
-                from native_shared import completed_views
-                completed_vehicles = completed_views(self)
-            else:
-                completed_vehicles = native_engine.sync(simulation.cars)
-            vehicle_states_published_at = perf_counter()
+            from native_shared import completed_views
+            completed_vehicles = completed_views(self)
+            completion_views_finished_at = perf_counter()
             self.publish_bookkeeping()
             bookkeeping_published_at = perf_counter()
             simulation._occupancy_dirty = True
@@ -570,8 +567,8 @@ class NativeRoadSimulation:
             'native_spawning': (generation_finished_at-configuration_finished_at)*1000,
             'spawn_views': (spawn_publication_finished_at-generation_finished_at)*1000,
             'native_movement': (movement_finished_at-spawn_publication_finished_at)*1000,
-            'vehicle_state_sync': (vehicle_states_published_at-movement_finished_at)*1000,
-            'bookkeeping_sync': (bookkeeping_published_at-vehicle_states_published_at)*1000,
+            'completion_views': (completion_views_finished_at-movement_finished_at)*1000,
+            'bookkeeping_sync': (bookkeeping_published_at-completion_views_finished_at)*1000,
             'occupancy_sync': (output_finished_at-bookkeeping_published_at)*1000,
             'output_sync': (output_finished_at-movement_finished_at)*1000,
             'total': (output_finished_at-update_started_at)*1000,

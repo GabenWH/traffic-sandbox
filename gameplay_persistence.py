@@ -41,7 +41,8 @@ def _links(city):
     lanes={lane.id:lane for road in city.roads for lane in road.lanes}
     connections={c.id:c for j in city.intersections for c in j.lane_connections}
     ports={p.id:p for j in city.intersections for p in (*j.incoming_ports(),*j.outgoing_ports())}
-    return lanes,connections,ports
+    endpoints={j.id:j for j in city.intersections}
+    return lanes,connections,ports,endpoints
 
 
 def _route_dump(route):
@@ -54,13 +55,14 @@ def _route_dump(route):
         elif edge.kind=='road_port':
             data=dict(kind='road_port',lane=v.lane.id,port=v.port.id,points=list(v.points))
         elif edge.kind=='lane_connection':data=dict(kind='lane_connection',connection=v.id)
+        elif edge.kind=='route_endpoint':data=dict(kind='route_endpoint',intersection=v.id)
         else:raise ValueError('Unsupported saved vehicle link: '+edge.kind)
         edges.append(data)
     return dict(nodes=route.nodes,edges=edges,cost=route.cost)
 
 
 def _route_load(data,index):
-    lanes,connections,ports=index;edges=[]
+    lanes,connections,ports,endpoints=index;edges=[]
     for edge in data['edges']:
         kind=edge['kind']
         if kind=='lane':
@@ -68,6 +70,7 @@ def _route_load(data,index):
             value=LaneTraversal(lane,tuple(map(tuple,edge['points']))) if 'points' in edge else lane
         elif kind=='road_port':value=PortTraversal(ports[edge['port']],lanes[edge['lane']],tuple(map(tuple,edge['points'])))
         elif kind=='lane_connection':value=connections[edge['connection']]
+        elif kind=='route_endpoint':value=endpoints[edge['intersection']]
         else:raise ValueError('Unsupported saved vehicle link')
         edges.append(MobilityLink(kind,value))
     return Path(_tuples(data['nodes']),tuple(edges),data['cost'])
@@ -122,7 +125,7 @@ def dump_transport(transit, managed=None):
 def restore_transport(transit,data):
     from mobility import lane_position_at_distance
     traffic=transit.traffic;traffic.clear_vehicles()
-    index=_links(transit.city);lanes,connections,ports=index
+    index=_links(transit.city);lanes,connections,ports,_=index
     transit.time=traffic.elapsed_time=float(data['time'])
     transit.stops.clear();transit.lines.clear();transit.buses.clear();transit.people.clear()
     transit.legs.clear();transit.leg_lengths.clear();transit.queues.clear();transit._next_departure.clear();transit.line_plans.clear()

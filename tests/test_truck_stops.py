@@ -72,33 +72,28 @@ class TruckStopTests(unittest.TestCase):
         operation(name, self.position(distance, lane), length=length, width=width)
 
     def test_arriving_truck_blocks_follower_before_outer_arrival_observation(self):
-        for mode in ('copy', 'shared'):
-            with self.subTest(mode=mode):
-                self.traffic.clear_vehicles()
-                self.traffic.native_output_mode = mode
-                truck = self.admit('truck', 100, 400, length=28, width=8)
-                self.assertIsNotNone(truck)
-                self.stop_on_arrival(truck.id)
-                follower = self.admit('follower', 40, 1000)
-                self.assertIsNotNone(follower)
-
-                # No fleet observer runs during this call. The native stop must
-                # exist before the following driver advances another substep.
-                completed = self.traffic.update(self.city, 40)
-                self.assertEqual([car.id for car in completed], ['truck'])
-                self.assertEqual([car.id for car in self.traffic.cars], ['follower'])
-                self.assertAlmostEqual(truck.position[0], self.position(400).point[0], places=7)
-                self.assertAlmostEqual(truck.position[1], self.position(400).point[1], places=7)
-                self.assertLessEqual(follower.distance, 335.000001)
-                self.assertEqual(follower.speed, 0)
-                self.assertGreaterEqual(400 - (40 + follower.distance) - 21, 4 - 1e-7)
-                # The optional Python occupancy view agrees with native traffic.
-                self.traffic._ensure_occupancy()
-                leader, gap = self.traffic.occupancy.lead_car_gap(follower, 128)
-                self.assertEqual(leader.id, 'truck')
-                self.assertGreaterEqual(gap, 4 - 1e-7)
-                self.traffic.clear_vehicles()
-
+        self.traffic.clear_vehicles()
+        truck = self.admit('truck', 100, 400, length=28, width=8)
+        self.assertIsNotNone(truck)
+        self.stop_on_arrival(truck.id)
+        follower = self.admit('follower', 40, 1000)
+        self.assertIsNotNone(follower)
+        # No fleet observer runs during this call. The native stop must
+        # exist before the following driver advances another substep.
+        completed = self.traffic.update(self.city, 40)
+        self.assertEqual([car.id for car in completed], ['truck'])
+        self.assertEqual([car.id for car in self.traffic.cars], ['follower'])
+        self.assertAlmostEqual(truck.position[0], self.position(400).point[0], places=7)
+        self.assertAlmostEqual(truck.position[1], self.position(400).point[1], places=7)
+        self.assertLessEqual(follower.distance, 335.000001)
+        self.assertEqual(follower.speed, 0)
+        self.assertGreaterEqual(400 - (40 + follower.distance) - 21, 4 - 1e-7)
+        # The optional Python occupancy view agrees with native traffic.
+        self.traffic._ensure_occupancy()
+        leader, gap = self.traffic.occupancy.lead_car_gap(follower, 128)
+        self.assertEqual(leader.id, 'truck')
+        self.assertGreaterEqual(gap, 4 - 1e-7)
+        self.traffic.clear_vehicles()
     def test_native_substeps_retain_loading_body_without_python_callbacks(self):
         truck = self.admit('truck', 100, 400, length=28, width=8)
         self.stop_on_arrival(truck.id)
