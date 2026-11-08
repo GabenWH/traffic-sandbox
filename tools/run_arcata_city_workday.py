@@ -61,6 +61,7 @@ def parse_args(argv=None):
     parser.add_argument('--population',type=int,default=10000,help='exact resident count within imported housing capacity (default: 10000)')
     parser.add_argument('--cars',type=int,default=1000,help='household cars in the same simulation (default: 1000)')
     parser.add_argument('--seed',type=int,default=42)
+    parser.add_argument('--with-buses',action='store_true',help='add 3 synthetic bus lines, 12 buses and 10 connected stops')
     parser.add_argument('--departure-window-minutes',type=float,default=120,help='stable worker departure spread; 0 is a synchronized stress burst (default: 120)')
     parser.add_argument('--departures-per-second',type=float,default=20,help='global trip-start limit (default: 20)')
     parser.add_argument('--max-active-cars',type=int,default=2000,help='active road-vehicle limit for fleet admission (default: 2000)')
@@ -164,6 +165,10 @@ def build_scenario(city, *, cars=1000, seed=42, start_hour=6, population=None,co
 
 def _snapshot(runtime):
     report=runtime.report()
+    report.update(bus_count=len(runtime.transit.buses),
+        bus_passengers=sum(len(bus.passengers) for bus in runtime.transit.buses.values()),
+        bus_waiting=sum(len(queue) for queue in runtime.transit.queues.values()),
+        bus_distance_feet=sum(bus.distance_feet for bus in runtime.transit.buses.values()))
     report['states']=dict(runtime.resident_state_counts())
     report['clock_hour']=round(runtime.time/3600,5)
     cars=[v for v in runtime.fleet.vehicles.values() if v.kind=='car' and v.driver in runtime.residents]
@@ -246,6 +251,11 @@ def main(argv=None):
                 starts_per_second=args.departures_per_second,max_active_vehicles=args.max_active_cars)
             runtime,config=build_scenario(city,cars=args.cars,seed=args.seed,start_hour=args.start_hour,
                                            population=args.population,commute_policy=policy)
+            if args.with_buses:
+                from tools.arcata_buses import add_benchmark_buses
+                config['bus_service']=add_benchmark_buses(runtime, progress=emit)
+                config['scope']='commuting, shared parking, household consumption and synthetic bus service'
+                emit(dict(stage='bus_network',**config['bus_service']))
             config.update(source=source,duration_hours=args.hours,wall_limit_seconds=args.wall_seconds)
             (out/'configuration.json').write_text(json.dumps(config,indent=2))
             emit(dict(stage='ready',**{k:config[k] for k in ('population','workers','cars','parking_lots','parking_spaces')}))

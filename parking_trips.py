@@ -12,6 +12,8 @@ from math import ceil, dist, isfinite
 
 DAY = 86400
 _OPTIONS_PENDING = object()
+_TRY_BUS = object()
+PARKING_BEFORE_BUS_FEET = 50 / 0.3048  # Map geometry is measured in feet.
 
 
 @dataclass
@@ -65,16 +67,17 @@ class ParkingTrips:
             r.fleet.rebuild_indexes()
         self.wake_network()
 
-    def options(self, destination, *, bounded=False):
+    def options(self, destination, *, bounded=False, max_distance=None):
         """Replay eligible sites, checking further walks only when needed.
 
         Most departures use the primary lot. Keep the candidate iterator beside
         the validated prefix so a retry (or another commuter) resumes validation
         without rebuilding walks or eagerly retaining every hypothetical path.
         """
-        if destination not in self._options:
-            self._options[destination] = _ParkingOptions([destination], self._alternate_options(destination))
-        state = self._options[destination]
+        key = destination if max_distance is None else (destination, max_distance)
+        if key not in self._options:
+            self._options[key] = _ParkingOptions([destination], self._alternate_options(destination, max_distance))
+        state = self._options[key]
         validated, pending = state.sites, state.remaining
         index = 0
         while True:
@@ -107,12 +110,13 @@ class ParkingTrips:
         self._walk_queries_left -= 1
         return True
 
-    def _alternate_options(self, destination):
+    def _alternate_options(self, destination, max_distance=None):
         r = self.runtime
         seen = {r.fleet._lot_key(destination)}
         limit = r.commute_policy.parking_walk_seconds
         point = r.sites[destination]['walk_point']
-        for sid in self.access.candidates(destination, max_distance=limit*4.4):
+        radius = limit*4.4 if max_distance is None else min(limit*4.4, max_distance)
+        for sid in self.access.candidates(destination, max_distance=radius):
             key = r.fleet._lot_key(sid)
             if key in seen:
                 continue
@@ -163,18 +167,31 @@ class ParkingTrips:
             self.resolved(person.id)
         return admitted
 
-    def _fallback(self, person, plan, origin):
+    def _fallback(self, person, plan, origin, *, require_bus=False):
         r = self.runtime
         destination = r.sites[plan['destination']]['walk_point']
-        seconds = self._walk_cost(origin, destination, allow_bus=True)
+        if require_bus:
+            # No transit search when this town has no running bus service.
+            if not any(bus.service_until>r.transit.time and bus.fuel_liters>0
+                       for bus in r.transit.buses.values()):
+                return False
+            try:
+                seconds = r.transit.journey_path(origin, destination, require_bus=True).cost
+            except ValueError:
+                return False
+        else:
+            seconds = self._walk_cost(origin, destination, allow_bus=True)
         if seconds > r.commute_policy.fallback_trip_seconds+1e-8:
             return False
         try:
-            r.transit.request_trip(person.id, origin, destination)
+            if require_bus:
+                r.transit.request_trip(person.id, origin, destination, require_bus=True)
+            else:
+                r.transit.request_trip(person.id, origin, destination)
         except (ValueError, RuntimeError):
             return False
         plan['stage'] = 'fallback'
-        r.fleet.last_dispatch_status = 'walked'
+        r.fleet.last_dispatch_status = 'transit' if require_bus else 'walked'
         self.counts['mode_fallbacks'] += 1
         r._note('trip_mode_fallback', person=person.id, destination=plan['destination'], planned_seconds=seconds)
         return True
@@ -204,9 +221,36 @@ class ParkingTrips:
             fleet.last_dispatch_status = 'inaccessible'
             return False
         reasons = []
+        bus_attempted = False
+        def try_bus():
+            nonlocal bus_attempted
+            if bus_attempted:
+                return False
+            bus_attempted = True
+            return self._fallback(person, plan, origin, require_bus=True)
+        def parking_options():
+            bounded = r._inside_update and plan['purpose']=='commute'
+            if not r.transit.buses:
+                yield from self.options(plan['destination'], bounded=bounded)
+                return
+            seen = set()
+            for sid in self.options(plan['destination'], bounded=bounded,
+                                    max_distance=PARKING_BEFORE_BUS_FEET):
+                if sid is not _OPTIONS_PENDING:
+                    seen.add(sid)
+                yield sid
+            # Nearby parking is exhausted before asking the bus planner.
+            yield _TRY_BUS
+            for sid in self.options(plan['destination'], bounded=bounded):
+                if sid not in seen:
+                    yield sid
         # Service visits/returns have different retry semantics. Apply the new
         # quantum budget only to commutes, which already retry planning at 0.25s.
-        for sid in self.options(plan['destination'], bounded=r._inside_update and plan['purpose']=='commute'):
+        for sid in parking_options():
+            if sid is _TRY_BUS:
+                if try_bus():
+                    return True
+                continue
             if sid is _OPTIONS_PENDING:
                 fleet.last_dispatch_status = 'planning'
                 return False
@@ -249,6 +293,8 @@ class ParkingTrips:
                     r._note('parking_fallback', person=person.id, destination=plan['destination'], parking=sid)
                 return True
             status = fleet.last_dispatch_status
+            if status != 'planning' and try_bus():
+                return True
             if status in ('planning', 'limited', 'blocked', 'unavailable'):
                 return False
             reasons.append(status)

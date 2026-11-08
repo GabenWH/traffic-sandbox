@@ -892,6 +892,28 @@ class LaneConnection(CityObject):
     _conflict_row: tuple[bool, ...] = field(default=(), init=False, repr=False, compare=False)
     inspection_title = "Lane connection"
 
+    def __setattr__(self, name, value):
+        previous = self.__dict__.get(name)
+        object.__setattr__(self, name, value)
+        if name == 'control' and previous != value:
+            # Native bridges subscribe weakly so discarded engines are not kept
+            # alive by map objects. Frozen ControlDefinition values are replaced
+            # on edits; no per-tick scan is needed to discover those edits.
+            listeners = self.__dict__.get('_native_control_listeners')
+            if listeners is not None:
+                listeners[:] = [listener for listener in listeners if listener() is not None]
+                for listener in tuple(listeners):
+                    callback = listener()
+                    if callback is not None:
+                        callback(self)
+
+    def watch_native_control(self, callback):
+        from weakref import WeakMethod
+        listeners = self.__dict__.setdefault('_native_control_listeners', [])
+        listeners[:] = [listener for listener in listeners if listener() is not None]
+        if not any(listener() == callback for listener in listeners):
+            listeners.append(WeakMethod(callback))
+
     def __post_init__(self):
         from numpy_storage import packed_points
         self.path=packed_points(self.path)

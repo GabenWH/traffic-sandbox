@@ -127,7 +127,7 @@ class TransitSimulation:
             raise ValueError('Stop walking point must be finite')
         self.stops[stop.id] = stop
 
-    def add_line(self, line):
+    def add_line(self, line, *, route_finder=None):
         if not line.id or line.id in self.lines or len(line.stop_ids) < 2:
             raise ValueError('A line needs a unique ID and at least two stops')
         if len(set(line.stop_ids)) != len(line.stop_ids):
@@ -140,8 +140,8 @@ class TransitSimulation:
         for a, b in zip(line.stop_ids, (*line.stop_ids[1:], line.stop_ids[0])):
             if a not in self.stops or b not in self.stops:
                 raise ValueError('Line refers to an unknown stop')
-            route = self.city.find_vehicle_route_between(self.stops[a].road_position,
-                                                         self.stops[b].road_position)
+            find_route = route_finder or self.city.find_vehicle_route_between
+            route = find_route(self.stops[a].road_position, self.stops[b].road_position)
             if route is None:
                 raise ValueError(f'No vehicle route between bus stops {a} and {b}')
             length = polyline_length(list(vehicle_route_points(route)))
@@ -202,7 +202,7 @@ class TransitSimulation:
         previous.origin=previous.destination=tuple(destination)
         previous.arrived_at=self.time
 
-    def request_trip(self, person_id, origin, destination, *, allow_bus=True):
+    def request_trip(self, person_id, origin, destination, *, allow_bus=True, require_bus=False):
         self._check_network()
         if isinstance(person_id, bool) or not isinstance(person_id, int) or person_id < 0 or person_id > 2147483647:
             raise ValueError('Passenger ID must be a nonnegative native integer')
@@ -211,7 +211,8 @@ class TransitSimulation:
             raise ValueError('An existing passenger must finish before departing from that destination')
         if any(len(p) != 2 or not all(isfinite(v) for v in p) for p in (origin, destination)):
             raise ValueError('Trip points must be finite 2D positions')
-        path = self.journey_path(origin, destination, allow_bus=allow_bus)
+        path = (self.journey_path(origin, destination, allow_bus=allow_bus, require_bus=True)
+                if require_bus else self.journey_path(origin, destination, allow_bus=allow_bus))
         legs=[];first=last=None;boarding=None
         for kind,value in path.edges:
             if kind in ('first','direct'):first=value
@@ -232,8 +233,10 @@ class TransitSimulation:
         self._start_walk(person, first, 'walking_to_stop' if legs else 'walking_direct')
         return person
 
-    def journey_path(self, origin, destination, *, allow_bus=True):
+    def journey_path(self, origin, destination, *, allow_bus=True, require_bus=False):
         from pathfinding import DirectedGraph
+        if require_bus and not allow_bus:
+            raise ValueError('A bus journey requires bus travel to be enabled')
         graph=DirectedGraph()
         start,goal=('journey','origin'),('journey','destination')
         graph.add_node(start);graph.add_node(goal)
@@ -265,6 +268,17 @@ class TransitSimulation:
                     graph.add_edge(('stop',stop),goal,last.length/4.4 if last else 0,('last',last))
                 except ValueError:
                     pass
+        if require_bus:
+            # Track whether a ride edge has actually been traversed. Boarding
+            # and immediately alighting at the same stop is not a bus journey.
+            bus_graph=DirectedGraph()
+            for node in graph.nodes:
+                for transition in graph.transitions_from(node):
+                    for rode_bus in (False,True):
+                        bus_graph.add_edge((node,rode_bus),
+                            (transition.destination,rode_bus or transition.edge[0]=='ride'),
+                            transition.cost,transition.edge)
+            graph=bus_graph;start=(start,False);goal=(goal,True)
         path=graph.find_path(start,goal)
         if path is None:
             raise ValueError('No walking or transit journey')

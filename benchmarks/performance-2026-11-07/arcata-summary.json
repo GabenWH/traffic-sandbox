@@ -1,0 +1,62 @@
+{
+  "notes": "16k population, 1k household cars, seed42, 07:00-08:25, not 1k continuously moving cars. Detailed timing sampled 1 tick in17; no renderer. Buses change workload, routes and outcomes.",
+  "runs": [
+    {
+      "stop_reason": "duration",
+      "simulated_seconds": 5100.0,
+      "ticks": 102000,
+      "mean_tick_ms": 1.547638410099549,
+      "max_tick_ms": 545.5732350001199,
+      "ticks_over_50ms": 2,
+      "case": "fast-tick-run",
+      "final": {
+        "population": 16000,
+        "at_work": 1241,
+        "commuting": 2127,
+        "commute_departures": 3368,
+        "active_road_vehicles": 62,
+        "bus_count": null,
+        "bus_passengers": null,
+        "resource_balance_error": 0.0
+      }
+    },
+    {
+      "stop_reason": "duration",
+      "simulated_seconds": 5100.0,
+      "ticks": 102000,
+      "mean_tick_ms": 0.5440505471356208,
+      "max_tick_ms": 532.2468310005206,
+      "ticks_over_50ms": 3,
+      "case": "rng-skip-run",
+      "final": {
+        "population": 16000,
+        "at_work": 1241,
+        "commuting": 2127,
+        "commute_departures": 3368,
+        "active_road_vehicles": 62,
+        "bus_count": null,
+        "bus_passengers": null,
+        "resource_balance_error": 0.0
+      }
+    },
+    {
+      "stop_reason": "duration",
+      "simulated_seconds": 5100.0,
+      "ticks": 102000,
+      "mean_tick_ms": 0.708069131120033,
+      "max_tick_ms": 378.5865150002792,
+      "ticks_over_50ms": 3,
+      "case": "bus-connected-run",
+      "final": {
+        "population": 16000,
+        "at_work": 1239,
+        "commuting": 2129,
+        "commute_departures": 3368,
+        "active_road_vehicles": 72,
+        "bus_count": 12,
+        "bus_passengers": 0,
+        "resource_balance_error": 0.0
+      }
+    }
+  ]
+}

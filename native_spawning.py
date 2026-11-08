@@ -93,6 +93,14 @@ class NativeRoadSimulation:
         self.external_routes = {}
         self.source_ids = []
         self.controls = {}
+        self._watched_connection_count = 0
+        self._dirty_controls = {}
+        self._configured_speed = None
+        self._configured_tracing = None
+        self._mirrored_rng_state = None
+        self._rng_output_words = (C.c_uint32 * 625)()
+        self._published_rng_bytes = None
+        self._configured_signal_states = None
         self.publishing = False
         self.shared = simulation.native_output_mode == 'shared'
         try:
@@ -176,49 +184,95 @@ class NativeRoadSimulation:
         self.city = city
         self.paths.clear()
 
+    def _control_changed(self, connection):
+        self._dirty_controls[id(connection)] = connection
+
     def configure(self):
-        sim, e = self.sim, self.engine
-        state = sim.rng.getstate()
-        if state[0] != 3 or len(state[1]) != 625 or any(not 0 <= word <= 0xffffffff for word in state[1]):
-            raise ValueError('Native traffic requires a valid Python Random version-3 state')
-        self.gaussian = state[2]
-        e._call('nt_rng_set', (C.c_uint32 * 625)(*state[1]), 625)
-        junctions = sim._active_junctions_snapshot(self.city) if self.city is not None else ()
-        self.source_ids = [junction.id for junction in junctions]
-        sources = [self.endpoint_ids[id(j)] for j in junctions]
-        clocks = [sim._spawn_elapsed[j.id] for j in junctions]
-        if not isinstance(sim.max_cars, int) or not 1 <= sim.max_cars <= 2147483647:
+        simulation, native_engine = self.sim, self.engine
+        # 1. Copy Python RNG state into C++, including the cursor in word 625.
+        # publish_random() copies the advanced state back after generation.
+        random_state = simulation.rng.getstate()
+        if random_state != self._mirrored_rng_state:
+            if (random_state[0] != 3 or len(random_state[1]) != 625
+                    or any(not 0 <= state_word <= 0xffffffff for state_word in random_state[1])):
+                raise ValueError('Native traffic requires a valid Python Random version-3 state')
+            native_engine._call('nt_rng_set', (C.c_uint32 * 625)(*random_state[1]), 625)
+            self._mirrored_rng_state = random_state
+            # A Python reseed/state edit starts a new publication baseline.
+            self._published_rng_bytes = None
+        self.gaussian = random_state[2]
+
+        # 2. Rebuild spawn endpoint indices and elapsed timers, then send them
+        # with the spawn interval, population cap, count and next vehicle handle.
+        active_spawn_junctions = simulation._active_junctions_snapshot(self.city) if self.city is not None else ()
+        self.source_ids = [junction.id for junction in active_spawn_junctions]
+        native_source_indices = [self.endpoint_ids[id(source_junction)] for source_junction in active_spawn_junctions]
+        source_elapsed_seconds = [simulation._spawn_elapsed[source_junction.id] for source_junction in active_spawn_junctions]
+        if not isinstance(simulation.max_cars, int) or not 1 <= simulation.max_cars <= 2147483647:
             raise ValueError('Native traffic cap must be a positive 32-bit integer')
-        e._call('nt_sources', (C.c_int * len(sources))(*sources), (C.c_double * len(clocks))(*clocks),
-                len(sources), sim.spawn_interval, sim.max_cars, sim._spawned_count, e._next_handle)
-        e.set_speed(sim.speed_mph)
-        e._call('nt_trace_enable', int(sim.debugger is not None))
-        for connection in e._connections:
-            control = CONTROL.get(connection.control.kind, 0)
-            if self.controls.get(id(connection)) != control:
-                e.set_control(connection, connection.control.kind)
-                self.controls[id(connection)] = control
-        aspects = [0] * len(e._connections)
-        codes = {SignalAspect.GREEN: 1, SignalAspect.YELLOW: 2}
-        for controller_id, state in sim._signal_states.items():
-            aspect = codes.get(state.aspect, 0)
-            if not aspect:
+        native_engine._call('nt_sources', (C.c_int * len(native_source_indices))(*native_source_indices), (C.c_double * len(source_elapsed_seconds))(*source_elapsed_seconds),
+                len(native_source_indices), simulation.spawn_interval, simulation.max_cars, simulation._spawned_count, native_engine._next_handle)
+
+        # 3. Native settings persist; only send values when they change.
+        if simulation.speed_mph != self._configured_speed:
+            native_engine.set_speed(simulation.speed_mph)
+            self._configured_speed = simulation.speed_mph
+        tracing_enabled = simulation.debugger is not None
+        if tracing_enabled != self._configured_tracing:
+            native_engine._call('nt_trace_enable', int(tracing_enabled))
+            self._configured_tracing = tracing_enabled
+
+        # 4. Subscribe once to new connections. Subsequent edits enqueue their
+        # connection directly, including changes to a signal's controller ID.
+        connection_count = len(native_engine._connections)
+        network_grew = connection_count != self._watched_connection_count
+        if network_grew:
+            for connection in native_engine._connections[self._watched_connection_count:]:
+                connection.watch_native_control(self._control_changed)
+                self._control_changed(connection)
+            self._watched_connection_count = connection_count
+        controls_changed = bool(self._dirty_controls)
+        for connection in self._dirty_controls.values():
+            control_code = CONTROL.get(connection.control.kind, 0)
+            if self.controls.get(id(connection)) != control_code:
+                native_engine.set_control(connection, connection.control.kind)
+                self.controls[id(connection)] = control_code
+        self._dirty_controls.clear()
+
+        # 5. Build permissions only on a transition, control edit or new network.
+        # Red/default = 0, green = 1, yellow = 2. Send the resulting full array
+        # together so a phase transition never exposes a partially updated state.
+        if (not controls_changed and not network_grew
+                and simulation._signal_states == self._configured_signal_states):
+            return
+        signal_permission_codes = [0] * len(native_engine._connections)
+        aspect_codes = {SignalAspect.GREEN: 1, SignalAspect.YELLOW: 2}
+        for controller_id, signal_state in simulation._signal_states.items():
+            permission_code = aspect_codes.get(signal_state.aspect, 0)
+            if not permission_code:
                 continue
-            for movement_id in state.movement_ids:
-                index = e._connection_ids_by_name.get(movement_id)
-                if index is None:
+            for movement_id in signal_state.movement_ids:
+                connection_index = native_engine._connection_ids_by_name.get(movement_id)
+                if connection_index is None:
                     continue
-                connection = e._connections[index]
+                connection = native_engine._connections[connection_index]
                 if (connection.control.kind is ControlType.SIGNAL
                         and connection.control.controller_id == controller_id):
-                    aspects[index] = aspect
-        e.set_signal_aspects(aspects)
+                    signal_permission_codes[connection_index] = permission_code
+        native_engine.set_signal_aspects(signal_permission_codes)
+        self._configured_signal_states = dict(simulation._signal_states)
 
     def publish_random(self):
         e, sim = self.engine, self.sim
-        words = (C.c_uint32 * 625)()
+        words = self._rng_output_words
         e._call('nt_rng_get', words, 625)
-        sim.rng.setstate((3, tuple(words), self.gaussian))
+        # Most movement steps make no random choices. Compare the raw words,
+        # including the generator cursor, before allocating 625 Python integers.
+        state_bytes = bytes(words)
+        if state_bytes != self._published_rng_bytes:
+            sim.rng.setstate((3, tuple(words), self.gaussian))
+            self._mirrored_rng_state = sim.rng.getstate()
+            self._published_rng_bytes = state_bytes
         clocks = (C.c_double * len(self.source_ids))()
         e._call('nt_source_times', clocks, len(clocks))
         sim._spawn_elapsed.update(zip(self.source_ids, clocks))
@@ -439,74 +493,109 @@ class NativeRoadSimulation:
                                hard_gridlock=resolver.hard_gridlock)
 
     def update(self, dt):
-        sim, e = self.sim, self.engine
-        started = perf_counter()
-        if sim.debugger is not None:
-            sim.debugger.begin_frame()
+        """Advance traffic by dt simulated seconds and return route completions.
+
+        This is the Python wrapper around the native traffic step. Time spent
+        inside its helper calls is part of this update's total cost too.
+        """
+        simulation, native_engine = self.sim, self.engine
+        update_started_at = perf_counter()
+        if simulation.debugger is not None:
+            simulation.debugger.begin_frame()
+
+        # Send Python-owned inputs: random state, spawn sources, speed,
+        # tracing settings, intersection controls and signal permissions.
         self.configure()
-        configured = perf_counter()
-        e._call('nt_generate', dt)
-        generated = perf_counter()
+        configuration_finished_at = perf_counter()
+
+        # C++ generates test traffic. Publish its updated random state and
+        # create Python views of any newly generated vehicles.
+        native_engine._call('nt_generate', dt)
+        generation_finished_at = perf_counter()
         self.publish_random()
-        admitted = self.receive_generated()
-        mirrored = perf_counter()
-        sim.elapsed_time += dt
-        before_profile = e.profile_snapshot()
-        e.step(dt)
-        after_profile = e.profile_snapshot()
-        moved = perf_counter()
+        spawned_vehicles = self.receive_generated()
+        spawn_publication_finished_at = perf_counter()
+        simulation.elapsed_time += dt
+
+        # Advance driving and walking in C++. Subtract cumulative native
+        # counters afterward to obtain this step's internal phase timings.
+        native_profile_before_step = native_engine.profile_snapshot()
+        native_engine.step(dt)
+        native_profile_after_step = native_engine.profile_snapshot()
+        movement_finished_at = perf_counter()
+
+        # Publish native results to Python. The guard prevents these output
+        # writes from being mistaken for user edits that invalidate C++ state.
         self.publishing = True
         try:
             if self.shared:
                 from native_shared import completed_views
-                completed = completed_views(self)
+                completed_vehicles = completed_views(self)
             else:
-                completed = e.sync(sim.cars)
-            states_published = perf_counter()
+                completed_vehicles = native_engine.sync(simulation.cars)
+            vehicle_states_published_at = perf_counter()
             self.publish_bookkeeping()
-            bookkeeping_published = perf_counter()
-            sim._occupancy_dirty = True
-            if completed:
+            bookkeeping_published_at = perf_counter()
+            simulation._occupancy_dirty = True
+            if completed_vehicles:
                 from truck_stops import LaneObstacle
-                for car in completed:
-                    if car._road_stop_position is not None:
-                        sim._lane_obstacles[car.id] = LaneObstacle(car.id,
-                            car._road_stop_position, car.length, car.width, heading=car.heading)
-                        e._obstacle_handles[car.id] = e._handles[car.id]
-                removed = {id(car) for car in completed}
-                with sim._roster_revision.mutate():
-                    sim._cars[:] = [car for car in sim.cars if id(car) not in removed]
-                for car in completed:
-                    e._handles.pop(car.id, None)
-            for car in completed:
-                sim._occupancy_changes.pop(id(car), None)
-                car._on_occupancy_change = None
-                car._on_native_edit = None
-                car.brain._on_native_edit = None
+                # A vehicle stopping at the roadside keeps a physical body
+                # as an obstacle after it leaves the active vehicle roster.
+                for vehicle in completed_vehicles:
+                    if vehicle._road_stop_position is not None:
+                        simulation._lane_obstacles[vehicle.id] = LaneObstacle(
+                            vehicle.id, vehicle._road_stop_position,
+                            vehicle.length, vehicle.width, heading=vehicle.heading)
+                        native_engine._obstacle_handles[vehicle.id] = native_engine._handles[vehicle.id]
+                completed_vehicle_object_ids = {id(vehicle) for vehicle in completed_vehicles}
+                with simulation._roster_revision.mutate():
+                    simulation._cars[:] = [vehicle for vehicle in simulation.cars
+                                           if id(vehicle) not in completed_vehicle_object_ids]
+                for vehicle in completed_vehicles:
+                    native_engine._handles.pop(vehicle.id, None)
+            # Completed vehicles no longer report live movement/edit events.
+            for vehicle in completed_vehicles:
+                simulation._occupancy_changes.pop(id(vehicle), None)
+                vehicle._on_occupancy_change = None
+                vehicle._on_native_edit = None
+                vehicle.brain._on_native_edit = None
         finally:
             self.publishing = False
-        finished = perf_counter()
-        timings = {'native_configuration': (configured-started)*1000, 'native_spawning': (generated-configured)*1000,
-                   'spawn_views': (mirrored-generated)*1000, 'native_movement': (moved-mirrored)*1000,
-                   'vehicle_state_sync': (states_published-moved)*1000,
-                   'bookkeeping_sync': (bookkeeping_published-states_published)*1000,
-                   'occupancy_sync': (finished-bookkeeping_published)*1000,
-                   'output_sync': (finished-moved)*1000, 'total': (finished-started)*1000}
-        phases = {name: after_profile[name] - before_profile[name] for name in
-                  ('preparation_ms', 'control_ms', 'decision_ms', 'arbitration_ms', 'movement_ms')}
-        timings.update(observe=phases['preparation_ms'] + phases['control_ms'],
-                       intent=phases['decision_ms'], decision=phases['decision_ms'],
-                       resolve=phases['arbitration_ms'], apply=phases['movement_ms'],
-                       resolution=phases['arbitration_ms'] + phases['movement_ms'])
-        if sim.occupancy.profile_internal_timings:
-            timings.update(dict.fromkeys(('occupancy_position_lookup', 'occupancy_bin_build',
-                           'occupancy_section_mapping', 'occupancy_finalize'), 0.0))
-        sim.profiler.record_tick(system='test_traffic', simulated_time=sim.elapsed_time, elapsed_seconds=dt,
-                                 entity_counts={'cars': len(sim.cars), 'spawned': len(admitted), 'completed': len(completed)},
-                                 timings_ms=timings)
-        if sim.debugger is not None:
-            self.publish_debugger(completed, timings, dt)
-        return completed
+        output_finished_at = perf_counter()
+
+        # Convert wall-clock intervals from seconds to milliseconds. The
+        # output_sync and total entries are aggregates, not additional work.
+        timings_ms = {
+            'native_configuration': (configuration_finished_at-update_started_at)*1000,
+            'native_spawning': (generation_finished_at-configuration_finished_at)*1000,
+            'spawn_views': (spawn_publication_finished_at-generation_finished_at)*1000,
+            'native_movement': (movement_finished_at-spawn_publication_finished_at)*1000,
+            'vehicle_state_sync': (vehicle_states_published_at-movement_finished_at)*1000,
+            'bookkeeping_sync': (bookkeeping_published_at-vehicle_states_published_at)*1000,
+            'occupancy_sync': (output_finished_at-bookkeeping_published_at)*1000,
+            'output_sync': (output_finished_at-movement_finished_at)*1000,
+            'total': (output_finished_at-update_started_at)*1000,
+        }
+        native_phase_timings_ms = {
+            phase_name: native_profile_after_step[phase_name] - native_profile_before_step[phase_name]
+            for phase_name in ('preparation_ms', 'control_ms', 'decision_ms', 'arbitration_ms', 'movement_ms')
+        }
+        timings_ms.update(
+            observe=native_phase_timings_ms['preparation_ms'] + native_phase_timings_ms['control_ms'],
+            intent=native_phase_timings_ms['decision_ms'], decision=native_phase_timings_ms['decision_ms'],
+            resolve=native_phase_timings_ms['arbitration_ms'], apply=native_phase_timings_ms['movement_ms'],
+            resolution=native_phase_timings_ms['arbitration_ms'] + native_phase_timings_ms['movement_ms'])
+        if simulation.occupancy.profile_internal_timings:
+            timings_ms.update(dict.fromkeys(('occupancy_position_lookup', 'occupancy_bin_build',
+                              'occupancy_section_mapping', 'occupancy_finalize'), 0.0))
+        simulation.profiler.record_tick(
+            system='test_traffic', simulated_time=simulation.elapsed_time, elapsed_seconds=dt,
+            entity_counts={'cars': len(simulation.cars), 'spawned': len(spawned_vehicles),
+                           'completed': len(completed_vehicles)},
+            timings_ms=timings_ms)
+        if simulation.debugger is not None:
+            self.publish_debugger(completed_vehicles, timings_ms, dt)
+        return completed_vehicles
 
     def close(self):
         self.engine.close()
