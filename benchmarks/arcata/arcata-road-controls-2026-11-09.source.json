@@ -1,0 +1,12 @@
+{
+  "retrieved_date": "2026-11-09",
+  "api": "https://api.openstreetmap.org/api/0.6/nodes?nodes=ID1,ID2,...",
+  "source_road_file": "arcata-roads-2026-06-01.json",
+  "queried_node_count": 10078,
+  "batch_size": 400,
+  "control_node_count": 222,
+  "coordinate_policy": "Existing June road coordinates are preserved; this supplement supplies node tags only.",
+  "source_note": "Live node versions; control tags are not a June 2026 historical snapshot. Timings and inferred controls are simulation assumptions.",
+  "attribution": "\u00a9 OpenStreetMap contributors; ODbL 1.0",
+  "sha256": "46c4020e280e917475ff12d590269727ee78e853749d0dca1653f3a633c468b2"
+}

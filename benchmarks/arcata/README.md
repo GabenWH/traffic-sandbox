@@ -19,6 +19,38 @@ boundary portals as combined car sources and sinks. The existing model applies
 
 ## Import OSM buildings and parking
 
+### Junction controls and roundabouts
+
+The road importer now joins complete `junction=roundabout` rings, including
+rings split across multiple OSM ways, into the normal dedicated roundabout
+intersection. Approaches retain their geometry and use the existing shared
+yield/merge behavior. Boundary-truncated or incomplete rings keep their clipped
+road geometry and are counted in `incomplete_roundabouts`.
+
+The bundled roads automatically load `arcata-road-controls-2026-11-09.json`.
+This small offline supplement contains tagged nodes retrieved from the OSM API
+for all 10,078 node IDs referenced by driveable source ways. Its `.source.json`
+records retrieval, provenance and checksum. These are live node tags, combined
+with the June road geometry; existing road coordinates are preserved.
+
+The repaired map has 1,141 road segments, eight dedicated roundabouts, six
+signal-controlled intersections, 100 intersections with mapped stop/yield
+controls, and 199 terminal turnarounds. One ring is incomplete at the boundary.
+Node tags apply to the matching topology and travel direction, including signs
+at OSM way splits. `highway=mini_roundabout` is also supported. Road imports
+accept JSON, OSM XML and gzip, so tagged supplemental extracts can be supplied
+using another `--osm` argument.
+
+Mapped lights receive working fixed-time programs that survive world saves.
+The default program serves one incoming lane at a time, with 20 seconds green,
+three yellow, and one all-red. These timings are simulation assumptions; OSM
+does not provide the real signal program. Explicit runtime programs take priority.
+Where controls are absent, local multi-arm intersections receive inferred stop
+controls, with through-road priority based on road classification. Highway
+merges and two-road continuations retain ordinary conflict/yield behavior.
+`mapped_*` and `inferred_stop_intersections` metadata distinguish these cases;
+the cached map has 384 inferred stop intersections. Boundary portals stay open.
+
 `tools/import_arcata_homes.py` imports mapped building polygons into the same
 Arcata road map and writes a normal city save. A small real OSM neighborhood
 extract is included so the import can be tried offline:

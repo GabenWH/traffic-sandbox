@@ -104,6 +104,7 @@ def world_to_dict(
                     "roundabout_ring_radius": intersection.roundabout_ring_radius,
                     "roundabout_island_radius": intersection.roundabout_island_radius,
                     "roundabout_outer_band_width": intersection.roundabout_outer_band_width,
+                    "signalized": intersection.signalized,
                     "road_ids": [road.id for road in intersection.connected_roads],
                     "lane_connections": [
                         {
@@ -340,6 +341,7 @@ def world_from_dict(data: object) -> LoadedWorld:
                 intersection_data.get("roundabout_outer_band_width"),
                 f"{path}.roundabout_outer_band_width",
             ),
+            signalized=_boolean(intersection_data.get('signalized', False), f'{path}.signalized'),
         )
         if intersection.elevation < 0:
             raise WorldFormatError(f"{path}.elevation cannot be negative.")
@@ -806,6 +808,12 @@ def _number(value: object, path: str) -> float:
     if not isfinite(number):
         raise WorldFormatError(f"{path} must be finite.")
     return number
+
+
+def _boolean(value: object, path: str) -> bool:
+    if not isinstance(value, bool):
+        raise WorldFormatError(f'{path} must be a boolean.')
+    return value
 
 
 def _positive_number(value: object, path: str) -> float:

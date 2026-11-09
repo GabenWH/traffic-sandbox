@@ -960,6 +960,8 @@ class Intersection(CityObject):
     roundabout_ring_radius: float | None = None
     roundabout_island_radius: float | None = None
     roundabout_outer_band_width: float | None = None
+    # Opt into a generated fixed-time plan when this map is bound to traffic.
+    signalized: bool = False
 
     @property
     def inspection_title(self) -> str:
@@ -997,6 +999,7 @@ class Intersection(CityObject):
         """Apply one all-way-stop policy across this standard junction."""
         if self.kind is not IntersectionKind.STANDARD:
             raise ValueError("All-way stops require a standard intersection.")
+        self.signalized = False
         control = ControlDefinition(
             ControlType.STOP if enabled else ControlType.UNCONTROLLED,
         )

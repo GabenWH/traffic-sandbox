@@ -189,6 +189,26 @@ def _before_signal_boundary(elapsed: float, boundary: float) -> bool:
     return elapsed < boundary and boundary - elapsed > 4 * max(ulp(elapsed), ulp(boundary))
 
 
+def default_signal_controller(junction, movements):
+    """Serve one incoming road at a time; timings are simulation defaults.
+
+    OSM indicates the presence of signals, not their real timing program.
+    Keeping conflicting approaches in separate phases gives every movement
+    service without inventing simultaneous protected turns.
+    """
+    approaches = {}
+    for connection in movements:
+        if (connection.control.kind is ControlType.SIGNAL
+                and connection.control.controller_id == junction.id):
+            approaches.setdefault(connection.source_output.id, set()).add(connection.id)
+    if not approaches:
+        return None
+    return FixedTimeSignalController(SignalPlan(tuple(
+        SignalPhase(20.0, frozenset(movements), 3.0, 1.0, name=source)
+        for source, movements in sorted(approaches.items())
+    )))
+
+
 def _next_phase_clearance(plan: SignalPlan, started: float, requested: float) -> float:
     """Apply a request only at an existing end-of-clearance boundary."""
     if requested == started:

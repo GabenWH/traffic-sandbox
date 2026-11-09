@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from city import CityMap, Terrain
-from models import Intersection, Road
+from models import Intersection, IntersectionKind, Road
 from simulation_profiler import SimulationProfiler
 from traffic_testbed import RoadVehicleSimulation
 
@@ -195,16 +195,19 @@ def clip_segment_to_city(
     return intervals
 
 
-def load_osm(paths: list[Path]) -> tuple[dict[str, tuple[float, float]], dict[str, dict[str, object]], dict[str, object]]:
+def load_osm(paths: list[Path]):
+    from tools.osm_elements import read_osm
     nodes: dict[str, tuple[float, float]] = {}
     ways: dict[str, dict[str, object]] = {}
     metadata: dict[str, object] = {}
+    node_tags: dict[str, dict[str, str]] = {}
     for path in paths:
-        payload = json.loads(path.read_text())
+        payload = read_osm(path)
         metadata.update(payload.get("osm3s", {}))
         for element in payload["elements"]:
             if element["type"] == "node":
-                nodes[str(element["id"])] = (float(element["lon"]), float(element["lat"]))
+                nodes.setdefault(str(element["id"]), (float(element["lon"]), float(element["lat"])))
+                node_tags.setdefault(str(element['id']), {}).update(element.get('tags', {}))
             elif element["type"] == "way":
                 ways[str(element["id"])] = {
                     "nodes": [str(item) for item in element.get("nodes", [])],
@@ -212,7 +215,7 @@ def load_osm(paths: list[Path]) -> tuple[dict[str, tuple[float, float]], dict[st
                 }
                 for item, geometry in zip(element.get("nodes", []), element.get("geometry", [])):
                     nodes[str(item)] = (float(geometry["lon"]), float(geometry["lat"]))
-    return nodes, ways, metadata
+    return nodes, ways, metadata, node_tags
 
 
 def road_lanes(tags: dict[str, str]) -> tuple[int, int]:
@@ -231,7 +234,15 @@ def road_lanes(tags: dict[str, str]) -> tuple[int, int]:
 
 def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(),
                residents_per_building: int = 4, building_progress=None) -> tuple[CityMap, list[str], dict[str, object]]:
-    nodes, ways, osm_metadata = load_osm(paths)
+    from tools.osm_junctions import roundabout_components, apply_controls
+    paths = list(paths)
+    bundled_roads = DATA_DIR / 'arcata-roads-2026-06-01.json'
+    controls = DATA_DIR / 'arcata-road-controls-2026-11-09.json'
+    if any(Path(path).resolve() == bundled_roads.resolve() for path in paths) and controls not in paths:
+        # Geometry stays at the original snapshot coordinates, even when a
+        # control node has moved since then. Apply the supplement tags last.
+        paths.append(controls)
+    nodes, ways, osm_metadata, node_tags = load_osm(paths)
     outer, inner, boundary_metadata = parse_boundary(boundary_path)
     boundary_points = [point for ring in outer for point in ring[:-1]]
     lat0 = sum(point[1] for point in boundary_points) / len(boundary_points)
@@ -257,6 +268,9 @@ def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(),
         membership.update(set(refs))
     shared_nodes = {node_id for node_id, count in membership.items() if count >= 2}
     shared_keys = {("node", node_id) for node_id in shared_nodes}
+    shared_keys.update(('node', ref) for ref, tags in node_tags.items()
+                       if tags.get('highway') == 'mini_roundabout' or
+                       tags.get('highway') == 'traffic_signals' and tags.get('crossing'))
 
     def to_feet(point: tuple[float, float]) -> tuple[float, float]:
         return (
@@ -264,13 +278,20 @@ def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(),
             (point[1] - lat0) * 111_132.0 * 3.28084,
         )
 
+    collapsed, ring_ways, incomplete_rings = roundabout_components(
+        selected, nodes, to_feet, in_boundary,
+        lambda a, b: sum(end-start for start, end in clip_segment_to_city(a, b, outer, inner)) >= 1 - 1e-9)
+
     roads: list[Road] = []
     endpoint_position: dict[tuple[object, ...], tuple[float, float]] = {}
     portal_keys: set[tuple[object, ...]] = set()
     kept_way_count = 0
     source_segment_count = 0
     clipped_point_count = 0
+    road_refs = {}
     for way_id, record, refs in selected:
+        if way_id in ring_ways:
+            continue
         tags = record["tags"]
         way_points = [nodes[node_id] for node_id in refs]
         fragments: list[list[GeoPoint]] = []
@@ -318,21 +339,38 @@ def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(),
         finish_fragment()
 
         piece_index = 0
+
+        def emit_piece(piece):
+            nonlocal piece_index, source_segment_count
+            original_refs = [point.key[1] for point in piece if point.key[0] == 'node']
+            # Keep the mapped approach point as an interior vertex; the regular
+            # junction setback then trims the approach outside the source ring.
+            for at_start in (True, False):
+                index = 0 if at_start else -1
+                point = piece[index]
+                ring = collapsed.get(point.key[1]) if point.key[0] == 'node' else None
+                if ring is not None:
+                    lon = lon0 + ring.center[0] / (111_320.0 * math.cos(math.radians(lat0)) * 3.28084)
+                    lat = lat0 + ring.center[1] / (111_132.0 * 3.28084)
+                    center = GeoPoint(ring.key, lon, lat)
+                    piece = [center, *piece] if at_start else [*piece, center]
+            previous = len(roads)
+            add_piece(way_id, tags, piece, piece_index, roads, endpoint_position, portal_keys, to_feet)
+            if len(roads) != previous:
+                road_refs[roads[-1].id] = original_refs
+                piece_index += 1
+                source_segment_count += 1
         for fragment in fragments:
             start = 0
             for point_index in range(1, len(fragment)):
                 if fragment[point_index].key in shared_keys:
                     piece = fragment[start:point_index + 1]
                     if len(piece) >= 2:
-                        add_piece(way_id, tags, piece, piece_index, roads, endpoint_position, portal_keys, to_feet)
-                        piece_index += 1
-                        source_segment_count += 1
+                        emit_piece(piece)
                     start = point_index
             piece = fragment[start:]
             if len(piece) >= 2:
-                add_piece(way_id, tags, piece, piece_index, roads, endpoint_position, portal_keys, to_feet)
-                piece_index += 1
-                source_segment_count += 1
+                emit_piece(piece)
         if piece_index:
             kept_way_count += 1
 
@@ -350,12 +388,34 @@ def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(),
         Intersection(id=f"osm-junction:{json.dumps(list(key), separators=(',', ':'))}", position=to_feet(point))
         for key, point in unique_endpoints.items()
     ]
+    junction_keys = {junction.id: key for junction, key in zip(intersections, unique_endpoints)}
+    ring_by_key = {ring.key: ring for ring in collapsed.values()}
+    endpoint_roads = defaultdict(list)
+    for road in roads:
+        for encoded in road.id.split('|')[1:]:
+            endpoint_roads[tuple(json.loads(encoded))].append(road)
+    for junction, key in zip(intersections, unique_endpoints):
+        if key in ring_by_key:
+            ring = ring_by_key[key]
+            junction.kind = IntersectionKind.ROUNDABOUT
+            junction.roundabout_ring_radius = ring.ring_radius
+            junction.roundabout_island_radius = max(1.0, ring.ring_radius - 12.0)
+            junction.radius_override = max(60.0, ring.ring_radius + 24.0)
+        elif key[0] == 'node' and node_tags.get(key[1], {}).get('highway') == 'mini_roundabout':
+            junction.kind = IntersectionKind.ROUNDABOUT
+        elif key not in portal_keys and len(endpoint_roads[key]) == 1:
+            road = endpoint_roads[key][0]
+            if road.forward_lane_count and road.reverse_lane_count:
+                junction.kind = IntersectionKind.CUL_DE_SAC
     projected_endpoints = [to_feet(point) for point in unique_endpoints.values()]
     city = CityMap(
         width=max((p[0] for p in projected_endpoints), default=0) - min((p[0] for p in projected_endpoints), default=0),
         height=max((p[1] for p in projected_endpoints), default=0) - min((p[1] for p in projected_endpoints), default=0),
         terrain=Terrain(trees=[]), roads=roads, intersections=intersections,
     )
+    control_metadata = apply_controls(city, node_tags, ways, road_refs, junction_keys, to_feet, nodes)
+    # Recompile lane-specific controls after assigning their road-port policies.
+    city.rebuild_mobility_network()
 
     portal_ids = []
     for intersection in city.intersections:
@@ -381,6 +441,11 @@ def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(),
         "network_length_feet": round(sum(sum(math.dist(a, b) for a, b in zip(road.centerline, road.centerline[1:])) for road in roads), 1),
         "roads_by_highway": dict(Counter(road.name.split(" [", 1)[-1].rstrip("]") for road in roads)),
         "osm_file_names": [path.name for path in paths],
+        "roundabout_intersections": sum(j.kind is IntersectionKind.ROUNDABOUT for j in city.intersections),
+        "incomplete_roundabouts": incomplete_rings,
+        "tagged_control_nodes": sum(t.get('highway') in {'traffic_signals', 'stop', 'give_way', 'mini_roundabout'}
+                                    for t in node_tags.values()),
+        **control_metadata,
     }
     if building_paths:
         from tools.osm_buildings import import_osm_homes
