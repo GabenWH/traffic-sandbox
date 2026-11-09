@@ -12,8 +12,8 @@ class ParkingCanvasTests(unittest.TestCase):
         from tests.test_parking import fleet_with_shared_lot
         from persistent_fleet import FleetVehicle
         fleet = fleet_with_shared_lot()
-        fleet.add(FleetVehicle('one', 'car', 'a'))
-        fleet.add(FleetVehicle('two', 'car', 'b'))
+        fleet.add(FleetVehicle('one', 'car', 'a', color='#c42329'))
+        fleet.add(FleetVehicle('two', 'car', 'b', color='#2364c4'))
         lot = fleet.sites['a']['parking_lot']
         lot.surface = [(85,75),(145,75),(145,125),(85,125)]
         polygons = []
@@ -25,7 +25,9 @@ class ParkingCanvasTests(unittest.TestCase):
         RendererMixin._draw_parking_lots(host)
         RendererMixin._draw_parked_vehicles(host)
         cars = [p for p,kw in polygons if kw.get('tags') == 'parked_vehicles']
+        colors = [kw['fill'] for p,kw in polygons if kw.get('tags') == 'parked_vehicles']
         self.assertEqual(len(cars), 2)
+        self.assertEqual(colors, ['#c42329', '#2364c4'])
         self.assertTrue(all(len(p) == 8 for p in cars))
         self.assertEqual(max(cars[0][1::2])-min(cars[0][1::2]), 15)
         self.assertEqual(max(cars[0][0::2])-min(cars[0][0::2]), 6)

@@ -9,6 +9,7 @@ from typing import Literal, Protocol, runtime_checkable
 
 Point = tuple[float, float]
 VehicleShape = Literal["car", "material_truck", "crew_truck"]
+CAR_COLORS = ("#ff5b72", "#37e6ff", "#f7d154", "#7fea8c", "#c98cff")
 
 
 @dataclass(frozen=True)

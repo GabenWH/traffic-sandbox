@@ -2,11 +2,12 @@
 from collections import Counter
 from retention import BoundedCache
 from dataclasses import dataclass, field
+from hashlib import blake2s
 from math import isfinite,dist,hypot
 from types import SimpleNamespace
 from mobility import nearest_lane_position, vehicle_route_points,LaneTraversal,lane_position_at_distance
 from models import polyline_length
-from vehicle import VehicleAppearance
+from vehicle import CAR_COLORS, VehicleAppearance
 from fleet_cargo import VehicleCargo
 
 
@@ -35,6 +36,7 @@ class FleetVehicle:
     reserved_road_stop_distance: float | None = None
     road_stop_position: tuple | None = None
     road_stop_heading: tuple | None = None
+    color: str | None = None
     _actor: object = field(default=None, repr=False)
     _last: float = field(default=0.0, repr=False)
 
@@ -42,13 +44,22 @@ class FleetVehicle:
                               'parking_space_id', 'reserved_space_id',
                               'road_stop_lane_id', 'road_stop_distance',
                               'reserved_road_stop_lane_id', 'reserved_road_stop_distance'))
-    _PRESENTATION_FIELDS = frozenset(('cargo','capacity','length','width','kind',
+    _PRESENTATION_FIELDS = frozenset(('cargo','capacity','length','width','kind','color',
                                     'truck_spec_id','road_stop_position','road_stop_heading'))
+
+    def __post_init__(self):
+        if self.color is None:
+            digest = blake2s(self.id.encode('utf-8'), digest_size=8).digest()
+            self.color = CAR_COLORS[int.from_bytes(digest, 'big') % len(CAR_COLORS)]
 
     def __setattr__(self, name, value):
         previous = self.__dict__.get(name)
         if name=='cargo':value=VehicleCargo(value,self)
         object.__setattr__(self, name, value)
+        if name == 'color' and previous != value:
+            actor = self.__dict__.get('_actor')
+            if actor is not None:
+                actor.color = value
         if (name in self._INDEX_FIELDS or name in self._PRESENTATION_FIELDS) and previous != value:
             changed = self.__dict__.get('_on_fleet_change')
             if changed is not None:
@@ -266,7 +277,7 @@ class PersistentFleet:
                     continue
                 position, heading = space.position, space.heading
             yield SimpleNamespace(id=vehicle.id, position=position, heading=heading,
-                                  length=vehicle.length, width=vehicle.width, color='#527fa5',
+                                  length=vehicle.length, width=vehicle.width, color=vehicle.color,
                                   elevation=0.0, parked=True, source_type=vehicle.kind,
                                   appearance=self._appearance(vehicle))
 
@@ -489,7 +500,7 @@ class PersistentFleet:
         actor = self.transit.traffic.admit_route(route, vehicle_id=v.id, source_id=v.site,
                    destination_id=destination, source_type=v.kind,
                    appearance=self._appearance(v),
-                   length=v.length, width=v.width, speed_cap_mph=None)
+                   length=v.length, width=v.width, speed_cap_mph=None, color=v.color)
         if actor is None:
             self.last_dispatch_status = 'blocked'
             return False

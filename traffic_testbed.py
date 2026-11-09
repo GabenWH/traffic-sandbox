@@ -37,7 +37,7 @@ from traffic_network_cache import JunctionLookup
 from traffic_route_state import RouteGeometry, RouteState
 from traffic_debugger import TrafficDebugger
 from units import mph_to_pixels_per_second
-from vehicle import VehicleAppearance, vehicle_footprints_overlap
+from vehicle import CAR_COLORS, VehicleAppearance, vehicle_footprints_overlap
 
 
 TEST_CAR_SPEED_MPH = 25.0
@@ -318,7 +318,7 @@ class RoadVehicleSimulation:
     _native_controller: object = field(default=None, init=False, repr=False, compare=False)
     _scene_metadata_revision: int = field(default=0, init=False, repr=False)
 
-    colors = ("#ff5b72", "#37e6ff", "#f7d154", "#7fea8c", "#c98cff")
+    colors = CAR_COLORS
 
     @property
     def vehicles(self) -> list[RoutedRoadVehicle]:

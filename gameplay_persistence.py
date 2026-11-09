@@ -249,7 +249,10 @@ def restore_city(city,raw):
             if v.id in city.fleet.vehicles or v.site not in city.fleet.sites:raise ValueError('Invalid saved fleet')
             v._actor=actors.get(v.id)
             if v.phase=='driving' and v._actor is None:raise ValueError('Missing active fleet actor')
-            if v._actor is not None:v._last=v._actor.distance
+            if v._actor is not None:
+                if 'color' not in info:v.color=v._actor.color
+                else:v._actor.color=v.color
+                v._last=v._actor.distance
             city.fleet.vehicles[v.id]=v
             if 'parking_space_id' not in info:legacy_parking.append(v.id)
         city.fleet.restore_parking(legacy_ids=legacy_parking,suspended_ids=data.get('resuming_vehicles',{}))
