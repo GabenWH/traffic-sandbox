@@ -269,10 +269,12 @@ class TownSimulation:
             town.transit.add_line(BusLine(**line))
         for b in data['buses']:
             mutable = {k:b.pop(k) for k in ('phase','stop_index','passengers','distance_feet','ready_at','position')}
+            mutable['berthed'] = b.pop('berthed', False)
             bus = Bus(**b)
             town.transit.add_bus(bus)
             for k,v in mutable.items():
                 setattr(bus,k,v)
+            town.transit.restore_bus_body(bus)
         for v in data['fleet']:
             town.fleet.add(FleetVehicle(**v))
         town._events = [tuple(e) for e in data['events']]

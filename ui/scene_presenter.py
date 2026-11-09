@@ -1,6 +1,6 @@
 """Change-driven metadata boundary; ordinary frames consume C++ buffers directly."""
 from collections import OrderedDict
-from native_viewer import Parked,visual
+from native_viewer import Parked,visual,Visual
 from .scene_buffers import route_heights
 
 
@@ -51,7 +51,10 @@ class ScenePresenter:
         runtime=getattr(city,'gameplay',None)
         if runtime is not None:
             fleet=runtime.fleet;fleet._ensure_indexes()
-            key=(id(fleet),fleet._presentation_revision,road_key)
+            transit=fleet.transit
+            bus_key=tuple((b.id,b.berthed,b.stop_index,b.length,b.width) for b in transit.buses.values())
+            waiting_key=tuple((key, len(queue)) for key,queue in transit.queues.items())
+            key=(id(fleet),fleet._presentation_revision,road_key,bus_key,waiting_key)
             if key!=self.parked_key:
                 parked=[]
                 for i,p in enumerate(fleet.parked_vehicles()):
@@ -63,6 +66,14 @@ class ScenePresenter:
                         if road:z=road.elevation_at(p.position)
                     parked.append(Parked(visual(i,p.appearance,p.length,p.width,p.color),
                                           *p.position,z,*p.heading))
+                for p in transit.stopped_buses():
+                    parked.append(Parked(visual(len(parked),p.appearance,p.length,p.width,p.color),
+                                          *p.position,p.elevation,*p.heading))
+                for person in transit.waiting_people():
+                    # Same dimensions/model as native moving pedestrians.
+                    person_visual=Visual(len(parked),4,0,0,2,2,5,.90,.66,.20,0)
+                    parked.append(Parked(person_visual,*person.position,
+                                         person.elevation,*person.heading))
                 self.scene.replace_parked(parked);self.parked_key=key
         elif self.parked_key is not None:
             self.scene.replace_parked([]);self.parked_key=None

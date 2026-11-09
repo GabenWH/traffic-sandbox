@@ -170,12 +170,13 @@ class RendererMixin:
                         fill='',outline='#e9e2c7',width=1,tags=STATIC_TAG)
 
     def _draw_parked_vehicles(self) -> None:
+        from itertools import chain
         runtime = getattr(self, 'city_simulation', None)
         if runtime is None:
             return
         self.canvas.delete('parked_vehicles')
         left,top,right,bottom = self.visible_world_bounds()
-        for vehicle in runtime.fleet.parked_vehicles():
+        for vehicle in chain(runtime.fleet.parked_vehicles(), runtime.fleet.transit.stopped_buses()):
             x,y = vehicle.position
             if not (left-vehicle.length <= x <= right+vehicle.length and top-vehicle.length <= y <= bottom+vehicle.length):
                 continue

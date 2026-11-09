@@ -838,8 +838,11 @@ public:
             c.signal_occupancy.clear();arrivals.erase(h);
             if(c.stop_at_end) {
                 c.s.speed=c.s.desired=0;c.cruise=0;
-                auto where=occupancy(c);
-                store_obstacle(std::make_unique<Car>(c),where.first,where.second);
+                // Route geometry and section sums can differ by roundoff.
+                // A completed stop belongs to the final lane even when the
+                // occupancy cursor has advanced past its rounded endpoint.
+                const auto& last=route(c).sections.back();
+                store_obstacle(std::make_unique<Car>(c),last.key,last.offset+last.end-last.start);
             }
             completed.push_back(state(c,0));
             retired.push_back(std::move(cars.at(h)));cars.erase(h);

@@ -226,6 +226,27 @@ class GameplayPersistenceTests(unittest.TestCase):
         self.assertEqual(runtime.fleet.vehicles[carid].site,target.id)
         self.assertEqual(len(runtime.residents),3)
 
+    def test_road_edit_keeps_bus_appearance_when_service_resumes(self):
+        runtime, *_ = neighborhood()
+        self.addCleanup(runtime.close)
+        stops = []
+        for x in (200, 3200):
+            stop = placed(runtime.city, 'bus_stop', x, 50)
+            stop.phase = BuildablePhase.OPERATIONAL
+            stops.append(stop.id)
+        runtime.sync_buildings()
+        runtime.create_line(stops)
+        runtime.update(20)
+        bus = next(iter(runtime.transit.buses.values()))
+        self.assertEqual(bus.phase, 'driving')
+        self.assertEqual(bus._car.appearance.kind, 'bus')
+        runtime.city.add_road([(5000, 5000), (6000, 5000)])
+        runtime.sync_network()
+        bus = runtime.transit.buses[bus.id]
+        runtime._resume_transport()
+        self.assertEqual(bus.phase, 'driving')
+        self.assertEqual(bus._car.appearance.kind, 'bus')
+
     def test_saved_invalid_membership_is_rejected(self):
         from city_simulation import CitySimulation
         runtime,home,*_=neighborhood();runtime.invite_household(home.id,2)

@@ -17,6 +17,7 @@ from parking_layout import ensure_parking, parking_access
 from town_services import Business, ServiceTown
 from town_simulation import Resident
 from transit import Bus, BusLine, BusStop
+from vehicle import VehicleAppearance
 from commute_schedule import CommutePolicy,DepartureLimits
 from parking_trips import ParkingTrips
 from event_queue import EventQueue
@@ -772,14 +773,21 @@ class CitySimulation(ServiceTown):
             if not lanes:continue
             target_index=self.transit.lines[bus.line_id].stop_ids.index(stop)
             if dist(point,self.transit.stops[stop].road_position.point)<1e-6:
+                try:
+                    self.transit.traffic.set_lane_obstacle(bid,self.transit.stops[stop].road_position,
+                                                          length=bus.length,width=bus.width)
+                except ValueError:continue
                 bus.stop_index=target_index;self.transit._dock(bus)
                 del self._resuming_buses[bid];continue
             origin=min((nearest_lane_position(l,point) for l in lanes),key=lambda x:x[1])[0]
             route=self.city.find_vehicle_route_between(origin,self.transit.stops[stop].road_position)
             if route is None:continue
             actor=self.transit.traffic.admit_route(route,vehicle_id=bid,source_id='resume',destination_id=stop,
-                source_type='bus',length=bus.length,width=bus.width,color='#e3a82f')
+                source_type='bus',length=bus.length,width=bus.width,color='#e3a82f',
+                appearance=VehicleAppearance(kind='bus'))
             if actor is not None:
+                self.transit.traffic.stop_vehicle_at_route_end(bid)
+                bus.berthed=False
                 bus.stop_index=(target_index-1)%len(self.transit.lines[bus.line_id].stop_ids)
                 bus._car=actor;bus._last_distance=0;bus.phase='driving'
                 del self._resuming_buses[bid]

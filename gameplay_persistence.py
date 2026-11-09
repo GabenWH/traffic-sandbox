@@ -226,6 +226,7 @@ def restore_transport(transit,data):
     for bus in transit.buses.values():
         bus._car=actors.get(bus.id)
         if bus._car is not None:bus._last_distance=bus._car.travelled_distance
+        transit.restore_bus_body(bus)
     transit.vehicle_arrivals=deque(actors[pid] for pid in data.get('vehicle_arrivals',[]) if pid in actors)
     transit.person_arrivals=deque(data.get('person_arrivals',[]))
     return actors
@@ -401,7 +402,10 @@ def rebind_transport(city):
             line=city.transit.line_plans[bus.line_id]
             target=(bus.stop_index+1)%len(line.stop_ids) if info['phase']=='driving' else bus.stop_index
             pending_buses[bus.id]=(positions.get(bus.id,bus.position),line.stop_ids[target])
-        if bus.id in pending_buses:bus.phase='resuming' if bus.line_id in city.transit.lines else 'suspended'
+        if bus.id in pending_buses:
+            bus.phase='resuming' if bus.line_id in city.transit.lines else 'suspended'
+            bus.berthed=False
+        else:city.transit.restore_bus_body(bus)
     city._resuming_buses=pending_buses
     # Replan walkers/queues; riding passengers remain attached to the same bus.
     city._suspended_walkers=dict(city._suspended_walkers)

@@ -80,6 +80,10 @@ class CityGameplayMixin:
             x,y=self.world_to_screen((p.x,p.y))
             self.canvas.create_oval(x-radius,y-radius,x+radius,y+radius,
                 fill='#e5a833' if p.waiting else '#8c31bc',outline='',tags='town-activity')
+        for person in runtime.transit.waiting_people():
+            x,y=self.world_to_screen(person.position)
+            self.canvas.create_oval(x-radius,y-radius,x+radius,y+radius,
+                fill='#e5a833',outline='',tags='town-activity')
         for stop in runtime.transit.stops.values():
             x,y=self.world_to_screen(stop.walk_point)
             waiting=sum(len(q) for (line,sid),q in runtime.transit.queues.items() if sid==stop.id)

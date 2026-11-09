@@ -1,7 +1,7 @@
 """Connected fixed-line bus service over road and pedestrian mobility layers.
 
 Native traffic moves active buses and walkers. This event coordinator handles
-service, capacity and passenger transitions. Bays are assumed off the road;
+service, capacity and passenger transitions. Buses occupy their lane while stopped;
 walking estimates use the current inferred pedestrian network. Shared-stop
 transfers use an expected-time routing graph. No live delay prediction,
 mid-trip fleet save/load or idling fuel are modeled yet.
@@ -10,11 +10,13 @@ from collections import deque, OrderedDict
 from retention import EventHistory
 from dataclasses import dataclass, field
 from math import dist, isfinite
+from types import SimpleNamespace
 
 from mobility import LanePosition, vehicle_route_points
 from models import polyline_length
 from traffic_testbed import RoadVehicleSimulation
 from walking_cache import WalkingRouteCache, walking_geometry_key
+from vehicle import VehicleAppearance
 
 
 def _positive(value, name, zero=False):
@@ -57,6 +59,7 @@ class Bus:
     distance_feet: float = field(default=0.0, init=False)
     ready_at: float = field(default=0.0, init=False)
     position: tuple = field(default=(0, 0), init=False)
+    berthed: bool = field(default=False, init=False)
     _car: object = field(default=None, init=False, repr=False)
     _last_distance: float = field(default=0.0, init=False, repr=False)
 
@@ -305,6 +308,31 @@ class TransitSimulation:
             if self.engine.release_pedestrian_lane(lane):del self._walk_routes[key]
         self._walk_trim_size=len(self._walk_routes)
 
+    def waiting_people(self):
+        """Use the shared waiting-area layout for all riders at each stop."""
+        from waiting_people import WaitingArea, waiting_person_poses
+        from models import point_at_polyline_distance
+        grouped = {}
+        for (_, stop_id), queue in self.queues.items():
+            grouped.setdefault(stop_id, []).extend(queue)
+        roads = {road.id: road for road in self.city.roads}
+        areas = []
+        for stop_id, people in grouped.items():
+            if not people:
+                continue
+            stop = self.stops[stop_id]
+            lane = stop.road_position.lane
+            distance = stop.road_position.distance
+            a = point_at_polyline_distance(lane.points, max(0., distance-1.))
+            b = point_at_polyline_distance(lane.points, distance+1.)
+            x, y = stop.walk_point
+            rx, ry = stop.road_position.point
+            road = roads.get(lane.road_id)
+            areas.append(WaitingArea(tuple(people), (x,y),
+                (b[0]-a[0],b[1]-a[1]),(x-rx,y-ry),
+                road.elevation_at((x,y)) if road else 0.))
+        return waiting_person_poses(areas)
+
     def _finish_walk(self, person):
         if person.phase == 'walking_to_stop':
             person.phase = 'waiting'
@@ -336,21 +364,71 @@ class TransitSimulation:
         bus.service_at = self.time
         bus.ready_at = self.time + line.dwell_seconds + len(alighting)*line.alighting_seconds
         bus.position = self.stops[stop].road_position.point
+        bus.berthed = True
         self._event('dock', bus=bus.id, stop=stop)
 
+    def restore_bus_body(self, bus):
+        """Reapply physical stopping after loading or rebuilding transport."""
+        if bus._car is not None:
+            self.traffic.stop_vehicle_at_route_end(bus.id)
+        elif bus.berthed and bus.line_id in self.lines:
+            stop = self.lines[bus.line_id].stop_ids[bus.stop_index]
+            self.traffic.set_lane_obstacle(bus.id, self.stops[stop].road_position,
+                                           length=bus.length, width=bus.width)
+
+    def stopped_buses(self):
+        """Stationary bus poses for both viewers; waiting depot buses are off-road."""
+        roads = {road.id: road for road in self.city.roads}
+        for bus in self.buses.values():
+            body = self.traffic._lane_obstacles.get(bus.id)
+            if body is None:
+                continue
+            stop = self.stops[self.lines[bus.line_id].stop_ids[bus.stop_index]]
+            road = roads.get(stop.road_position.lane.road_id)
+            yield SimpleNamespace(id=bus.id, position=body.position, heading=body.heading,
+                length=bus.length, width=bus.width, color='#e3a82f',
+                elevation=road.elevation_at(body.position) if road else 0., parked=True,
+                source_type='bus', appearance=VehicleAppearance(kind='bus'))
+
+    def _return_riders_to_stop(self, bus, reason):
+        """Keep interrupted riders in order for another bus on the same line."""
+        stop = self.lines[bus.line_id].stop_ids[bus.stop_index]
+        passengers = tuple(bus.passengers)
+        if not passengers:
+            return
+        for person_id in passengers:
+            person = self.people[person_id]
+            person.phase, person.bus_id, person.board_stop = 'waiting', None, stop
+            self._event('alight', person=person_id, bus=bus.id, stop=stop, reason=reason)
+            self._event('wait', person=person_id, stop=stop)
+        self.queues[(bus.line_id, stop)].extendleft(reversed(passengers))
+        bus.passengers.clear()
+
     def _service(self, bus):
-        if bus.phase != 'docked' or self.time < bus.service_at or self.time >= bus.service_until:
+        if bus.phase != 'docked' or self.time < bus.service_at:
+            return
+        if self.time >= bus.service_until:
             return
         line = self.lines[bus.line_id]
         stop = line.stop_ids[bus.stop_index]
-        # Reserve terminal order at arrival, including boarding time. Otherwise
-        # an empty or returning bus can repeatedly steal an older bus's slot.
-        if bus.stop_index == 0:
+        # Order buses waiting off-road, but let a bus already occupying the
+        # berth leave: a newly added bus cannot enter until it clears.
+        if bus.stop_index == 0 and not bus.berthed:
             order=(bus.service_at,bus.id)
             if any(other is not bus and other.line_id==bus.line_id and other.phase=='docked'
                    and other.stop_index==0 and other.service_at<=self.time<other.service_until
                    and (other.service_at,other.id)<order for other in self.buses.values()):
                 return
+        if not bus.berthed:
+            try:
+                self.traffic.set_lane_obstacle(bus.id, self.stops[stop].road_position,
+                                               length=bus.length, width=bus.width)
+            except ValueError:
+                # Another body occupies the stop. No passengers board until
+                # this bus can actually enter its berth.
+                return
+            bus.berthed = True
+            bus.ready_at = max(bus.ready_at, self.time + line.dwell_seconds)
         queue = self.queues[(bus.line_id, stop)]
         while queue and len(bus.passengers) < bus.capacity:
             person = self.people[queue.popleft()]
@@ -362,17 +440,15 @@ class TransitSimulation:
             return
         if bus.stop_index == 0 and self.time + 1e-8 < self._next_departure[bus.line_id]:
             return
-        needed = self.leg_lengths[bus.line_id][bus.stop_index] / 5280 * bus.liters_per_mile
-        if bus.fuel_liters + 1e-9 < needed:
-            bus.phase = 'out_of_fuel'
-            self._event('out_of_fuel', bus=bus.id, stop=stop)
-            return
         destination = line.stop_ids[(bus.stop_index+1) % len(line.stop_ids)]
         car = self.traffic.admit_route(self.legs[bus.line_id][bus.stop_index],
                                       vehicle_id=bus.id, source_id=stop, destination_id=destination,
                                       source_type='bus', length=bus.length, width=bus.width,
+                                      appearance=VehicleAppearance(kind='bus'),
                                       speed_cap_mph=None, color='#e3a82f')
         if car is not None:
+            self.traffic.stop_vehicle_at_route_end(bus.id)
+            bus.berthed = False
             if bus.stop_index == 0:
                 self._next_departure[bus.line_id] = self.time + line.headway_seconds
             bus._car, bus._last_distance, bus.phase = car, 0.0, 'driving'
@@ -385,15 +461,39 @@ class TransitSimulation:
             raise RuntimeError('Advance shared traffic only through TransitSimulation.update')
         remaining = seconds
         while remaining > 1e-9:
+            # Return interrupted riders and remove unavailable buses from the
+            # lane before other buses try to berth or the idle clock advances.
+            for bus in self.buses.values():
+                if (bus.phase in ('docked', 'out_of_fuel')
+                        and self.time >= bus.service_until):
+                    self._return_riders_to_stop(bus, 'service_closed')
+                    if bus.berthed:
+                        self.traffic.remove_lane_obstacle(bus.id)
+                        bus.berthed = False
+                    continue
+                if bus.phase == 'docked' and self.time >= bus.service_at:
+                    needed = self.leg_lengths[bus.line_id][bus.stop_index] / 5280 * bus.liters_per_mile
+                    if bus.fuel_liters + 1e-9 < needed:
+                        self._return_riders_to_stop(bus, 'out_of_fuel')
+                        if bus.berthed:
+                            self.traffic.remove_lane_obstacle(bus.id)
+                            bus.berthed = False
+                        bus.phase = 'out_of_fuel'
+                        stop = self.lines[bus.line_id].stop_ids[bus.stop_index]
+                        self._event('out_of_fuel', bus=bus.id, stop=stop)
             for bus in self.buses.values():
                 self._service(bus)
             # With no moving actors or generated traffic, advance to the next
             # bus service event without Python per-tick work during the night.
             if not self.traffic.cars and not self.traffic.active_junction_ids and not self.engine.pedestrian_count():
-                deadlines = [max(b.service_at, b.ready_at,
+                deadlines = [b.service_at if not b.berthed else max(b.service_at, b.ready_at,
                                  self._next_departure[b.line_id] if b.stop_index == 0 else self.time)
                              for b in self.buses.values() if b.phase == 'docked' and self.time < b.service_until]
-                deadline = min(deadlines, default=float('inf'))
+                deadlines.extend(b.service_until for b in self.buses.values()
+                                 if b.berthed and self.time < b.service_until)
+                # Service was just attempted. With no moving actors, a blocked
+                # berth/departure cannot change until another future event.
+                deadline = min((t for t in deadlines if t > self.time+1e-8), default=float('inf'))
                 skip = min(remaining, deadline-self.time)
                 if skip > .05:
                     self.time += skip
