@@ -215,7 +215,8 @@ class BuildingImportTests(unittest.TestCase):
         boundary = ROOT / 'benchmarks/arcata/arcata-city-boundary.osm'
         sample = ROOT / 'tests/fixtures/arcata-osm-building-sample.osm'
         city, _, info = build_city([roads], boundary, building_paths=[sample])
-        self.assertEqual(info['road_segments'], 1181)
+        self.assertEqual(info['road_segments'], 1141)
+        self.assertEqual(info['roundabout_intersections'], 8)
         self.assertEqual(info['imported_homes'], 2)
         self.assertEqual({b.id for b in city.buildings},
                          {'osm-building:way:845521364', 'osm-building:way:845521365'})

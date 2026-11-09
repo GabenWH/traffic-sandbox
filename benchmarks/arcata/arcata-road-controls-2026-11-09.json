@@ -1,0 +1,2628 @@
+{
+  "generator": "OpenStreetMap API 0.6; traffic-sandbox control-node supplement",
+  "elements": [
+    {
+      "type": "node",
+      "id": 84972338,
+      "lon": -124.0811587,
+      "lat": 40.9049932,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 6,
+      "timestamp": "2024-07-23T18:47:48Z"
+    },
+    {
+      "type": "node",
+      "id": 85002495,
+      "lon": -124.0834002,
+      "lat": 40.8751594,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 7,
+      "timestamp": "2021-11-06T09:27:15Z"
+    },
+    {
+      "type": "node",
+      "id": 85174616,
+      "lon": -124.0787356,
+      "lat": 40.8860587,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2025-04-16T22:20:50Z"
+    },
+    {
+      "type": "node",
+      "id": 85427618,
+      "lon": -124.079342,
+      "lat": 40.900875,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2014-05-31T19:16:14Z"
+    },
+    {
+      "type": "node",
+      "id": 85471544,
+      "lon": -124.0790391,
+      "lat": 40.8878224,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 4,
+      "timestamp": "2025-04-16T22:20:50Z"
+    },
+    {
+      "type": "node",
+      "id": 85471547,
+      "lon": -124.0784897,
+      "lat": 40.8876166,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2025-04-16T22:20:50Z"
+    },
+    {
+      "type": "node",
+      "id": 85688637,
+      "lon": -124.0674824,
+      "lat": 40.8577214,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2026-06-07T01:20:13Z"
+    },
+    {
+      "type": "node",
+      "id": 85688662,
+      "lon": -124.0815702,
+      "lat": 40.8828044,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-07T09:08:38Z"
+    },
+    {
+      "type": "node",
+      "id": 85689460,
+      "lon": -124.0841354,
+      "lat": 40.8701794,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2021-05-24T05:38:24Z"
+    },
+    {
+      "type": "node",
+      "id": 85699703,
+      "lon": -124.0942464,
+      "lat": 40.8869509,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2026-01-12T17:24:14Z"
+    },
+    {
+      "type": "node",
+      "id": 85701025,
+      "lon": -124.0651228,
+      "lat": 40.8641252,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2014-05-31T19:11:41Z"
+    },
+    {
+      "type": "node",
+      "id": 85708312,
+      "lon": -124.103041,
+      "lat": 40.874384,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2009-11-16T23:15:38Z"
+    },
+    {
+      "type": "node",
+      "id": 85708318,
+      "lon": -124.0945225,
+      "lat": 40.8957833,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2018-04-07T19:51:18Z"
+    },
+    {
+      "type": "node",
+      "id": 85724260,
+      "lon": -124.0864814,
+      "lat": 40.8904458,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-09T05:23:09Z"
+    },
+    {
+      "type": "node",
+      "id": 85724271,
+      "lon": -124.0857997,
+      "lat": 40.8923094,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-09T05:11:53Z"
+    },
+    {
+      "type": "node",
+      "id": 85740109,
+      "lon": -124.0771671,
+      "lat": 40.8639507,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2021-02-02T11:28:24Z"
+    },
+    {
+      "type": "node",
+      "id": 85740374,
+      "lon": -124.0769867,
+      "lat": 40.8712058,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 5,
+      "timestamp": "2017-12-07T19:06:32Z"
+    },
+    {
+      "type": "node",
+      "id": 85741184,
+      "lon": -124.0701422,
+      "lat": 40.863197,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2014-05-14T18:18:15Z"
+    },
+    {
+      "type": "node",
+      "id": 85743716,
+      "lon": -124.0695946,
+      "lat": 40.8588399,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2022-09-20T22:55:17Z"
+    },
+    {
+      "type": "node",
+      "id": 85747886,
+      "lon": -124.0808922,
+      "lat": 40.8786466,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 6,
+      "timestamp": "2025-04-03T23:07:18Z"
+    },
+    {
+      "type": "node",
+      "id": 85749553,
+      "lon": -124.0776056,
+      "lat": 40.9016883,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2014-05-31T19:16:14Z"
+    },
+    {
+      "type": "node",
+      "id": 85749602,
+      "lon": -124.0803968,
+      "lat": 40.8994668,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2024-02-17T05:47:13Z"
+    },
+    {
+      "type": "node",
+      "id": 85751204,
+      "lon": -124.0957139,
+      "lat": 40.8842744,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2026-01-12T17:24:14Z"
+    },
+    {
+      "type": "node",
+      "id": 85767795,
+      "lon": -124.0943959,
+      "lat": 40.8862445,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2026-01-12T17:24:14Z"
+    },
+    {
+      "type": "node",
+      "id": 85770800,
+      "lon": -124.0808255,
+      "lat": 40.8780024,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 5,
+      "timestamp": "2025-04-02T00:23:56Z"
+    },
+    {
+      "type": "node",
+      "id": 85809211,
+      "lon": -124.0656713,
+      "lat": 40.8813553,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2013-03-01T11:25:19Z"
+    },
+    {
+      "type": "node",
+      "id": 85812134,
+      "lon": -124.0936356,
+      "lat": 40.8976604,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-10T06:00:58Z"
+    },
+    {
+      "type": "node",
+      "id": 85829774,
+      "lon": -124.0874782,
+      "lat": 40.8819079,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2020-11-09T02:21:14Z"
+    },
+    {
+      "type": "node",
+      "id": 85836523,
+      "lon": -124.079718,
+      "lat": 40.90176,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2014-05-31T19:16:14Z"
+    },
+    {
+      "type": "node",
+      "id": 85842188,
+      "lon": -124.089668,
+      "lat": 40.882869,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2009-12-12T09:17:06Z"
+    },
+    {
+      "type": "node",
+      "id": 85849008,
+      "lon": -124.0875681,
+      "lat": 40.8700688,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 7,
+      "timestamp": "2021-01-15T09:17:17Z"
+    },
+    {
+      "type": "node",
+      "id": 85854543,
+      "lon": -124.072466,
+      "lat": 40.884768,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-06T07:18:23Z"
+    },
+    {
+      "type": "node",
+      "id": 85859886,
+      "lon": -124.093281,
+      "lat": 40.8813583,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 5,
+      "timestamp": "2020-09-09T02:50:04Z"
+    },
+    {
+      "type": "node",
+      "id": 85864426,
+      "lon": -124.1025076,
+      "lat": 40.8710374,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2017-01-24T22:49:32Z"
+    },
+    {
+      "type": "node",
+      "id": 85887569,
+      "lon": -124.0838381,
+      "lat": 40.8838196,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-06T06:54:11Z"
+    },
+    {
+      "type": "node",
+      "id": 85891067,
+      "lon": -124.0739365,
+      "lat": 40.89037,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-06T07:16:05Z"
+    },
+    {
+      "type": "node",
+      "id": 85898975,
+      "lon": -124.0912868,
+      "lat": 40.9122892,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-11T02:43:47Z"
+    },
+    {
+      "type": "node",
+      "id": 85903539,
+      "lon": -124.0816764,
+      "lat": 40.8723911,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 4,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 85917083,
+      "lon": -124.102056,
+      "lat": 40.874522,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2009-12-12T09:24:58Z"
+    },
+    {
+      "type": "node",
+      "id": 85919278,
+      "lon": -124.0688399,
+      "lat": 40.8594381,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2026-06-07T01:20:13Z"
+    },
+    {
+      "type": "node",
+      "id": 85923653,
+      "lon": -124.086273,
+      "lat": 40.901092,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-11T02:20:02Z"
+    },
+    {
+      "type": "node",
+      "id": 85929050,
+      "lon": -124.081294,
+      "lat": 40.871952,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2017-12-06T17:31:07Z"
+    },
+    {
+      "type": "node",
+      "id": 85935642,
+      "lon": -124.079584,
+      "lat": 40.899926,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2024-07-21T20:33:27Z"
+    },
+    {
+      "type": "node",
+      "id": 85935664,
+      "lon": -124.0695119,
+      "lat": 40.8810318,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2025-12-16T20:44:10Z"
+    },
+    {
+      "type": "node",
+      "id": 85939451,
+      "lon": -124.0882548,
+      "lat": 40.882344,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-09T02:50:04Z"
+    },
+    {
+      "type": "node",
+      "id": 85944426,
+      "lon": -124.0865209,
+      "lat": 40.8698392,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 6,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 85944434,
+      "lon": -124.0853218,
+      "lat": 40.8730101,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 5,
+      "timestamp": "2017-12-06T02:46:18Z"
+    },
+    {
+      "type": "node",
+      "id": 85945878,
+      "lon": -124.087949,
+      "lat": 40.893445,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2009-12-12T09:36:28Z"
+    },
+    {
+      "type": "node",
+      "id": 85945890,
+      "lon": -124.08551,
+      "lat": 40.892993,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2009-12-12T09:36:28Z"
+    },
+    {
+      "type": "node",
+      "id": 85953741,
+      "lon": -124.0698936,
+      "lat": 40.8558535,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2026-06-07T01:20:13Z"
+    },
+    {
+      "type": "node",
+      "id": 85965152,
+      "lon": -124.0865547,
+      "lat": 40.900584,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-11T02:20:02Z"
+    },
+    {
+      "type": "node",
+      "id": 85965498,
+      "lon": -124.0886033,
+      "lat": 40.8826949,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-09T02:50:04Z"
+    },
+    {
+      "type": "node",
+      "id": 85984090,
+      "lon": -124.0708875,
+      "lat": 40.9032606,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2012-09-26T07:22:39Z"
+    },
+    {
+      "type": "node",
+      "id": 85990245,
+      "lon": -124.091867,
+      "lat": 40.8792596,
+      "tags": {
+        "direction": "both",
+        "highway": "stop"
+      },
+      "version": 6,
+      "timestamp": "2020-10-21T00:20:58Z"
+    },
+    {
+      "type": "node",
+      "id": 86006479,
+      "lon": -124.0879299,
+      "lat": 40.8920076,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-09T06:40:21Z"
+    },
+    {
+      "type": "node",
+      "id": 86012807,
+      "lon": -124.0852538,
+      "lat": 40.8768794,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 6,
+      "timestamp": "2024-07-11T03:01:21Z"
+    },
+    {
+      "type": "node",
+      "id": 86035979,
+      "lon": -124.0891219,
+      "lat": 40.8915175,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-09T05:50:11Z"
+    },
+    {
+      "type": "node",
+      "id": 86036047,
+      "lon": -124.073286,
+      "lat": 40.880948,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-11-23T23:27:25Z"
+    },
+    {
+      "type": "node",
+      "id": 86036058,
+      "lon": -124.0709563,
+      "lat": 40.8627794,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2014-05-14T18:18:15Z"
+    },
+    {
+      "type": "node",
+      "id": 86049289,
+      "lon": -124.074521,
+      "lat": 40.881246,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-11-23T23:27:25Z"
+    },
+    {
+      "type": "node",
+      "id": 86062606,
+      "lon": -124.102514,
+      "lat": 40.872984,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2009-12-12T09:42:10Z"
+    },
+    {
+      "type": "node",
+      "id": 86096080,
+      "lon": -124.1031988,
+      "lat": 40.8716317,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2017-01-24T22:49:31Z"
+    },
+    {
+      "type": "node",
+      "id": 86101698,
+      "lon": -124.1041139,
+      "lat": 40.8728324,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-07T07:52:39Z"
+    },
+    {
+      "type": "node",
+      "id": 86112527,
+      "lon": -124.103989,
+      "lat": 40.874223,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2009-12-12T09:52:40Z"
+    },
+    {
+      "type": "node",
+      "id": 86123677,
+      "lon": -124.0867842,
+      "lat": 40.901098,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-11T02:20:02Z"
+    },
+    {
+      "type": "node",
+      "id": 86128691,
+      "lon": -124.1032123,
+      "lat": 40.8728341,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-07T07:52:39Z"
+    },
+    {
+      "type": "node",
+      "id": 86137825,
+      "lon": -124.079733,
+      "lat": 40.8824314,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2026-01-07T17:35:28Z"
+    },
+    {
+      "type": "node",
+      "id": 86138012,
+      "lon": -124.0741458,
+      "lat": 40.8789479,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2025-12-16T20:44:10Z"
+    },
+    {
+      "type": "node",
+      "id": 86139540,
+      "lon": -124.0694495,
+      "lat": 40.8565667,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2026-06-07T01:20:13Z"
+    },
+    {
+      "type": "node",
+      "id": 86141571,
+      "lon": -124.0923222,
+      "lat": 40.8812281,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-09T02:50:04Z"
+    },
+    {
+      "type": "node",
+      "id": 86156215,
+      "lon": -124.0790731,
+      "lat": 40.8716668,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 6,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 86156225,
+      "lon": -124.078581,
+      "lat": 40.8741876,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 5,
+      "timestamp": "2022-09-03T17:51:02Z"
+    },
+    {
+      "type": "node",
+      "id": 86164616,
+      "lon": -124.0851904,
+      "lat": 40.8704107,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 5,
+      "timestamp": "2017-12-06T02:46:18Z"
+    },
+    {
+      "type": "node",
+      "id": 86164621,
+      "lon": -124.0836948,
+      "lat": 40.8743795,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 7,
+      "timestamp": "2021-05-25T01:29:44Z"
+    },
+    {
+      "type": "node",
+      "id": 86184392,
+      "lon": -124.0893598,
+      "lat": 40.871305,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2021-05-24T05:38:24Z"
+    },
+    {
+      "type": "node",
+      "id": 86189631,
+      "lon": -124.085368,
+      "lat": 40.8764753,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2020-09-06T08:09:01Z"
+    },
+    {
+      "type": "node",
+      "id": 86191124,
+      "lon": -124.1006251,
+      "lat": 40.8696496,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-07T06:40:52Z"
+    },
+    {
+      "type": "node",
+      "id": 86196332,
+      "lon": -124.0897158,
+      "lat": 40.9006683,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-11T02:20:02Z"
+    },
+    {
+      "type": "node",
+      "id": 86201427,
+      "lon": -124.0714822,
+      "lat": 40.8807421,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2025-12-16T20:44:10Z"
+    },
+    {
+      "type": "node",
+      "id": 86216878,
+      "lon": -124.0720573,
+      "lat": 40.9033135,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 4,
+      "timestamp": "2025-12-09T21:39:48Z"
+    },
+    {
+      "type": "node",
+      "id": 86221623,
+      "lon": -124.0858351,
+      "lat": 40.9008348,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-11T02:20:02Z"
+    },
+    {
+      "type": "node",
+      "id": 86232519,
+      "lon": -124.096855,
+      "lat": 40.896413,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2026-11-06T19:34:21Z"
+    },
+    {
+      "type": "node",
+      "id": 86236286,
+      "lon": -124.095712,
+      "lat": 40.898905,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2018-04-07T19:51:18Z"
+    },
+    {
+      "type": "node",
+      "id": 86247299,
+      "lon": -124.1010602,
+      "lat": 40.8738551,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 4,
+      "timestamp": "2021-02-09T09:37:41Z"
+    },
+    {
+      "type": "node",
+      "id": 259755421,
+      "lon": -124.0970075,
+      "lat": 40.8870992,
+      "tags": {
+        "highway": "turning_loop"
+      },
+      "version": 2,
+      "timestamp": "2026-01-12T17:24:14Z"
+    },
+    {
+      "type": "node",
+      "id": 259756799,
+      "lon": -124.1036711,
+      "lat": 40.8718676,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2017-01-24T22:49:32Z"
+    },
+    {
+      "type": "node",
+      "id": 259756881,
+      "lon": -124.1035558,
+      "lat": 40.8711919,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 4,
+      "timestamp": "2017-01-24T22:49:32Z"
+    },
+    {
+      "type": "node",
+      "id": 373598563,
+      "lon": -124.0830013,
+      "lat": 40.905029,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 3,
+      "timestamp": "2021-11-06T11:09:04Z"
+    },
+    {
+      "type": "node",
+      "id": 559633691,
+      "lon": -124.1004798,
+      "lat": 40.8889695,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 1,
+      "timestamp": "2009-11-08T18:01:27Z"
+    },
+    {
+      "type": "node",
+      "id": 564213373,
+      "lon": -124.0795477,
+      "lat": 40.8757839,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 7,
+      "timestamp": "2025-04-04T15:16:08Z"
+    },
+    {
+      "type": "node",
+      "id": 564213376,
+      "lon": -124.078566,
+      "lat": 40.8757573,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2022-09-03T17:51:02Z"
+    },
+    {
+      "type": "node",
+      "id": 564396884,
+      "lon": -124.088724,
+      "lat": 40.873147,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2019-02-24T12:17:50Z"
+    },
+    {
+      "type": "node",
+      "id": 1150231285,
+      "lon": -124.0847319,
+      "lat": 40.8745977,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 6,
+      "timestamp": "2020-09-06T06:25:19Z"
+    },
+    {
+      "type": "node",
+      "id": 1150231480,
+      "lon": -124.0881677,
+      "lat": 40.8684643,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 1150231530,
+      "lon": -124.0884639,
+      "lat": 40.8676855,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 1150231614,
+      "lon": -124.0892162,
+      "lat": 40.8687125,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2021-05-24T05:10:40Z"
+    },
+    {
+      "type": "node",
+      "id": 1150231770,
+      "lon": -124.0872721,
+      "lat": 40.8708667,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 5,
+      "timestamp": "2020-09-06T06:18:25Z"
+    },
+    {
+      "type": "node",
+      "id": 1150231891,
+      "lon": -124.0874188,
+      "lat": 40.8734707,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2020-09-10T03:56:40Z"
+    },
+    {
+      "type": "node",
+      "id": 1150231926,
+      "lon": -124.084307,
+      "lat": 40.8727877,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 3,
+      "timestamp": "2017-12-06T02:46:18Z"
+    },
+    {
+      "type": "node",
+      "id": 2389036948,
+      "lon": -124.0887969,
+      "lat": 40.8922247,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 3,
+      "timestamp": "2020-09-09T06:40:21Z"
+    },
+    {
+      "type": "node",
+      "id": 2809851076,
+      "lon": -124.0638675,
+      "lat": 40.8492765,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 2,
+      "timestamp": "2014-07-31T03:58:23Z"
+    },
+    {
+      "type": "node",
+      "id": 2990325269,
+      "lon": -124.0834768,
+      "lat": 40.8724257,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 2,
+      "timestamp": "2017-01-31T07:32:58Z"
+    },
+    {
+      "type": "node",
+      "id": 4631278531,
+      "lon": -124.0862199,
+      "lat": 40.8706347,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 3,
+      "timestamp": "2017-12-06T02:46:18Z"
+    },
+    {
+      "type": "node",
+      "id": 4646676267,
+      "lon": -124.0835137,
+      "lat": 40.8786597,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 2,
+      "timestamp": "2017-12-06T02:46:17Z"
+    },
+    {
+      "type": "node",
+      "id": 4650010157,
+      "lon": -124.0863764,
+      "lat": 40.8672431,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 4650603760,
+      "lon": -124.0874378,
+      "lat": 40.867469,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 5,
+      "timestamp": "2023-12-20T21:03:10Z"
+    },
+    {
+      "type": "node",
+      "id": 4650834638,
+      "lon": -124.087856,
+      "lat": 40.869281,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 3,
+      "timestamp": "2025-08-23T06:09:21Z"
+    },
+    {
+      "type": "node",
+      "id": 4650861758,
+      "lon": -124.0858039,
+      "lat": 40.8688164,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 4,
+      "timestamp": "2023-12-20T21:03:10Z"
+    },
+    {
+      "type": "node",
+      "id": 4650861761,
+      "lon": -124.0847376,
+      "lat": 40.8686169,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 5,
+      "timestamp": "2024-07-11T00:33:35Z"
+    },
+    {
+      "type": "node",
+      "id": 4677738637,
+      "lon": -124.0868217,
+      "lat": 40.8690399,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 3,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 4677738639,
+      "lon": -124.086096,
+      "lat": 40.8680411,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 4677738640,
+      "lon": -124.087106,
+      "lat": 40.8682549,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 4,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 5049574204,
+      "lon": -124.0803003,
+      "lat": 40.9060053,
+      "tags": {
+        "highway": "turning_loop"
+      },
+      "version": 4,
+      "timestamp": "2022-07-25T12:23:07Z"
+    },
+    {
+      "type": "node",
+      "id": 5231026829,
+      "lon": -124.0796786,
+      "lat": 40.8741845,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 5,
+      "timestamp": "2025-04-02T22:16:01Z"
+    },
+    {
+      "type": "node",
+      "id": 5300352240,
+      "lon": -124.0778853,
+      "lat": 40.8688183,
+      "tags": {
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2017-12-23T07:09:30Z"
+    },
+    {
+      "type": "node",
+      "id": 5300352243,
+      "lon": -124.0779045,
+      "lat": 40.8660022,
+      "tags": {
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 3,
+      "timestamp": "2023-09-02T00:22:22Z"
+    },
+    {
+      "type": "node",
+      "id": 5767015480,
+      "lon": -124.081715,
+      "lat": 40.8867108,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 2,
+      "timestamp": "2025-04-16T22:20:50Z"
+    },
+    {
+      "type": "node",
+      "id": 7892003421,
+      "lon": -124.0943957,
+      "lat": 40.8992828,
+      "tags": {
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2020-09-10T05:30:26Z"
+    },
+    {
+      "type": "node",
+      "id": 8337348611,
+      "lon": -124.0913871,
+      "lat": 40.8659201,
+      "tags": {
+        "highway": "traffic_signals",
+        "traffic_signals:direction": "backward"
+      },
+      "version": 1,
+      "timestamp": "2021-01-19T08:57:58Z"
+    },
+    {
+      "type": "node",
+      "id": 8337348612,
+      "lon": -124.091621,
+      "lat": 40.8657707,
+      "tags": {
+        "highway": "traffic_signals",
+        "traffic_signals:direction": "forward"
+      },
+      "version": 1,
+      "timestamp": "2021-01-19T08:57:58Z"
+    },
+    {
+      "type": "node",
+      "id": 8337348613,
+      "lon": -124.0912546,
+      "lat": 40.8658112,
+      "tags": {
+        "highway": "traffic_signals",
+        "traffic_signals:direction": "forward"
+      },
+      "version": 1,
+      "timestamp": "2021-01-19T08:57:58Z"
+    },
+    {
+      "type": "node",
+      "id": 8342146847,
+      "lon": -124.0881641,
+      "lat": 40.865159,
+      "tags": {
+        "highway": "traffic_signals"
+      },
+      "version": 1,
+      "timestamp": "2021-01-20T13:31:14Z"
+    },
+    {
+      "type": "node",
+      "id": 8342146849,
+      "lon": -124.0873145,
+      "lat": 40.8647785,
+      "tags": {
+        "highway": "traffic_signals",
+        "traffic_signals:direction": "forward"
+      },
+      "version": 1,
+      "timestamp": "2021-01-20T13:31:14Z"
+    },
+    {
+      "type": "node",
+      "id": 8342146850,
+      "lon": -124.0871102,
+      "lat": 40.864935,
+      "tags": {
+        "highway": "traffic_signals"
+      },
+      "version": 1,
+      "timestamp": "2021-01-20T13:31:14Z"
+    },
+    {
+      "type": "node",
+      "id": 8342146851,
+      "lon": -124.0882667,
+      "lat": 40.8652415,
+      "tags": {
+        "highway": "traffic_signals",
+        "traffic_signals:direction": "forward"
+      },
+      "version": 1,
+      "timestamp": "2021-01-20T13:31:14Z"
+    },
+    {
+      "type": "node",
+      "id": 8342146852,
+      "lon": -124.087425,
+      "lat": 40.8648642,
+      "tags": {
+        "highway": "traffic_signals"
+      },
+      "version": 1,
+      "timestamp": "2021-01-20T13:31:14Z"
+    },
+    {
+      "type": "node",
+      "id": 8342146853,
+      "lon": -124.0884772,
+      "lat": 40.8651002,
+      "tags": {
+        "highway": "traffic_signals"
+      },
+      "version": 1,
+      "timestamp": "2021-01-20T13:31:14Z"
+    },
+    {
+      "type": "node",
+      "id": 8342146854,
+      "lon": -124.0883592,
+      "lat": 40.8650041,
+      "tags": {
+        "highway": "traffic_signals",
+        "traffic_signals:direction": "backward"
+      },
+      "version": 1,
+      "timestamp": "2021-01-20T13:31:14Z"
+    },
+    {
+      "type": "node",
+      "id": 8407661668,
+      "lon": -124.0993939,
+      "lat": 40.8735787,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-02-09T09:35:26Z"
+    },
+    {
+      "type": "node",
+      "id": 8407661669,
+      "lon": -124.1012776,
+      "lat": 40.8738694,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-02-09T09:35:26Z"
+    },
+    {
+      "type": "node",
+      "id": 8407661671,
+      "lon": -124.0994499,
+      "lat": 40.873425,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-02-09T09:35:26Z"
+    },
+    {
+      "type": "node",
+      "id": 8759416184,
+      "lon": -124.0895288,
+      "lat": 40.8678447,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 8759416185,
+      "lon": -124.090362,
+      "lat": 40.868948,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 8759416186,
+      "lon": -124.0904682,
+      "lat": 40.8681134,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 8759416187,
+      "lon": -124.0894767,
+      "lat": 40.8679873,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 8759416188,
+      "lon": -124.0906569,
+      "lat": 40.8681544,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 8759416189,
+      "lon": -124.0851513,
+      "lat": 40.8678152,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:09:35Z"
+    },
+    {
+      "type": "node",
+      "id": 8759418074,
+      "lon": -124.092988,
+      "lat": 40.8703853,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:10:40Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497105,
+      "lon": -124.0809826,
+      "lat": 40.8695772,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497106,
+      "lon": -124.0814055,
+      "lat": 40.8721693,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497107,
+      "lon": -124.0882804,
+      "lat": 40.8711663,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:38:24Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497108,
+      "lon": -124.0895705,
+      "lat": 40.8705039,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:38:24Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497109,
+      "lon": -124.0927902,
+      "lat": 40.8711303,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:38:24Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497110,
+      "lon": -124.0927398,
+      "lat": 40.8712644,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:38:24Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497112,
+      "lon": -124.0789434,
+      "lat": 40.8689951,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:38:24Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497113,
+      "lon": -124.082076,
+      "lat": 40.8696593,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497114,
+      "lon": -124.0897589,
+      "lat": 40.8705446,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:38:24Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497115,
+      "lon": -124.081765,
+      "lat": 40.872249,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497116,
+      "lon": -124.0810357,
+      "lat": 40.8694342,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497220,
+      "lon": -124.0924965,
+      "lat": 40.8719268,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:38:24Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497221,
+      "lon": -124.0799488,
+      "lat": 40.8693531,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2026-01-05T18:03:18Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497222,
+      "lon": -124.0820239,
+      "lat": 40.8698129,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497223,
+      "lon": -124.0801462,
+      "lat": 40.8718174,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 8759497226,
+      "lon": -124.0883301,
+      "lat": 40.8710341,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-24T05:38:24Z"
+    },
+    {
+      "type": "node",
+      "id": 8762947481,
+      "lon": -124.0834591,
+      "lat": 40.8787821,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-05-25T01:29:44Z"
+    },
+    {
+      "type": "node",
+      "id": 8932450599,
+      "lon": -124.0787404,
+      "lat": 40.8734128,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2025-04-02T16:31:56Z"
+    },
+    {
+      "type": "node",
+      "id": 8932450600,
+      "lon": -124.0795996,
+      "lat": 40.8735819,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2025-04-02T16:31:56Z"
+    },
+    {
+      "type": "node",
+      "id": 8932450602,
+      "lon": -124.0795663,
+      "lat": 40.8736168,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 2,
+      "timestamp": "2025-04-02T16:31:56Z"
+    },
+    {
+      "type": "node",
+      "id": 9002939689,
+      "lon": -124.0858442,
+      "lat": 40.8714114,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 9002939690,
+      "lon": -124.0851411,
+      "lat": 40.8738343,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 9002939691,
+      "lon": -124.0849366,
+      "lat": 40.8737893,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 9002939692,
+      "lon": -124.0878217,
+      "lat": 40.866693,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 9002939693,
+      "lon": -124.0881147,
+      "lat": 40.8658991,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 9002939694,
+      "lon": -124.085539,
+      "lat": 40.872204,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 9002939695,
+      "lon": -124.0876378,
+      "lat": 40.8666536,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 9002939696,
+      "lon": -124.0860368,
+      "lat": 40.8714527,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 9002939697,
+      "lon": -124.0857396,
+      "lat": 40.8722474,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 9002939698,
+      "lon": -124.0879392,
+      "lat": 40.8658608,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-08-13T05:34:49Z"
+    },
+    {
+      "type": "node",
+      "id": 9075792006,
+      "lon": -124.0774998,
+      "lat": 40.8660035,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-09-09T08:10:52Z"
+    },
+    {
+      "type": "node",
+      "id": 9229556419,
+      "lon": -124.0847873,
+      "lat": 40.9049989,
+      "tags": {
+        "direction": "forward",
+        "highway": "give_way"
+      },
+      "version": 1,
+      "timestamp": "2021-11-06T08:31:57Z"
+    },
+    {
+      "type": "node",
+      "id": 9229556420,
+      "lon": -124.0894335,
+      "lat": 40.903822,
+      "tags": {
+        "direction": "forward",
+        "highway": "give_way"
+      },
+      "version": 1,
+      "timestamp": "2021-11-06T08:31:57Z"
+    },
+    {
+      "type": "node",
+      "id": 9229797377,
+      "lon": -124.0751225,
+      "lat": 40.9047384,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-11-06T11:09:04Z"
+    },
+    {
+      "type": "node",
+      "id": 9246208171,
+      "lon": -124.0915949,
+      "lat": 40.8822537,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2021-11-12T14:09:52Z"
+    },
+    {
+      "type": "node",
+      "id": 11069972239,
+      "lon": -124.0459121,
+      "lat": 40.9075462,
+      "tags": {
+        "direction": "forward",
+        "highway": "give_way"
+      },
+      "version": 1,
+      "timestamp": "2023-07-26T19:52:01Z"
+    },
+    {
+      "type": "node",
+      "id": 11435785392,
+      "lon": -124.0817558,
+      "lat": 40.8350331,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2023-12-20T21:03:10Z"
+    },
+    {
+      "type": "node",
+      "id": 11435785393,
+      "lon": -124.083769,
+      "lat": 40.8273596,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2023-12-20T21:03:10Z"
+    },
+    {
+      "type": "node",
+      "id": 11633661320,
+      "lon": -124.0825165,
+      "lat": 40.899539,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 2,
+      "timestamp": "2024-07-21T20:33:27Z"
+    },
+    {
+      "type": "node",
+      "id": 12046903006,
+      "lon": -124.0857281,
+      "lat": 40.8662411,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T00:33:35Z"
+    },
+    {
+      "type": "node",
+      "id": 12046903012,
+      "lon": -124.0852459,
+      "lat": 40.8669965,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 2,
+      "timestamp": "2025-10-05T03:08:56Z"
+    },
+    {
+      "type": "node",
+      "id": 12046903013,
+      "lon": -124.08543,
+      "lat": 40.8670374,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 2,
+      "timestamp": "2025-10-05T03:08:56Z"
+    },
+    {
+      "type": "node",
+      "id": 12046903014,
+      "lon": -124.0853618,
+      "lat": 40.8669341,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 2,
+      "timestamp": "2025-10-05T03:08:56Z"
+    },
+    {
+      "type": "node",
+      "id": 12046903015,
+      "lon": -124.085309,
+      "lat": 40.8670863,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "all"
+      },
+      "version": 2,
+      "timestamp": "2025-10-05T03:08:56Z"
+    },
+    {
+      "type": "node",
+      "id": 12046903017,
+      "lon": -124.0858513,
+      "lat": 40.8654101,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T00:33:35Z"
+    },
+    {
+      "type": "node",
+      "id": 12046903018,
+      "lon": -124.0860163,
+      "lat": 40.8654439,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T00:33:35Z"
+    },
+    {
+      "type": "node",
+      "id": 12047038400,
+      "lon": -124.0847975,
+      "lat": 40.8711853,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T03:01:21Z"
+    },
+    {
+      "type": "node",
+      "id": 12047038401,
+      "lon": -124.0849936,
+      "lat": 40.8712275,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T03:01:21Z"
+    },
+    {
+      "type": "node",
+      "id": 12047038402,
+      "lon": -124.0846934,
+      "lat": 40.8720183,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T03:01:21Z"
+    },
+    {
+      "type": "node",
+      "id": 12047038403,
+      "lon": -124.084489,
+      "lat": 40.8719766,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T03:01:21Z"
+    },
+    {
+      "type": "node",
+      "id": 12047038422,
+      "lon": -124.0838877,
+      "lat": 40.8735625,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T03:01:21Z"
+    },
+    {
+      "type": "node",
+      "id": 12047038423,
+      "lon": -124.0841283,
+      "lat": 40.873611,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T03:01:21Z"
+    },
+    {
+      "type": "node",
+      "id": 12047064696,
+      "lon": -124.0861368,
+      "lat": 40.8646439,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T03:26:18Z"
+    },
+    {
+      "type": "node",
+      "id": 12047064701,
+      "lon": -124.0863537,
+      "lat": 40.8647072,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T03:26:18Z"
+    },
+    {
+      "type": "node",
+      "id": 12047064734,
+      "lon": -124.0866264,
+      "lat": 40.8638553,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T03:26:18Z"
+    },
+    {
+      "type": "node",
+      "id": 12047064735,
+      "lon": -124.0864639,
+      "lat": 40.8638205,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2024-07-11T03:26:18Z"
+    },
+    {
+      "type": "node",
+      "id": 12335471330,
+      "lon": -124.0685902,
+      "lat": 40.8305755,
+      "tags": {
+        "highway": "turning_loop"
+      },
+      "version": 1,
+      "timestamp": "2024-11-12T20:07:39Z"
+    },
+    {
+      "type": "node",
+      "id": 12716550218,
+      "lon": -124.077962,
+      "lat": 40.8809567,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-03-31T15:50:32Z"
+    },
+    {
+      "type": "node",
+      "id": 12716550289,
+      "lon": -124.0798493,
+      "lat": 40.8842834,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-03-31T15:50:32Z"
+    },
+    {
+      "type": "node",
+      "id": 12716849154,
+      "lon": -124.0761876,
+      "lat": 40.8736024,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 2,
+      "timestamp": "2025-04-04T22:55:09Z"
+    },
+    {
+      "type": "node",
+      "id": 12716849155,
+      "lon": -124.0760136,
+      "lat": 40.8735497,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 2,
+      "timestamp": "2025-04-04T22:55:09Z"
+    },
+    {
+      "type": "node",
+      "id": 12719027429,
+      "lon": -124.0812912,
+      "lat": 40.8772056,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-01T16:25:17Z"
+    },
+    {
+      "type": "node",
+      "id": 12719027441,
+      "lon": -124.0807424,
+      "lat": 40.8773334,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-01T16:25:17Z"
+    },
+    {
+      "type": "node",
+      "id": 12719027456,
+      "lon": -124.0808654,
+      "lat": 40.8798344,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-01T16:25:17Z"
+    },
+    {
+      "type": "node",
+      "id": 12724163158,
+      "lon": -124.0813742,
+      "lat": 40.8712992,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 12724163184,
+      "lon": -124.0785894,
+      "lat": 40.8736601,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 12724163185,
+      "lon": -124.0784548,
+      "lat": 40.873771,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 12724173928,
+      "lon": -124.081673,
+      "lat": 40.8704995,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-02T19:39:33Z"
+    },
+    {
+      "type": "node",
+      "id": 12724431263,
+      "lon": -124.0815452,
+      "lat": 40.8741798,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-02T22:16:01Z"
+    },
+    {
+      "type": "node",
+      "id": 12736989014,
+      "lon": -124.0780622,
+      "lat": 40.8713636,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-07T16:29:34Z"
+    },
+    {
+      "type": "node",
+      "id": 12741847493,
+      "lon": -124.0825936,
+      "lat": 40.867246,
+      "tags": {
+        "highway": "turning_circle"
+      },
+      "version": 1,
+      "timestamp": "2025-04-09T16:13:42Z"
+    },
+    {
+      "type": "node",
+      "id": 12760735431,
+      "lon": -124.0818542,
+      "lat": 40.8866711,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-16T22:20:50Z"
+    },
+    {
+      "type": "node",
+      "id": 12760735432,
+      "lon": -124.0817562,
+      "lat": 40.886632,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-16T22:20:50Z"
+    },
+    {
+      "type": "node",
+      "id": 12760735434,
+      "lon": -124.0792727,
+      "lat": 40.8861366,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-16T22:20:50Z"
+    },
+    {
+      "type": "node",
+      "id": 12760735436,
+      "lon": -124.0790948,
+      "lat": 40.88917,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-16T22:20:50Z"
+    },
+    {
+      "type": "node",
+      "id": 12760735438,
+      "lon": -124.0790464,
+      "lat": 40.8883706,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-16T22:20:50Z"
+    },
+    {
+      "type": "node",
+      "id": 12760735442,
+      "lon": -124.080132,
+      "lat": 40.883176,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-04-16T22:20:50Z"
+    },
+    {
+      "type": "node",
+      "id": 13091919689,
+      "lon": -124.089881,
+      "lat": 40.8697062,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2025-08-23T06:09:21Z"
+    },
+    {
+      "type": "node",
+      "id": 13091919690,
+      "lon": -124.0900816,
+      "lat": 40.8697491,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop",
+        "stop": "minor"
+      },
+      "version": 1,
+      "timestamp": "2025-08-23T06:09:21Z"
+    },
+    {
+      "type": "node",
+      "id": 13365270803,
+      "lon": -124.0719337,
+      "lat": 40.9035492,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-12-09T21:39:48Z"
+    },
+    {
+      "type": "node",
+      "id": 13365270808,
+      "lon": -124.0720184,
+      "lat": 40.9036127,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-12-09T21:39:48Z"
+    },
+    {
+      "type": "node",
+      "id": 13365270814,
+      "lon": -124.0721699,
+      "lat": 40.9035123,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2025-12-09T21:39:48Z"
+    },
+    {
+      "type": "node",
+      "id": 13438245743,
+      "lon": -124.0879124,
+      "lat": 40.8886989,
+      "tags": {
+        "direction": "forward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2026-01-07T17:50:24Z"
+    },
+    {
+      "type": "node",
+      "id": 13450929369,
+      "lon": -124.0901914,
+      "lat": 40.8845463,
+      "tags": {
+        "direction": "backward",
+        "highway": "stop"
+      },
+      "version": 1,
+      "timestamp": "2026-01-12T17:24:14Z"
+    }
+  ]
+}

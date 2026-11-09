@@ -17,7 +17,7 @@ from city import CityMap
 from car_brain import (CarBrain, CarDecision, CarObservation, BehaviorState,
                        COMFORTABLE_BRAKING)
 from intersection_controls import (AllWayStopCoordinator, FixedTimeSignalController,
-                                   SignalAspect, movements_conflict)
+                                   SignalAspect, movements_conflict, default_signal_controller)
 from merge_behavior import observe_merge, MERGE_STRATEGIES, MergeTrafficSnapshot
 from soft_deadlock import DeadlockCandidate, SoftDeadlockResolver, merge_space_clear
 from simulation_profiler import SimulationProfiler
@@ -284,6 +284,7 @@ class RoadVehicleSimulation:
     signal_controllers: dict[str, FixedTimeSignalController] = field(
         default_factory=dict, repr=False,
     )
+    _map_signal_controllers: dict = field(default_factory=dict, init=False, repr=False)
     _signal_states: dict = field(default_factory=dict, init=False, repr=False)
     _signal_permissions: dict = field(default_factory=dict, init=False, repr=False)
     _signal_connections: dict = field(default_factory=dict, init=False, repr=False)
@@ -575,6 +576,27 @@ class RoadVehicleSimulation:
     def sync_network(self, city_map: CityMap) -> tuple[bool, list[RoutedRoadVehicle]]:
         """Discard routes made for an older version of the city lane graph."""
         token = (id(city_map), city_map.mobility_revision)
+        if token != self._network_token:
+            for ident, controller in self._map_signal_controllers.items():
+                if self.signal_controllers.get(ident) is controller:
+                    del self.signal_controllers[ident]
+            self._map_signal_controllers = {}
+            junctions = self._junction_lookup.get(city_map)
+            signal_junctions = {junction.id for junction in junctions.values() if junction.signalized}
+            movements = {ident: [] for ident in signal_junctions}
+            if signal_junctions:
+                graph = city_map.mobility.layers['vehicles'].graph
+                for node in graph.nodes:
+                    for transition in graph.transitions_from(node):
+                        edge = transition.edge
+                        if edge.kind == 'lane_connection' and edge.value.intersection_id in movements:
+                            movements[edge.value.intersection_id].append(edge.value)
+            for junction in junctions.values():
+                if junction.signalized:
+                    controller = default_signal_controller(junction, movements[junction.id])
+                    if controller is not None and junction.id not in self.signal_controllers:
+                        self.signal_controllers[junction.id] = controller
+                        self._map_signal_controllers[junction.id] = controller
         if self._network_token is None:
             self._network_token = token
             return False, []
