@@ -143,7 +143,9 @@ class BackgroundRoutingTests(unittest.TestCase):
 
     def test_road_ports_record_their_own_time_not_the_adjoining_lanes_time(self):
         from commute_routing import BackgroundRoutes,link_key
-        from mobility import vehicle_link_points
+        from mobility import vehicle_link_points, MobilityLink, PortTraversal
+        from models import Lane
+        from pathfinding import Path
         from persistent_fleet import PersistentFleet,FleetVehicle
         from types import SimpleNamespace
         city=CityMap(terrain=Terrain(trees=[]))
@@ -152,6 +154,15 @@ class BackgroundRoutingTests(unittest.TestCase):
         a=lane_position_at_distance(first.lanes[0],20)
         b=lane_position_at_distance(last.lanes[0],800)
         service=BackgroundRoutes(city);route=service.get_route('car','a','b',[a],[b],blocking=True)
+        # Lane-specific ports meet their lanes directly, so actual route-port
+        # traversals now have zero length. Give the trip tracker a continuous,
+        # explicit nonzero port so this still tests independent port timing.
+        first_lane=next(link for link in route.edges if link.kind=='lane')
+        actual_port=next(link.value for link in route.edges if link.kind=='road_port')
+        start=tuple(vehicle_link_points(first_lane)[-1]);end=(start[0]+10,start[1])
+        port=MobilityLink('road_port',PortTraversal(actual_port.port,actual_port.lane,(start,end)))
+        end_lane=Lane('tracking fixture',[end,(end[0]+100,end[1])],(end[0]+100,end[1]))
+        route=Path(('start','port','exit','end'),(first_lane,port,MobilityLink('lane',end_lane)),route.cost)
         transit=SimpleNamespace(time=0.);fleet=PersistentFleet(transit,{})
         fleet.routing=service;v=FleetVehicle('car','car','a');v._actor=SimpleNamespace(distance=0.)
         fleet._track_trip(v,route)

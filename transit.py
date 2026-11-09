@@ -414,10 +414,11 @@ class TransitSimulation:
             for bus in self.buses.values():
                 if bus.phase != 'driving':
                     continue
-                distance = bus._car.distance - bus._last_distance
+                travelled = getattr(bus._car, 'travelled_distance', bus._car.distance)
+                distance = travelled - bus._last_distance
                 bus.distance_feet += max(0, distance)
                 bus.fuel_liters = max(0, bus.fuel_liters - max(0, distance)/5280*bus.liters_per_mile)
-                bus._last_distance = bus._car.distance
+                bus._last_distance = travelled
                 bus.position = bus._car.position
                 if bus.id in completed:
                     bus._car = None

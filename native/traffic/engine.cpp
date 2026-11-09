@@ -24,6 +24,8 @@ void require(bool ok, const char* message) { if (!ok) throw std::invalid_argumen
 void check_finite(double x) { require(std::isfinite(x), "nonfinite native input"); }
 double clamp(double x, double lo, double hi) { return std::max(lo, std::min(hi, x)); }
 struct Route {
+    bool terminal_flexible=false, start_flexible=false;
+    bool private_lane_alternative=false;
     std::vector<NTPoint> points;
     std::vector<NTSection> sections;
     std::vector<NTMovement> movements;
@@ -60,6 +62,10 @@ struct Car {
     size_t geometry=0, control_cursor=0, route_cursor=0, round_cursor=0, section_cursor=0;
     size_t section_first=0, section_stop=0;
     int order=0;
+    int lane_source=-1, lane_target=-1, lane_signal=0;
+    double lane_source_distance=0, lane_elapsed=0, lane_duration=3, lane_cooldown=0;
+    double lane_desired=inf;
+    std::string lane_phantom, lane_reason;
 };
 struct Stationary { std::unique_ptr<Car> car; int key; double position; };
 struct Arrival { int connection; double time; };
@@ -68,6 +74,7 @@ struct MergeVehicle { Car* car; double position; };
 struct Reservation { double distance, time; };
 struct Merge {
     double distance=0, length=0, cruise=0;
+    double lateral_duration=0;
     std::vector<MergeVehicle> vehicles;
     std::vector<Reservation> reservations;
 };
@@ -301,7 +308,7 @@ public:
         }
         return v;
     }
-    void geometry(Car& c) {
+    void route_geometry(Car& c) {
         auto& r=route(c); double d=c.s.distance;
         while(c.geometry<r.ends.size() && r.ends[c.geometry]<d) ++c.geometry;
         // Match reference subtraction at rounded corners.
@@ -334,6 +341,7 @@ public:
         }
         return {-1,0};
     }
+#include "multilane.h"
     void index(const std::vector<Car*>& order) {
         // Entries persist across ticks; only section membership changes.
         std::unordered_map<int,std::vector<Entry>> additions;
@@ -344,6 +352,8 @@ public:
             double low=c.s.distance-c.s.length/2-22,high=c.s.distance+c.s.length/2;
             while(c.section_first<ss.size() && ss[c.section_first].end<low) ++c.section_first;
             while(c.section_stop<ss.size() && ss[c.section_stop].start<=high) ++c.section_stop;
+            if(c.lane_source>=0)
+                additions[c.lane_source].push_back({&c,c.lane_source_distance,-1});
             int shadow=-1;
             int occupied_connection=!c.claims.empty()?c.claims.back():
                 (!c.signal_occupancy.empty()?c.signal_occupancy.back():-1);
@@ -397,15 +407,13 @@ public:
             if(stopped!=obstacle_lanes.end()) inspect(stopped->second,max_obstacle_length);
             if(local && local_gap<gap) {best=local;gap=local_gap;}
         }
+        if(c.lane_source>=0 && std::abs(distance-c.s.distance)<1e-6) {
+            auto shadow=lane_leader(c,c.lane_source,c.lane_source_distance);
+            if(shadow.second<gap) return shadow;
+        }
         return {best,gap};
     }
-    static double arrival(double distance,double speed,double desired) {
-        if(distance<=0) return 0;
-        if(desired<=0.01) return inf;
-        double a=desired>=speed?10:-24, t=(desired-speed)/a, d=(speed+desired)*t/2;
-        if(distance<=d) return (std::sqrt(std::max(0.0,speed*speed+2*a*distance))-speed)/a;
-        return t+(distance-d)/desired;
-    }
+#include "merge_policy.h"
     Merge observe_merge(Car& c,const NTMovement& m,const std::vector<Car*>& order) {
         Merge result;result.distance=std::max(0.0,m.end-c.s.distance);result.length=c.s.length;result.cruise=c.cruise;
         auto& con=connections[m.connection];
@@ -424,7 +432,8 @@ public:
             }
             bool waiting_merge=false;
             for(auto& om:route(o).movements) if(connections[om.connection].intersection==con.intersection &&
-                connections[om.connection].target>=0 && o.s.distance+o.s.length/2<om.start) {waiting_merge=true;break;}
+                connections[om.connection].target>=0 && o.s.distance+o.s.length/2<=om.start+1e-8 &&
+                !has(o,om.connection) && !occupies_signal(o,om.connection)) {waiting_merge=true;break;}
             if(waiting_merge) continue;
             double position=inf;
             for(auto& s:route(o).sections) if(s.key==con.target && o.s.distance<=s.start) {position=o.s.distance-s.start;break;}
@@ -448,50 +457,6 @@ public:
             }
         }
         return result;
-    }
-    static bool gap(const Merge& m,double speed,double desired,double headway) {
-        double begin=arrival(std::max(0.0,m.distance-m.length),speed,desired);
-        double finish=arrival(m.distance+m.length/2,speed,desired);
-        if(finish==inf) return false;
-        for(auto& r:m.reservations) if(arrival(std::max(0.0,m.distance+r.distance-m.length),speed,std::max(desired,m.cruise))<r.time+headway) return false;
-        for(auto& v:m.vehicles) {
-            auto& o=*v.car; double allowance=(m.length+o.s.length)/2+4;
-            if(v.position+o.s.speed*begin>=allowance+headway*desired) continue;
-            double cap=std::max({o.s.speed,o.cruise,speed,desired}),accel=std::min(finish,(cap-o.s.speed)/10);
-            double travel=o.s.speed*accel+5*accel*accel+cap*(finish-accel);
-            if(v.position+travel>-(allowance+headway*cap)) return false;
-        }
-        return true;
-    }
-    static Choice merge_choice(Car& c,const Merge& m,double cruise) {
-        Choice choice;choice.desired=cruise;choice.entry=cruise;
-        if(c.s.style==1) {
-            choice.clear=gap(m,c.s.speed,cruise,2);
-            if(!choice.clear) choice.reason="waiting for a generous merge gap";
-            return choice;
-        }
-        double progress=clamp(1-m.distance/128,0,1),strength=progress*progress*(3-2*progress);
-        double t=arrival(m.distance,c.s.speed,cruise),nearest=inf;
-        Car* leader=nullptr;double position=0;
-        for(auto& v:m.vehicles) {
-            double p=v.position+v.car->s.speed*t;
-            if(p>=0 && (!leader || p<nearest)) {nearest=p;leader=v.car;position=v.position;}
-        }
-        if(leader) {
-            choice.phantom=leader->id;
-            double g=position+m.distance-(m.length+leader->s.length)/2,wanted=6+0.8*c.s.speed;
-            double response=0.8*(g-wanted)+1.2*(leader->s.speed-c.s.speed);
-            choice.desired=std::min(cruise,cruise*(1-strength)+std::max(0.0,c.s.speed+response)*strength);
-            if(leader->s.speed>0.1) {
-                double opening=std::max(0.0,(18+0.8*c.s.speed-position)/leader->s.speed);
-                if(opening>0) choice.desired=std::min(choice.desired,std::max(0.0,m.distance-m.length)/opening);
-            }
-        }
-        choice.entry=std::max(choice.desired,std::min(cruise,6.0));
-        choice.clear=gap(m,c.s.speed,choice.entry,0.8);
-        if(!choice.phantom.empty() && choice.desired<cruise) choice.reason="matching speed behind phantom car";
-        if(!choice.clear) choice.reason="yielding until the merge gap opens";
-        return choice;
     }
     bool physical_merge(Car& c,const NTMovement& m,const std::vector<Car*>& order) {
         auto obs=observe_merge(c,m,order);
@@ -690,6 +655,7 @@ public:
         std::sort(order.begin(),order.end(),[](Car* a,Car* b){return a->id<b->id;});
         for(Car* c:order) {update_signal_occupancy(*c);c->cruise=cruise(*c);}
         index(order);
+        select_lanes(order,dt);
         mark_phase(profile.preparation_ms);
         if(profile_enabled) profile.vehicle_visits+=order.size();
         std::map<std::pair<int,int>,std::pair<Car*,int>> heads;
@@ -770,6 +736,13 @@ public:
             if(c.s.entry>=0) for(auto& m:route(c).movements)
                 if((has(c,m.connection) || occupies_signal(c,m.connection)) && connections[m.connection].target>=0 && c.s.distance+c.s.length/2>=m.start && c.s.distance-c.s.length/2<m.end) v=std::min(v,c.s.entry);
             i.decision=decide(c,i,dt,v,temporary,order);
+            if(c.lane_source>=0) c.s.signal=c.lane_signal;
+            if(c.lane_desired<inf) {
+                i.decision.desired=std::min(i.decision.desired,c.lane_desired);
+                c.s.desired=i.decision.desired;
+                if(!c.lane_phantom.empty()) c.phantom=c.lane_phantom;
+                if(!c.lane_reason.empty() && c.reason.empty()) c.reason=c.lane_reason;
+            }
             if(trace_enabled) {
                 NTTrace row{c.s.handle,i.movement<0?-1:route(c).movements[i.movement].connection,int(i.priority),int(i.claimed),int(trace_vehicles.size()),0,0,c.s.distance,c.s.speed};
                 if(i.merge) {auto observed=observe_merge(c,route(c).movements[i.movement],order);row.reservations=int(observed.reservations.size());
@@ -848,6 +821,10 @@ public:
             // Preserve the baseline multiply/divide order of advance().
             c.s.distance=std::min(route(c).length,c.s.distance+c.s.speed*(c.s.speed>0?travel/c.s.speed:0));
             if(route(c).length-c.s.distance<1e-8) c.s.distance=route(c).length;
+            if(c.lane_source>=0) {
+                c.lane_source_distance+=travel;c.lane_elapsed+=dt;
+                if(c.lane_elapsed>=c.lane_duration) c.lane_source=-1;
+            }
             geometry(c);
             update_signal_occupancy(c);
             if(c.s.handle==temporary && i.claimed && i.movement>=0 && c.s.distance+c.s.length/2>=route(c).movements[i.movement].start) entered=true;
@@ -959,8 +936,13 @@ public:
         require(s.route>=0 && size_t(s.route)<routes.size(),"unknown route");
         if(routes[s.route].length<=0) return false;
         validate_spawn(s,id);
-        Car candidate;candidate.s=s;candidate.id=id;geometry(candidate);
+        Car candidate;candidate.s=s;candidate.id=id;
         auto stopped=obstacles.find(id);
+        // A stationary vehicle must resume at its own body, never be moved to
+        // an alternate entry lane by the free-lane admission preference.
+        if(stopped==obstacles.end() && s.distance==0 && routes[s.route].start_flexible)
+            candidate.s.route=choose_external_entry(s.route,s.length);
+        geometry(candidate);
         if(stopped!=obstacles.end()) {
             const auto& body=*stopped->second.car;
             auto where=occupancy(candidate);
@@ -975,9 +957,12 @@ public:
         if(lead(candidate,s.distance,22+s.length).second<22) return false;
         insert(candidate.s,id);remove_obstacle(id);return true;
     }
-    int compile_path(const SpawnPath& path) {
+    int compile_path(const SpawnPath& path,bool terminal_flexible=false,bool private_alternative=false,
+                     bool start_flexible=false) {
         if(!path.found) return -1;
-        Route r;r.edge_ids=path.edges;r.cost=path.cost;
+        Route r;r.terminal_flexible=terminal_flexible;r.start_flexible=start_flexible;
+        r.private_lane_alternative=private_alternative;
+        r.edge_ids=path.edges;r.cost=path.cost;
         double travelled=0;
         std::vector<int> section_kinds;
         std::vector<double> connector_starts;
@@ -1002,18 +987,32 @@ public:
                 if(kind==1 && s.end<=m.start+1e-8) m.signal_start=s.start;
             }
         }
-        routes.push_back(std::move(r));return int(routes.size()-1);
+        // Private alternatives can be reclaimed independently of the paths
+        // published by the route-query API, even when geometry is identical.
+        std::vector<double> signature{double(terminal_flexible),double(private_alternative),double(start_flexible)};
+        for(auto s:r.sections) signature.insert(signature.end(),{double(s.key),s.start,s.end,s.offset});
+        for(auto p:r.points) signature.insert(signature.end(),{p.x,p.y});
+        auto previous=compiled_routes.find(signature);if(previous!=compiled_routes.end()) return previous->second;
+        int result;
+        if(free_routes.empty()) {
+            result=int(routes.size());routes.push_back(std::move(r));
+        } else {
+            result=free_routes.back();free_routes.pop_back();routes[size_t(result)]=std::move(r);
+        }
+        auto inserted=compiled_routes.emplace(std::move(signature),result);
+        compiled_route_entries.emplace(result,inserted.first);
+        return result;
     }
     int find_route(int source,int destination) {
         auto key=std::make_pair(source,destination);auto found=spawn_routes.find(key);
         if(found!=spawn_routes.end()) return found->second;
-        int result=compile_path(graph.find(source,destination));spawn_routes.emplace(key,result);return result;
+        int result=compile_path(graph.find(source,destination),true,false,true);spawn_routes.emplace(key,result);return result;
     }
     int generated_active() {int n=0;for(auto& pair:cars) n+=pair.second->s.generated;return n;}
     bool generate_one(int source,int destination) {
         require(source>=0 && size_t(source)<graph.endpoints.size() && destination>=0 && size_t(destination)<graph.endpoints.size(),"unknown endpoint");
         if(source==destination || generated_active()>=cap) return false;
-        int route_id=find_route(source,destination);if(route_id<0) return false;
+        int route_id=choose_spawn_route(source,destination);if(route_id<0) return false;
         require(rng_ready,"random state is not configured");
         int64_t number=spawned_count+1;std::string id;
         for(;;++number) {
@@ -1100,7 +1099,7 @@ int nt_walk_query(void* p,NTPoint start,NTPoint finish,NTPoint* projections,NTWa
         return int(path.edges.size());
     });
 }
-int nt_abi(){return 4;}
+int nt_abi(){return 5;}
 const char* nt_error(){return error.c_str();}
 void* nt_create(double speed){try{error.clear();return new Engine(speed);}catch(const std::exception& e){error=e.what();return nullptr;}}
 void nt_destroy(void* p){delete static_cast<Engine*>(p);}
@@ -1139,7 +1138,10 @@ int nt_route_release(void* p,int id){return guarded([&]{
     for(const auto& pair:e.cars)if(pair.second->s.route==id)return 0;
     for(const auto& car:e.retired)if(car->s.route==id)return 0;
     for(const auto& pair:e.spawn_routes)if(pair.second==id)return 0;
-    e.routes[size_t(id)]=Route{};e.free_routes.push_back(id);return 1;});}
+    e.forget_route(id);
+    e.routes[size_t(id)]=Route{};e.free_routes.push_back(id);
+    if(++e.released_routes_since_sweep>=64) e.collect_unused_alternatives();
+    return 1;});}
 int nt_pedestrian_lane_release(void* p,int id){return guarded([&]{
     auto& e=engine(p);require(id>=0 && size_t(id)<e.pedestrian_lanes.size(),"unknown pedestrian lane");
     if(e.pedestrian_lanes[size_t(id)].length==0)return 1;
@@ -1187,7 +1189,7 @@ int nt_signal_aspects(void* p,const unsigned char* aspects,int n){return guarded
 int nt_profile_enable(void* p,int enabled){return guarded([&]{require(enabled==0 || enabled==1,"invalid profile flag");auto& e=engine(p);
     e.profile={};e.profile_enabled=enabled!=0;return 0;});}
 int nt_profile_read(void* p,NTProfile* profile){return guarded([&]{require(profile!=nullptr,"missing profile output");*profile=engine(p).profile;return 0;});}
-int nt_step(void* p,double dt){return guarded([&]{check_finite(dt);require(dt>=0,"invalid timestep");auto& e=engine(p);e.completed.clear();e.retired.clear();e.pedestrian_completed.clear();double remaining=dt;
+int nt_step(void* p,double dt){return guarded([&]{check_finite(dt);require(dt>=0,"invalid timestep");auto& e=engine(p);e.lane_events.clear();e.completed.clear();e.retired.clear();e.pedestrian_completed.clear();double remaining=dt;
     if(dt<=0.05+1e-9) e.tick(dt);else while(remaining>1e-9){double part=std::min(0.05,remaining);e.tick(part);remaining-=part;}return 0;});}
 int nt_pedestrian_lane(void* p,const NTPoint* points,int n,double crossing_fraction){return guarded([&]{
     auto& e=engine(p);check_finite(crossing_fraction);require(n>=2 && points && crossing_fraction>=-1 && crossing_fraction<=1,"invalid pedestrian lane");PedestrianLane lane;
@@ -1242,7 +1244,12 @@ int nt_graph(void* p,const NTPoint* nodes,int nn,const NTGraphEdge* edges,int ne
         for(int j=0;j<d.in_count;++j) {int n=ports[d.in_start+j];require(n>=0 && n<nn,"invalid incoming port");end.incoming.push_back(n);}
         graph.endpoints.push_back(std::move(end));
     }
-    e.graph=std::move(graph);e.spawn_routes.clear();e.sources.clear();e.source_times.clear();return 0;});}
+    e.graph=std::move(graph);e.key_edges.clear();
+    e.compiled_route_entries.clear();e.compiled_routes.clear();
+    e.lane_alternatives.clear();e.alternative_users.clear();e.spawn_choices.clear();
+    e.released_routes_since_sweep=0;
+    for(size_t i=0;i<e.graph.edges.size();++i) if(e.graph.edges[i].data.key>=0) e.key_edges[e.graph.edges[i].data.key]=int(i);
+    e.spawn_routes.clear();e.sources.clear();e.source_times.clear();return 0;});}
 int nt_rng_set(void* p,const uint32_t* words,int n){return guarded([&]{require(words && n==625 && words[624]<=624,"invalid random state");auto& e=engine(p);std::copy(words,words+624,e.random.words.begin());e.random.index=words[624];e.rng_ready=true;return 0;});}
 int nt_rng_get(void* p,uint32_t* words,int n){return guarded([&]{require(words && n==625,"invalid random output");auto& e=engine(p);require(e.rng_ready,"random state is not configured");std::copy(e.random.words.begin(),e.random.words.end(),words);words[624]=e.random.index;return 0;});}
 int nt_choice(void* p,int n){return guarded([&]{auto& e=engine(p);require(e.rng_ready && n>0,"invalid random choice");return int(e.random.below(uint32_t(n)));});}
@@ -1259,7 +1266,8 @@ const NTGenerated* nt_generated(void* p,int* count){try{auto& e=engine(p);*count
 int nt_find_route(void* p,int source,int destination){return guarded([&]{return engine(p).find_route(source,destination)+1;});}
 int nt_find_position_route(void* p,int source,int source_lane,double sd,NTPoint sp,int destination,int destination_lane,double dd,NTPoint dp){return guarded([&]{
     auto& e=engine(p);auto from=e.graph.query(source,source_lane,sd,sp),to=e.graph.query(destination,destination_lane,dd,dp);
-    return e.compile_path(e.graph.find(from,to,source_lane<0 && destination_lane<0 && source==destination))+1;});}
+    return e.compile_path(e.graph.find(from,to,source_lane<0 && destination_lane<0 && source==destination),
+                          destination_lane<0,false,source_lane<0)+1;});}
 const int* nt_route_edges(void* p,int route,int* count){try {auto& r=engine(p).routes.at(route);*count=int(r.edge_ids.size());return r.edge_ids.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
 const NTSection* nt_route_sections(void* p,int route,int* count){try {auto& rows=engine(p).routes.at(route).sections;*count=int(rows.size());return rows.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
 const NTMovement* nt_route_movements(void* p,int route,int* count){try {auto& rows=engine(p).routes.at(route).movements;*count=int(rows.size());return rows.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
@@ -1280,3 +1288,29 @@ const int* nt_trace_vehicles(void* p,int* count){try{auto& e=engine(p);*count=in
 }
 
 int nt_key_speed(void* p,int key,double mph){return guarded([&]{check_finite(mph);require(mph>0,"invalid road speed");engine(p).key_speeds[key]=mph;return 0;});}
+
+extern "C" {
+int nt_parallel_lanes(void* p,const NTLane* rows,int count){return guarded([&]{
+    auto& e=engine(p);require(count>=0 && (!count || rows),"invalid lane metadata");
+    e.parallel_lanes.clear();e.lane_groups.clear();e.lane_alternatives.clear();e.alternative_users.clear();e.spawn_choices.clear();
+    for(int i=0;i<count;++i){auto lane=rows[i];require(lane.edge>=0 && size_t(lane.edge)<e.graph.edges.size() && e.graph.edges[lane.edge].data.key==lane.key && lane.rank>=0,"invalid parallel lane");
+        e.parallel_lanes[lane.key]=lane;e.lane_groups[lane.group].push_back(lane.key);}
+    return 0;});}
+const NTLaneChange* nt_lane_changes(void* p,int* count){try {auto& e=engine(p);*count=int(e.lane_events.size());return e.lane_events.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
+const NTPoint* nt_route_points(void* p,int id,int* count){try {auto& r=engine(p).routes.at(id);*count=int(r.points.size());return r.points.data();}catch(const std::exception& ex){error=ex.what();*count=-1;return nullptr;}}
+int nt_restore_lane_change(void* p,const NTLaneChange* state){return guarded([&]{
+    require(state,"missing lane change state");auto& e=engine(p);auto& c=e.car(state->handle);
+    require(e.parallel_lanes.count(state->source_key) && e.parallel_lanes.count(state->target_key),"unknown parallel lane");
+    for(double v:{state->source_distance,state->elapsed,state->duration,state->cooldown}) check_finite(v);
+    require(state->duration>0 && state->elapsed>=0 && state->source_distance>=0,"invalid lane change state");
+    c.lane_source=state->elapsed<state->duration?state->source_key:-1;c.lane_target=state->target_key;
+    c.lane_source_distance=state->source_distance;c.lane_elapsed=state->elapsed;c.lane_duration=state->duration;c.lane_cooldown=state->cooldown;
+    c.lane_signal=e.parallel_lanes.at(state->target_key).rank>e.parallel_lanes.at(state->source_key).rank?1:2;
+    e.geometry(c);e.index_dirty=true;return 0;});}
+}
+
+extern "C" {
+int nt_route_terminal(void* p,int route,int flexible){return guarded([&]{auto& r=engine(p).routes.at(route);r.terminal_flexible=(flexible&1)!=0;r.start_flexible=(flexible&2)!=0;return 0;});}
+int nt_lane_change_state(void* p,int h,NTLaneChange* out){return guarded([&]{auto& c=engine(p).shared_car(h);require(out,"missing lane state");
+    *out={h,c.s.route,c.lane_source,c.lane_target,c.lane_source_distance,c.lane_elapsed,c.lane_duration,c.lane_cooldown,0,0};return 0;});}
+}

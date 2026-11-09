@@ -125,7 +125,8 @@ class MergeTrafficSnapshot:
                 movement.intersection_id
                 for start, _, movement in car.controlled_movements
                 if movement.merge_target is not None
-                and car.distance + car.length / 2 < start
+                and car.distance + car.length / 2 <= start + 1e-8
+                and getattr(car, "claimed_movement", None) is not movement
             )
             self._facts[identity] = _MergeRouteFacts(
                 waiting, upcoming, car.occupancy_position(),
@@ -179,7 +180,8 @@ def observe_merge(car, movement, cars, *, snapshot=None):
                    if facts is not None else any(
                        m[2].intersection_id == connection.intersection_id
                        and m[2].merge_target is not None
-                       and other.distance + other.length/2 < m[0]
+                       and other.distance + other.length/2 <= m[0] + 1e-8
+                       and getattr(other, "claimed_movement", None) is not m[2]
                        for m in other.controlled_movements))
         if waiting:
             continue

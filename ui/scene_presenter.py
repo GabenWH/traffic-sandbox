@@ -8,9 +8,19 @@ class ScenePresenter:
     def __init__(self,scene):
         self.scene=scene;self.metadata_key=None;self.parked_key=None
         self.road_key=None;self.roads={};self.height_cache=OrderedDict()
+        self.route_revision=0
 
     def invalidate(self):
         self.metadata_key=self.parked_key=self.road_key=None;self.height_cache.clear()
+        self.route_revision=0
+
+    def _register_vehicle(self,city,engine,car):
+        entry=self.height_cache.get(id(car.route))
+        if entry is None or entry[0] is not car.route:
+            entry=(car.route,route_heights(city,car,self.roads))
+            self.height_cache[id(car.route)]=entry
+            while len(self.height_cache)>4096:self.height_cache.popitem(last=False)
+        self.scene.register_vehicle(engine._handles[car.id],car.appearance,car.length,car.width,car.color,entry[1])
 
     def update(self,city,simulation):
         controller=simulation._native_backend(city)
@@ -20,16 +30,24 @@ class ScenePresenter:
             self.roads={road.id:road for road in city.roads};self.height_cache.clear();self.road_key=road_key
         key=(id(engine),road_key,simulation._roster_revision.stamp(),
              getattr(simulation,'_scene_metadata_revision',0))
-        if self.metadata_key!=key:
+        events=simulation._scene_route_events
+        current_revision=simulation._scene_route_revision
+        missed_events=(events and self.route_revision<events[0][0]-1)
+        if self.metadata_key!=key or missed_events:
             self.scene.clear_metadata()
             for car in simulation.vehicles:
-                entry=self.height_cache.get(id(car.route))
-                if entry is None or entry[0] is not car.route:
-                    entry=(car.route,route_heights(city,car,self.roads))
-                    self.height_cache[id(car.route)]=entry
-                    while len(self.height_cache)>4096:self.height_cache.popitem(last=False)
-                self.scene.register_vehicle(engine._handles[car.id],car.appearance,car.length,car.width,car.color,entry[1])
+                self._register_vehicle(city,engine,car)
             self.metadata_key=key
+        elif self.route_revision!=current_revision:
+            changed=set()
+            for revision,vehicle_id in reversed(events):
+                if revision<=self.route_revision:break
+                changed.add(vehicle_id)
+            by_id=simulation._roster_view.get()[1]
+            for vehicle_id in changed:
+                car=by_id.get(vehicle_id)
+                if car is not None and vehicle_id in engine._handles:self._register_vehicle(city,engine,car)
+        self.route_revision=current_revision
         runtime=getattr(city,'gameplay',None)
         if runtime is not None:
             fleet=runtime.fleet;fleet._ensure_indexes()

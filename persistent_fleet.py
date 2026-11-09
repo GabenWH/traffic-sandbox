@@ -515,7 +515,7 @@ class PersistentFleet:
         self.vehicle_changed(v.id)
         self.last_dispatch_status='departed'
         if self.background and self.admission is not None:self.admission.consume(self.transit.time,self._lot_key(v.site))
-        if self.routing is not None:self._track_trip(v,route)
+        if self.routing is not None:self._track_trip(v,actor.route)
         return True
 
     def _track_trip(self,vehicle,route,*,saved=None):
@@ -529,30 +529,71 @@ class PersistentFleet:
             if length<=1e-8:continue
             full=polyline_length(link.value.lane.points) if isinstance(link.value,LaneTraversal) else length
             boundaries.append((distance,link_key(link),full/length))
+        revision=getattr(vehicle._actor,'_route_ruler_revision',0)
         state=dict(segments=boundaries,cursor=0,entered=self.transit.time,
-                   previous_time=self.transit.time,previous_distance=0.)
-        if saved is not None:state.update(saved,segments=boundaries)
+                   previous_time=self.transit.time,previous_distance=0.,route_revision=revision,
+                   segment_entry_distance=0.)
+        if saved is not None:
+            state.update(saved,segments=boundaries)
+            if 'segment_entry_distance' not in saved and 0<state['cursor']<=len(boundaries):
+                state['segment_entry_distance']=boundaries[state['cursor']-1][0]
         elif vehicle._actor.distance>0:
             state['previous_distance']=vehicle._actor.distance
+            state['segment_entry_distance']=vehicle._actor.distance
             while state['cursor']<len(boundaries) and boundaries[state['cursor']][0]<=vehicle._actor.distance:
                 state['cursor']+=1
+        # A loaded actor starts a new in-memory revision sequence; its saved
+        # segment progress is already expressed on the restored route.
+        state['route_revision']=revision
         self._travel[vehicle.id]=state
         self.routing.learning.track(vehicle.id,[row[1] for row in boundaries[state['cursor']:]])
+
+    def _record_trip_segment(self,state,end_distance,end_time,*,partial=False):
+        index=state['cursor']
+        boundary,key,factor=state['segments'][index]
+        start=state['segments'][index-1][0] if index else 0.
+        entry=max(start,state.get('segment_entry_distance',start))
+        covered=end_distance-entry
+        full_length=(boundary-start)*factor
+        # A very short partial sample is too noisy to estimate a whole lane.
+        minimum=max(20.,full_length*.02) if partial else 1e-8
+        if covered>=minimum and full_length>0:
+            elapsed=max(0.,end_time-state['entered'])
+            self.routing.learning.record(key,elapsed*full_length/covered,day=int(end_time//86400))
+
+    def _advance_trip_learning(self,vehicle,state,distance,now):
+        change=distance-state['previous_distance'];elapsed=now-state['previous_time']
+        while state['cursor']<len(state['segments']):
+            boundary,key,_=state['segments'][state['cursor']]
+            if boundary>distance+1e-7:break
+            crossed=now-(distance-boundary)/change*elapsed if change>1e-9 else now
+            crossed=max(state['entered'],min(now,crossed))
+            self._record_trip_segment(state,boundary,crossed)
+            self.routing.learning.passed(vehicle.id,key)
+            state['entered']=crossed;state['segment_entry_distance']=boundary;state['cursor']+=1
+        state['previous_time']=now;state['previous_distance']=distance
 
     def _observe_trip(self,vehicle):
         state=self._travel.get(vehicle.id)
         if state is None:return
         now=self.transit.time;distance=vehicle._actor.distance
-        change=distance-state['previous_distance'];elapsed=now-state['previous_time']
-        while state['cursor']<len(state['segments']):
-            boundary,key,factor=state['segments'][state['cursor']]
-            if boundary>distance+1e-7:break
-            crossed=now-(distance-boundary)/change*elapsed if change>1e-9 else now
-            crossed=max(state['entered'],min(now,crossed))
-            self.routing.learning.record(key,(crossed-state['entered'])*factor,day=int(crossed//86400))
-            self.routing.learning.passed(vehicle.id,key)
-            state['entered']=crossed;state['cursor']+=1
-        state['previous_time']=now;state['previous_distance']=distance
+        if state.get('route_revision',0)!=getattr(vehicle._actor,'_route_ruler_revision',0):
+            previous_time=state['previous_time']
+            old_distance,rebase_distance,rebase_time=vehicle._actor._last_route_rebase
+            rebase_time=min(now,max(previous_time,rebase_time))
+            self._advance_trip_learning(vehicle,state,old_distance,rebase_time)
+            if state['cursor']<len(state['segments']):
+                self._record_trip_segment(state,old_distance,rebase_time,partial=True)
+            self._track_trip(vehicle,vehicle._actor.route)
+            state=self._travel[vehicle.id]
+            state['entered']=state['previous_time']=rebase_time
+            state['previous_distance']=min(distance,rebase_distance)
+            state['segment_entry_distance']=state['previous_distance']
+            state['cursor']=0
+            while state['cursor']<len(state['segments']) and state['segments'][state['cursor']][0]<=state['previous_distance']:
+                state['cursor']+=1
+            self.routing.learning.track(vehicle.id,[row[1] for row in state['segments'][state['cursor']:]])
+        self._advance_trip_learning(vehicle,state,distance,now)
 
     def observe(self):
         self._ensure_indexes()
@@ -560,10 +601,11 @@ class PersistentFleet:
         self.transit.vehicle_arrivals.clear()
         for v in tuple(self._driving.values()):
             if self.routing is not None:self._observe_trip(v)
-            delta = max(0, v._actor.distance-v._last)
+            travelled = getattr(v._actor,'travelled_distance',v._actor.distance)
+            delta = max(0, travelled-v._last)
             v.distance_feet += delta
             v.fuel_liters = max(0, v.fuel_liters-delta/5280*v.liters_per_mile)
-            v._last = v._actor.distance
+            v._last = travelled
             if v.id in completed:
                 self._travel.pop(v.id,None)
                 if self.routing is not None:self.routing.learning.finish(v.id)

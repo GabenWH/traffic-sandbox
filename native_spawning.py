@@ -14,6 +14,16 @@ from intersection_controls import SignalAspect
 from models import ControlType
 
 
+class ParallelLane(C.Structure):
+    _fields_ = [(name, C.c_int) for name in ('key', 'group', 'rank', 'edge')]
+
+
+class LaneChange(C.Structure):
+    _fields_ = [(name, C.c_int) for name in ('handle', 'route', 'source_key', 'target_key')] + [
+        (name, C.c_double) for name in ('source_distance', 'elapsed', 'duration', 'cooldown',
+                                       'previous_distance', 'new_distance')]
+
+
 class Relation(C.Structure):
     _fields_ = [(name, C.c_int) for name in ('first', 'second', 'flags')]
 
@@ -51,6 +61,12 @@ class Trace(C.Structure):
 def bind(lib):
     pointer = C.c_void_p
     signatures = {
+        'nt_route_terminal': (C.c_int, [pointer, C.c_int, C.c_int]),
+        'nt_lane_change_state': (C.c_int, [pointer, C.c_int, C.POINTER(LaneChange)]),
+        'nt_parallel_lanes': (C.c_int, [pointer, C.POINTER(ParallelLane), C.c_int]),
+        'nt_lane_changes': (C.POINTER(LaneChange), [pointer, C.POINTER(C.c_int)]),
+        'nt_restore_lane_change': (C.c_int, [pointer, C.POINTER(LaneChange)]),
+        'nt_route_points': (C.POINTER(_Point), [pointer, C.c_int, C.POINTER(C.c_int)]),
         'nt_network_sparse': (C.c_int, [pointer, C.POINTER(_Connection), C.c_int, C.POINTER(Relation), C.c_int]),
         'nt_graph': (C.c_int, [pointer, C.POINTER(_Point), C.c_int, C.POINTER(Edge), C.c_int,
                              C.POINTER(_Point), C.c_int, C.POINTER(Endpoint), C.c_int, C.POINTER(C.c_int), C.c_int]),
@@ -95,6 +111,8 @@ class NativeRoadSimulation:
         self.controls = {}
         self._watched_connection_count = 0
         self._dirty_controls = {}
+        self._policy_connections = {}
+        self._signal_aliases = {}
         self._configured_speed = None
         self._configured_tracing = None
         self._mirrored_rng_state = None
@@ -102,6 +120,7 @@ class NativeRoadSimulation:
         self._published_rng_bytes = None
         self._configured_signal_states = None
         self.publishing = False
+        self.changing = {}
         self.shared = simulation.native_output_mode == 'shared'
         try:
             if city is not None:
@@ -130,6 +149,7 @@ class NativeRoadSimulation:
         if self.city is city:
             return
         from mobility import vehicle_link_points, road_input_node, road_output_node
+        from multilane import lane_ports
         from models import polyline_length
         e = self.engine
         layer = city.mobility.layers['vehicles']
@@ -170,8 +190,8 @@ class NativeRoadSimulation:
         self.endpoint_ids = {id(j): i for i, j in enumerate(self.junctions)}
         ports, endpoints = [], []
         for junction in self.junctions:
-            outgoing = [ids[road_input_node(p)] for p in junction.outgoing_ports() if road_input_node(p) in ids]
-            incoming = [ids[road_output_node(p)] for p in junction.incoming_ports() if road_output_node(p) in ids]
+            outgoing = [ids[road_input_node(p)] for group in junction.outgoing_ports() for p in lane_ports(group) if road_input_node(p) in ids]
+            incoming = [ids[road_output_node(p)] for group in junction.incoming_ports() for p in lane_ports(group) if road_output_node(p) in ids]
             first_out = len(ports)
             ports.extend(outgoing)
             first_in = len(ports)
@@ -181,11 +201,44 @@ class NativeRoadSimulation:
         e._call('nt_graph', (_Point * len(positions))(*positions), len(positions),
                 (Edge * len(edges))(*edges), len(edges), (_Point * len(points))(*points), len(points),
                 (Endpoint * len(endpoints))(*endpoints), len(endpoints), (C.c_int * len(ports))(*ports), len(ports))
+        from multilane import outside_lanes
+        groups, lane_rows = {}, []
+        for road in city.roads:
+            for port in road.route_inputs:
+                if len(port.lanes) < 2:
+                    continue
+                group = groups.setdefault((road.id, port.lanes[0].direction), len(groups))
+                for rank, lane in enumerate(outside_lanes(port)):
+                    lane_rows.append(ParallelLane(e._key(('lane', lane.id)), group, rank,
+                                                  self.lane_edges[id(lane)]))
+        e._call('nt_parallel_lanes', (ParallelLane * len(lane_rows))(*lane_rows), len(lane_rows))
+        self.links_by_key = {}
+        for _, transition in self.graph_edges:
+            link = transition.edge
+            if link.kind == 'lane':
+                key = ('lane', link.value.id)
+            elif link.kind == 'road_port':
+                key = ('road_port', link.value.port.id, link.value.lane.id)
+            elif link.kind == 'lane_connection':
+                key = ('lane_connection', link.value.id)
+            else:
+                continue
+            self.links_by_key[e._key(key)] = link
+        self.keys_by_id = {value: key for key, value in e._keys.items()}
         self.city = city
         self.paths.clear()
+        for car in self.sim.cars:
+            saved = getattr(car, '_lane_change_snapshot', None)
+            if saved is not None:
+                source_key, target_key, distance, elapsed, duration, cooldown = saved
+                row = LaneChange(e._handles[car.id], 0, e._key(source_key), e._key(target_key),
+                                 distance, elapsed, duration, cooldown)
+                e._call('nt_restore_lane_change', C.byref(row))
+                self.changing[row.handle] = (car, row.source_key)
 
     def _control_changed(self, connection):
-        self._dirty_controls[id(connection)] = connection
+        policy = getattr(connection, '_policy_source', connection)
+        self._dirty_controls[id(policy)] = policy
 
     def configure(self):
         simulation, native_engine = self.sim, self.engine
@@ -222,21 +275,33 @@ class NativeRoadSimulation:
             native_engine._call('nt_trace_enable', int(tracing_enabled))
             self._configured_tracing = tracing_enabled
 
-        # 4. Subscribe once to new connections. Subsequent edits enqueue their
-        # connection directly, including changes to a signal's controller ID.
+        # 4. Index new movements by their authoritative policy and by both
+        # signal IDs. Subscribe to policy changes, and to direct movement edits
+        # so the authoritative policy can be restored without a network scan.
         connection_count = len(native_engine._connections)
         network_grew = connection_count != self._watched_connection_count
         if network_grew:
-            for connection in native_engine._connections[self._watched_connection_count:]:
-                connection.watch_native_control(self._control_changed)
-                self._control_changed(connection)
+            for index in range(self._watched_connection_count, connection_count):
+                connection = native_engine._connections[index]
+                policy = getattr(connection, '_policy_source', connection)
+                self._policy_connections.setdefault(id(policy), []).append(connection)
+                self._signal_aliases.setdefault(connection.id, []).append(index)
+                if policy.id != connection.id:
+                    self._signal_aliases.setdefault(policy.id, []).append(index)
+                policy.watch_native_control(self._control_changed)
+                if policy is not connection:
+                    connection.watch_native_control(self._control_changed)
+                self._control_changed(policy)
             self._watched_connection_count = connection_count
         controls_changed = bool(self._dirty_controls)
-        for connection in self._dirty_controls.values():
-            control_code = CONTROL.get(connection.control.kind, 0)
-            if self.controls.get(id(connection)) != control_code:
-                native_engine.set_control(connection, connection.control.kind)
-                self.controls[id(connection)] = control_code
+        for policy in self._dirty_controls.values():
+            for connection in self._policy_connections[id(policy)]:
+                if connection.control != policy.control:
+                    connection.control = policy.control
+                control_code = CONTROL.get(connection.control.kind, 0)
+                if self.controls.get(id(connection)) != control_code:
+                    native_engine.set_control(connection, connection.control.kind)
+                    self.controls[id(connection)] = control_code
         self._dirty_controls.clear()
 
         # 5. Build permissions only on a transition, control edit or new network.
@@ -252,13 +317,11 @@ class NativeRoadSimulation:
             if not permission_code:
                 continue
             for movement_id in signal_state.movement_ids:
-                connection_index = native_engine._connection_ids_by_name.get(movement_id)
-                if connection_index is None:
-                    continue
-                connection = native_engine._connections[connection_index]
-                if (connection.control.kind is ControlType.SIGNAL
-                        and connection.control.controller_id == controller_id):
-                    signal_permission_codes[connection_index] = permission_code
+                for connection_index in self._signal_aliases.get(movement_id, ()):
+                    connection = native_engine._connections[connection_index]
+                    if (connection.control.kind is ControlType.SIGNAL
+                            and connection.control.controller_id == controller_id):
+                        signal_permission_codes[connection_index] = permission_code
         native_engine.set_signal_aspects(signal_permission_codes)
         self._configured_signal_states = dict(simulation._signal_states)
 
@@ -418,6 +481,12 @@ class NativeRoadSimulation:
                        -1 if speed_cap_mph is None else speed_cap_mph, 0, 0, -1)
         if not e._call('nt_admit', C.byref(spawn), vehicle_id.encode()):
             return None
+        admitted = LaneChange()
+        e._call('nt_lane_change_state', handle, C.byref(admitted))
+        if admitted.route != native_route:
+            terminal = route.edges[-1] if route.edges[-1].kind == 'route_endpoint' else None
+            route = self.changed_path(admitted.route, terminal)
+            points = vehicle_route_points(route)
         car = RoutedRoadVehicle(source_id, destination_id, route, points, speed, color,
                                 appearance=appearance if appearance is not None else VehicleAppearance(),
                                 source_type=source_type, speed_cap_mph=speed_cap_mph,
@@ -429,6 +498,71 @@ class NativeRoadSimulation:
             sim._occupancy_dirty = True
         self.append(car, handle)
         return car
+
+    def changed_path(self, route_id, terminal_link=None):
+        """Materialize native route changes only when a car actually changes lanes."""
+        from mobility import MobilityLink, LaneTraversal
+        from models import slice_polyline, polyline_length
+        from pathfinding import Path
+        count = C.c_int()
+        rows = self.engine._lib.nt_route_sections(self.engine._ptr, route_id, C.byref(count))
+        if count.value < 0:
+            raise ValueError(self.engine._lib.nt_error().decode())
+        edges = []
+        for i in range(count.value):
+            row = rows[i]
+            link = self.links_by_key[row.key]
+            if link.kind == 'lane':
+                lane = link.value
+                end = row.offset+row.end-row.start
+                if row.offset > 1e-8 or abs(end-polyline_length(lane.points)) > 1e-8:
+                    link = MobilityLink('lane', LaneTraversal(lane, tuple(slice_polyline(lane.points, row.offset, end))))
+            edges.append(link)
+        if terminal_link is not None:
+            edges.append(terminal_link)
+        return Path(tuple(('native_lane_route', route_id, i) for i in range(len(edges)+1)),
+                    tuple(edges), self.engine._lib.nt_route_cost(self.engine._ptr, route_id))
+
+    def publish_lane_changes(self, dt=0):
+        from traffic_testbed import RoutedRoadVehicle
+        from mobility import vehicle_route_points
+        e = self.engine
+        count = C.c_int()
+        rows = e._lib.nt_lane_changes(e._ptr, C.byref(count))
+        if count.value < 0:
+            raise ValueError(e._lib.nt_error().decode())
+        if count.value:
+            cars = {car.id: car for car in self.sim.cars}
+            events = [(rows[i].handle, rows[i].route, rows[i].source_key,
+                       rows[i].previous_distance, rows[i].new_distance) for i in range(count.value)]
+            for handle, route_id, source_key, previous_distance, new_distance in events:
+                car = cars[e._ids[handle]]
+                terminal = car.route.edges[-1] if car.route.edges and car.route.edges[-1].kind == 'route_endpoint' else None
+                route = self.changed_path(route_id, terminal)
+                # Build derived route facts without touching the borrowed motion record.
+                view = RoutedRoadVehicle(car.source_id, car.destination_id, route, vehicle_route_points(route),
+                                         max(car.speed, 1), car.color)
+                for field in ('route', 'points', 'total_length', 'controlled_movements', 'signal_merge_movements',
+                              '_controlled_movement_by_id', 'route_segments', '_route_cache', '_geometry'):
+                    car.__dict__[field] = getattr(view, field)
+                car._occupancy_segment_index = 0
+                # Keep accounting continuous while the route-local ruler is
+                # rebased, and let route consumers rebuild only on a change.
+                car._route_ruler_shift = getattr(car, '_route_ruler_shift', 0.0) + new_distance-previous_distance
+                car._route_ruler_revision = getattr(car, '_route_ruler_revision', 0) + 1
+                car._last_route_rebase = (previous_distance, new_distance, self.sim.elapsed_time-dt)
+                self.sim._route_visual_changed(car.id)
+                self.changing[handle] = (car, source_key)
+        for handle, (car, source_key) in tuple(self.changing.items()):
+            row = LaneChange()
+            e._call('nt_lane_change_state', handle, C.byref(row))
+            car._lane_change_snapshot = (self.keys_by_id[source_key], self.keys_by_id[row.target_key],
+                                         row.source_distance, row.elapsed, row.duration, row.cooldown)
+            car._lane_change_occupancy = ((self.keys_by_id[source_key], row.source_distance)
+                                          if row.source_key >= 0 else None)
+            if row.cooldown <= 0:
+                car._lane_change_snapshot = None
+                self.changing.pop(handle)
 
     def publish_bookkeeping(self):
         from intersection_controls import StopArrival
@@ -528,6 +662,7 @@ class NativeRoadSimulation:
         # writes from being mistaken for user edits that invalidate C++ state.
         self.publishing = True
         try:
+            self.publish_lane_changes(dt)
             if self.shared:
                 from native_shared import completed_views
                 completed_vehicles = completed_views(self)
@@ -552,6 +687,7 @@ class NativeRoadSimulation:
                     simulation._cars[:] = [vehicle for vehicle in simulation.cars
                                            if id(vehicle) not in completed_vehicle_object_ids]
                 for vehicle in completed_vehicles:
+                    self.changing.pop(native_engine._handles[vehicle.id], None)
                     native_engine._handles.pop(vehicle.id, None)
             # Completed vehicles no longer report live movement/edit events.
             for vehicle in completed_vehicles:

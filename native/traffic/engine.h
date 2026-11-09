@@ -2,7 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// ABI 4. All distances/speeds use the Python model's feet and feet/second.
+// ABI 5. All distances/speeds use the Python model's feet and feet/second.
 extern "C" {
 struct NTConnection {
     int intersection, control, maneuver, role, target;
@@ -11,6 +11,13 @@ struct NTConnection {
 struct NTPoint { double x, y; };
 // Pedestrian-only paths and active walkers share the same native clock as cars.
 struct NTPedestrianState { int id, lane, waiting; double distance, x, y; };
+struct NTLane { int key, group, rank, edge; };
+struct NTLaneChange {
+    int handle, route, source_key, target_key;
+    double source_distance, elapsed, duration, cooldown;
+    // Route-local distances on either side of this change; physical travel is unchanged.
+    double previous_distance, new_distance;
+};
 struct NTSection { double start, end, offset; int key; };
 struct NTMovement { double start, end, signal_start; int connection, incoming; };
 struct NTSpawn {
@@ -44,6 +51,12 @@ struct NTProfile {
     uint64_t ticks, vehicle_visits;
     double preparation_ms, control_ms, decision_ms, arbitration_ms, movement_ms;
 };
+int nt_route_terminal(void*, int, int);
+int nt_lane_change_state(void*, int, NTLaneChange*);
+int nt_parallel_lanes(void*, const NTLane*, int);
+const NTLaneChange* nt_lane_changes(void*, int*);
+int nt_restore_lane_change(void*, const NTLaneChange*);
+const NTPoint* nt_route_points(void*, int, int*);
 // Immutable walking snapshots use the same SpawnGraph search as driving.
 struct NTWalkEdge { int source, destination, point_start, point_count, reverse; };
 struct NTWalkStep { int edge; double start, end; };

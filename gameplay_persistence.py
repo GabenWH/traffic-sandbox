@@ -41,7 +41,25 @@ def _links(city):
     lanes={lane.id:lane for road in city.roads for lane in road.lanes}
     connections={c.id:c for j in city.intersections for c in j.lane_connections}
     ports={p.id:p for j in city.intersections for p in (*j.incoming_ports(),*j.outgoing_ports())}
-    return lanes,connections,ports
+    junctions={j.id:j for j in city.intersections}
+    # Saved routes can use derived lane-specific ports, connections and shared
+    # roundabout lanes, not only the authored road-to-road junction policies.
+    graph=city.mobility.layers['vehicles'].graph
+    for node in graph.nodes:
+        for transition in graph.transitions_from(node):
+            link=transition.edge
+            if link.kind=='lane':
+                lanes[link.value.id]=link.value
+            elif link.kind=='road_port':
+                ports[link.value.port.id]=link.value.port
+                lanes[link.value.lane.id]=link.value.lane
+            elif link.kind=='lane_connection':
+                connection=link.value;connections[connection.id]=connection
+                ports[connection.source_output.id]=connection.source_output
+                ports[connection.destination_input.id]=connection.destination_input
+            elif link.kind=='lane_access':
+                ports[link.value.id]=link.value
+    return lanes,connections,ports,junctions
 
 
 def _route_dump(route):
@@ -54,13 +72,15 @@ def _route_dump(route):
         elif edge.kind=='road_port':
             data=dict(kind='road_port',lane=v.lane.id,port=v.port.id,points=list(v.points))
         elif edge.kind=='lane_connection':data=dict(kind='lane_connection',connection=v.id)
+        elif edge.kind=='lane_access':data=dict(kind='lane_access',port=v.id)
+        elif edge.kind=='route_endpoint':data=dict(kind='route_endpoint',junction=v.id)
         else:raise ValueError('Unsupported saved vehicle link: '+edge.kind)
         edges.append(data)
     return dict(nodes=route.nodes,edges=edges,cost=route.cost)
 
 
 def _route_load(data,index):
-    lanes,connections,ports=index;edges=[]
+    lanes,connections,ports,junctions=index;edges=[]
     for edge in data['edges']:
         kind=edge['kind']
         if kind=='lane':
@@ -68,6 +88,8 @@ def _route_load(data,index):
             value=LaneTraversal(lane,tuple(map(tuple,edge['points']))) if 'points' in edge else lane
         elif kind=='road_port':value=PortTraversal(ports[edge['port']],lanes[edge['lane']],tuple(map(tuple,edge['points'])))
         elif kind=='lane_connection':value=connections[edge['connection']]
+        elif kind=='lane_access':value=ports[edge['port']]
+        elif kind=='route_endpoint':value=junctions[edge['junction']]
         else:raise ValueError('Unsupported saved vehicle link')
         edges.append(MobilityLink(kind,value))
     return Path(_tuples(data['nodes']),tuple(edges),data['cost'])
@@ -87,7 +109,8 @@ def dump_transport(transit, managed=None):
             route=_route_dump(a.route),points=list(a.points),speed=a.speed,color=a.color,
             appearance=asdict(a.appearance),source_type=a.source_type,speed_cap_mph=a.speed_cap_mph,
             length=a.length,width=a.width,distance=a.distance,brain=asdict(a.brain),
-            merge_entry_speed=a._merge_entry_speed,position=a.position))
+            merge_entry_speed=a._merge_entry_speed,position=a.position,
+            lane_change=getattr(a,'_lane_change_snapshot',None)))
     routes={i:key for key,i in transit._walk_routes.items()}
     decoded={}
     walkers=[]
@@ -122,7 +145,7 @@ def dump_transport(transit, managed=None):
 def restore_transport(transit,data):
     from mobility import lane_position_at_distance
     traffic=transit.traffic;traffic.clear_vehicles()
-    index=_links(transit.city);lanes,connections,ports=index
+    index=_links(transit.city);lanes,connections,ports,_=index
     transit.time=traffic.elapsed_time=float(data['time'])
     transit.stops.clear();transit.lines.clear();transit.buses.clear();transit.people.clear()
     transit.legs.clear();transit.leg_lengths.clear();transit.queues.clear();transit._next_departure.clear();transit.line_plans.clear()
@@ -153,11 +176,25 @@ def restore_transport(transit,data):
     for info in data['actors']:
         info=dict(info);route=_route_load(info.pop('route'),index)
         position=info.pop('position');brain=info.pop('brain');distance=info.pop('distance');entry=info.pop('merge_entry_speed')
+        lane_change=info.pop('lane_change',None)
         info['appearance']=VehicleAppearance(**info['appearance']);speed=info['speed'];info['speed']=max(.001,speed)
         info['points']=tuple(map(tuple,info['points']))
         actor=RoutedRoadVehicle(route=route,**info);actor.place(distance);actor.speed=speed
         brain['state']=BehaviorState(brain['state']);brain['signal_intent']=SignalIntent(brain['signal_intent'])
         actor.brain=CarBrain(**brain);actor._merge_entry_speed=entry
+        if lane_change is not None:
+            if not isinstance(lane_change,(list,tuple)) or len(lane_change)!=6:
+                raise ValueError('Invalid saved lane change')
+            source,target,progress,elapsed,duration,cooldown=lane_change
+            source,target=_tuples(source),_tuples(target)
+            if (not isinstance(source,tuple) or not isinstance(target,tuple) or len(source)!=2 or len(target)!=2
+                    or source[0]!='lane' or target[0]!='lane' or source[1] not in lanes or target[1] not in lanes
+                    or any(not isinstance(x,(int,float)) or not isfinite(x) for x in (progress,elapsed,duration,cooldown))
+                    or progress<0 or elapsed<0 or duration<=0 or cooldown<0):
+                raise ValueError('Invalid saved lane change')
+            actor._lane_change_snapshot=(source,target,progress,elapsed,duration,cooldown)
+            actor._lane_change_occupancy=(source,progress) if elapsed<duration else None
+        actor._on_occupancy_change=traffic._mark_occupancy_changed
         actors[actor.id]=actor
     with traffic._roster_revision.mutate():traffic._cars.extend(actors.values())
     traffic._occupancy_dirty=True
@@ -170,7 +207,14 @@ def restore_transport(transit,data):
     traffic._spawn_elapsed.update(data.get('source_times',{}))
     traffic._spawned_count=data.get('spawned',0)
     traffic.spawn_interval=data.get('spawn_interval',10000);traffic.max_cars=data.get('max_cars',12)
-    transit.engine=traffic._native_backend(transit.city).engine
+    controller=traffic._native_backend(transit.city)
+    transit.engine=controller.engine
+    if not controller.shared:
+        # A restored lateral merge starts between lanes. Mirror the native pose
+        # immediately instead of displaying the target-lane centre for a frame.
+        publishing=controller.publishing;controller.publishing=True
+        try:transit.engine.sync(traffic.cars)
+        finally:controller.publishing=publishing
     transit.revision=transit.city.mobility_revision
     for info in data['walkers']:
         points=tuple(map(tuple,info['points']))
@@ -181,7 +225,7 @@ def restore_transport(transit,data):
         transit.engine.place_pedestrian(info['id'],info['distance'],info['waiting'])
     for bus in transit.buses.values():
         bus._car=actors.get(bus.id)
-        if bus._car is not None:bus._last_distance=bus._car.distance
+        if bus._car is not None:bus._last_distance=bus._car.travelled_distance
     transit.vehicle_arrivals=deque(actors[pid] for pid in data.get('vehicle_arrivals',[]) if pid in actors)
     transit.person_arrivals=deque(data.get('person_arrivals',[]))
     return actors
@@ -252,7 +296,7 @@ def restore_city(city,raw):
             if v._actor is not None:
                 if 'color' not in info:v.color=v._actor.color
                 else:v._actor.color=v.color
-                v._last=v._actor.distance
+                v._last=v._actor.travelled_distance
             city.fleet.vehicles[v.id]=v
             if 'parking_space_id' not in info:legacy_parking.append(v.id)
         city.fleet.restore_parking(legacy_ids=legacy_parking,suspended_ids=data.get('resuming_vehicles',{}))
@@ -296,6 +340,9 @@ def restore_city(city,raw):
                     if (not isinstance(saved['cursor'],int) or saved['cursor']<0 or
                             any(not isfinite(saved[k]) or saved[k]<0 for k in ('entered','previous_time','previous_distance'))):
                         raise ValueError('Invalid travel progress')
+                    entry=saved.get('segment_entry_distance',0.)
+                    if not isinstance(entry,(int,float)) or not isfinite(entry) or entry<0:
+                        raise ValueError('Invalid travel segment progress')
                 city.fleet._track_trip(v,v._actor.route,saved=saved)
                 if city.fleet._travel[v.id]['cursor']>len(city.fleet._travel[v.id]['segments']):
                     raise ValueError('Invalid travel cursor')

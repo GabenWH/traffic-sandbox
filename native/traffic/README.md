@@ -89,7 +89,7 @@ replace snapshots; Python still selects services and bus itineraries.
 existing display vehicles; it is not called by the differential driver before
 comparison, so Python reference state cannot mask a native discrepancy.
 
-The C ABI is version 4; borrowed route, event, bookkeeping, profile and trace records also
+The C ABI is version 5; borrowed route, event, bookkeeping, profile and trace records also
 expire on engine mutation. Python returns owned `Path` objects for application
 route views. Handle-to-ID history is currently retained for the engine lifetime;
 very long high-throughput runs can grow that Python mapping.
@@ -134,8 +134,14 @@ another tick or edit. Private index internals are not an up-to-date query API.
 Copy and shared output representations remain available through
 `native_output_mode`; both use the same C++ driver. World edits to public vehicle
 or driver state invalidate/reimport native state through callbacks. Yellow
-commitment is included in ABI 4 output/import so backend recreation retains the
+commitment is included in ABI 5 output/import so backend recreation retains the
 decision. Coordinator reservations owned by external IDs are imported as native
 world blockers; reservation edits also notify the native owner.
 
 See `docs/cpp-consolidation.md` for behavior provenance and validation.
+
+## Multilane roads
+
+See [multilane behavior and validation](../../docs/multilane-traffic.md).
+Parallel-lane changes and fixed joins share `merge_policy.h`; `multilane.h`
+supplies target-lane observations, route selection and dual-lane occupancy.

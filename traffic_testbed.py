@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from collections import deque
 from collections.abc import Sequence
 from itertools import count
 from functools import partial
@@ -118,6 +119,12 @@ class RoutedRoadVehicle:
     signal_items: list[int] = field(default_factory=list, repr=False)
 
     def __setattr__(self, name, value):
+        if name in ('distance', 'route', 'points', 'route_segments') and self.__dict__.get('_lane_change_snapshot') is not None:
+            owner = getattr(self.__dict__.get('_on_occupancy_change'), '__self__', None)
+            controller = getattr(owner, '_native_controller', None)
+            if controller is None or not controller.publishing:
+                self.__dict__['_lane_change_snapshot'] = None
+                self.__dict__['_lane_change_occupancy'] = None
         if name in ('distance', 'speed', 'position', 'heading', 'length', 'width',
                     'speed_cap_mph', 'brain', '_claimed_movement', '_merge_entry_speed',
                     'id', 'source_type', 'route', 'points', 'route_segments',
@@ -177,6 +184,11 @@ class RoutedRoadVehicle:
             raise ValueError("Vehicle distance must be finite")
         self.distance = max(0.0, min(self.total_length, distance))
         self.advance(0.0)
+
+    @property
+    def travelled_distance(self) -> float:
+        """Distance on this trip, independent of lane-change route rebasing."""
+        return self.distance-self.__dict__.get('_route_ruler_shift',0.0)
 
     @property
     def claimed_movement(self) -> LaneConnection | None:
@@ -317,6 +329,8 @@ class RoadVehicleSimulation:
     native_output_mode: str = "copy"
     _native_controller: object = field(default=None, init=False, repr=False, compare=False)
     _scene_metadata_revision: int = field(default=0, init=False, repr=False)
+    _scene_route_revision: int = field(default=0, init=False, repr=False)
+    _scene_route_events: deque = field(default_factory=lambda: deque(maxlen=4096), init=False, repr=False)
 
     colors = CAR_COLORS
 
@@ -377,6 +391,10 @@ class RoadVehicleSimulation:
 
     def _visual_changed(self):
         self._scene_metadata_revision += 1
+
+    def _route_visual_changed(self, vehicle_id):
+        self._scene_route_revision += 1
+        self._scene_route_events.append((self._scene_route_revision,vehicle_id))
 
     def _native_input_changed(self, car=None):
         controller = self._native_controller
@@ -455,15 +473,17 @@ class RoadVehicleSimulation:
         """
         controller_id = connection.control.controller_id
         controller = self.signal_controllers.get(controller_id) if controller_id else None
-        return controller is not None and controller.is_green(
-            connection.id, self.elapsed_time,
+        return controller is not None and (
+            controller.is_green(connection.id, self.elapsed_time)
+            or controller.is_green(getattr(connection, "_policy_source", connection).id, self.elapsed_time)
         )
 
     def _signal_aspect(self, connection: LaneConnection):
         controller_id = connection.control.controller_id
         if not controller_id:
             return None
-        return self._signal_permissions.get(controller_id, {}).get(connection.id)
+        permissions = self._signal_permissions.get(controller_id, {})
+        return permissions.get(connection.id, permissions.get(getattr(connection, "_policy_source", connection).id))
 
     def _signal_step_limit(self) -> float:
         limit = 0.05
@@ -490,6 +510,11 @@ class RoadVehicleSimulation:
                         if transition.edge.kind == "lane_connection":
                             connection = transition.edge.value
                             self._signal_connections[connection.id] = connection
+            self._signal_aliases = {}
+            for connection in self._signal_connections.values():
+                policy = getattr(connection, "_policy_source", connection)
+                for movement_id in {connection.id, policy.id}:
+                    self._signal_aliases.setdefault(movement_id, []).append(connection)
             self._signal_network_token = token
             self._signal_validation_key = None
             self.stop_coordinator.configure_signal_conflicts(
@@ -505,14 +530,17 @@ class RoadVehicleSimulation:
                 if state.aspect in (SignalAspect.GREEN, SignalAspect.YELLOW)
             }
         green = []
-        for controller_id, state in self._signal_states.items():
+        seen = set()
+        for controller_id, state in states.items():
             if state.aspect not in (SignalAspect.GREEN, SignalAspect.YELLOW):
                 continue
             for movement_id in sorted(state.movement_ids):
-                connection = self._signal_connections.get(movement_id)
-                if (connection is not None and connection.control.kind is ControlType.SIGNAL
-                        and connection.control.controller_id == controller_id):
-                    green.append(connection)
+                for connection in self._signal_aliases.get(movement_id, ()):
+                    connection.control = getattr(connection, "_policy_source", connection).control
+                    if (connection.id not in seen and connection.control.kind is ControlType.SIGNAL
+                            and connection.control.controller_id == controller_id):
+                        seen.add(connection.id)
+                        green.append(connection)
         key = tuple((connection.id, connection.control.controller_id) for connection in green)
         if key != self._signal_validation_key:
             for index, connection in enumerate(green):

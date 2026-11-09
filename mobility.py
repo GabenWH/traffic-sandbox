@@ -19,6 +19,7 @@ from models import (
     slice_polyline,
 )
 from pathfinding import DirectedGraph, Path
+from multilane import lane_ports, lane_connections
 
 
 VEHICLE_LAYER = "vehicles"
@@ -191,7 +192,7 @@ def build_vehicle_layer(
             layer.positions[end] = lane.points[-1]
             layer.graph.add_edge(start, end, polyline_length(lane.points), MobilityLink("lane", lane))
 
-        for port in road.route_inputs:
+        for port in (p for group in road.route_inputs for p in lane_ports(group)):
             port_node = road_input_node(port)
             layer.positions[port_node] = port.position
             for lane in port.lanes:
@@ -202,7 +203,7 @@ def build_vehicle_layer(
                     dist(*points),
                     MobilityLink("road_port", PortTraversal(port, lane, points)),
                 )
-        for port in road.route_outputs:
+        for port in (p for group in road.route_outputs for p in lane_ports(group)):
             port_node = road_output_node(port)
             layer.positions[port_node] = port.position
             for lane in port.lanes:
@@ -214,12 +215,26 @@ def build_vehicle_layer(
                     MobilityLink("road_port", PortTraversal(port, lane, points)),
                 )
 
+    for road in roads:
+        for group in road.route_inputs:
+            if len(group.lanes) > 1:
+                layer.positions[road_input_node(group)] = group.position
+                for port in lane_ports(group):
+                    layer.graph.add_edge(road_input_node(group), road_input_node(port), 0,
+                                         MobilityLink("lane_access", group))
+        for group in road.route_outputs:
+            if len(group.lanes) > 1:
+                layer.positions[road_output_node(group)] = group.position
+                for port in lane_ports(group):
+                    layer.graph.add_edge(road_output_node(port), road_output_node(group), 0,
+                                         MobilityLink("lane_access", group))
+
     for junction in intersections:
         if junction.kind is IntersectionKind.ROUNDABOUT:
             from roundabouts import add_roundabout_to_layer
             add_roundabout_to_layer(layer, junction)
             continue
-        for connection in junction.lane_connections:
+        for connection in (c for policy in junction.lane_connections for c in lane_connections(policy)):
             layer.graph.add_edge(
                 road_output_node(connection.source_output),
                 road_input_node(connection.destination_input),

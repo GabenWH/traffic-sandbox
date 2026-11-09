@@ -164,7 +164,7 @@ def _library():
     for name, (result, args) in signatures.items():
         function = getattr(lib, name)
         function.restype, function.argtypes = result, args
-    if lib.nt_abi() != 4:
+    if lib.nt_abi() != 5:
         raise RuntimeError('Incompatible native traffic ABI')
     from native_spawning import bind
     bind(lib)
@@ -304,12 +304,19 @@ class NativeTrafficEngine:
             _Movement(m[0], m[1], -1 if state.signal_start(m) is None else state.signal_start(m),
                       self._connection_ids[id(m[2])], self._key(state.incoming(m)))
             for m in car.controlled_movements))
-        # Exact compact value keys deduplicate separately materialized paths and
-        # never keep their Python object graphs alive.
-        signature = (point_signature,bytes(sections),bytes(movements))
+        # The same geometry can represent an exact lane endpoint or a flexible
+        # junction endpoint. Keep their native routes separate even when all
+        # packed geometry and movement data are identical.
+        route_edges = getattr(getattr(car, 'route', None), 'edges', ())
+        flags = (int(bool(route_edges and route_edges[-1].kind == 'route_endpoint'))
+                 | (int(bool(route_edges and route_edges[0].kind == 'route_endpoint')) << 1))
+        # Compact value keys deduplicate separately materialized paths without
+        # keeping their Python object graphs alive.
+        signature = (point_signature, bytes(sections), bytes(movements), flags)
         route = self._routes.get(signature)
         if route is None:
             route = self._call('nt_route', points, len(car.points), sections, len(sections), movements, len(movements))
+            self._call('nt_route_terminal', route, flags)
             self._routes[signature] = route
         self._routes.move_to_end(signature)
         self.trim_routes(protect=route)

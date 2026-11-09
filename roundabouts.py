@@ -79,7 +79,9 @@ def add_roundabout_to_layer(layer, junction):
     """
     # Local import avoids making models depend on the routing module.
     from mobility import MobilityLink, road_input_node, road_output_node
-    incoming, outgoing = junction.incoming_ports(), junction.outgoing_ports()
+    from multilane import lane_ports
+    incoming = [p for group in junction.incoming_ports() for p in lane_ports(group)]
+    outgoing = [p for group in junction.outgoing_ports() for p in lane_ports(group)]
     if not incoming or not outgoing:
         return
     cx, cy = junction.position

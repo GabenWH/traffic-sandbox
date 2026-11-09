@@ -275,13 +275,16 @@ class TrafficOccupancyIndex:
                     self._put_member(state, -1, occupancy[0], occupancy[1], order, dirty)
                 continue
             state.advance_window()
+            lateral = getattr(state.car, "_lane_change_occupancy", None)
             shadow = state.merge_shadow()
             for segment in tuple(state.members):
-                if not state.first <= segment < state.stop and segment != shadow:
+                if not state.first <= segment < state.stop and segment != shadow and not (segment == -2 and lateral is not None):
                     self._remove_member(state, segment, dirty)
             for segment in range(state.first, state.stop):
                 start, _, key, offset = state.segments[segment]
                 self._put_member(state, segment, key, offset + state.car.distance - start, order, dirty)
+            if lateral is not None:
+                self._put_member(state, -2, lateral[0], lateral[1], order, dirty)
             if shadow is not None:
                 start, _, key, offset = state.segments[shadow]
                 self._put_member(state, shadow, key, offset + state.car.distance - start, order, dirty)
