@@ -388,6 +388,32 @@ def road_deck_quads(road: Road) -> list[DeckQuad]:
     return quads
 
 
+def cul_de_sac_deck_quads(
+    junction: Intersection, segments: int = 48,
+) -> tuple[list[DeckQuad], list[DeckQuad]]:
+    """Return asphalt and a disjoint curb ring, open at the road entrance."""
+    if segments < 3:
+        raise ValueError("A cul-de-sac needs at least three segments")
+    if junction.kind is not IntersectionKind.CUL_DE_SAC:
+        return [], []
+    cx, cy = junction.position
+    inner, outer = junction.radius, junction.radius + 2
+    def point(radius: float, angle: float) -> Point3:
+        return (cx + radius*cos(angle), cy + radius*sin(angle), junction.elevation)
+    visible = _visible_band_intervals(_roundabout_road_intervals(junction, inner, outer))
+    # Asphalt and curb must share every boundary vertex. Independently
+    # tessellated circles have different chords, creating coplanar slivers.
+    angles=sorted(set([_TAU*i/segments for i in range(segments+1)]
+                      +[angle for interval in visible for angle in interval]))
+    pavement = []
+    curb = []
+    for a,b in zip(angles,angles[1:]):
+        pavement.append((point(0,a), point(inner,a), point(inner,b), point(0,b)))
+        if any(start<=(a+b)/2<=end for start,end in visible):
+            curb.append((point(inner,a), point(outer,a), point(outer,b), point(inner,b)))
+    return pavement, curb
+
+
 def roundabout_deck_quads(
     junction: Intersection, segments: int = 32,
 ) -> tuple[list[DeckQuad], list[DeckQuad], list[DeckQuad]]:

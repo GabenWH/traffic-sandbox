@@ -49,6 +49,32 @@ class CrossViewOrientationTests(unittest.TestCase):
         view._process_pointer()
         self.assertLess(camera.getZ(),initial)
 
+    def test_editor_projection_retains_coordinates_outside_the_viewport(self):
+        from ui.app import FreewaySimulator
+        from ui.camera3d import OrbitCamera
+        view,_=self.make_view(OrbitCamera((400,300,0),yaw=90,pitch=90,distance=1000))
+        view._apply_camera()
+        host=SimpleNamespace(native_view_active=True,view3d_active=True,view3d=view)
+        point=FreewaySimulator.world_to_screen(host,(4000,300))
+        self.assertAlmostEqual(point[0],4000,delta=.1)
+        self.assertAlmostEqual(point[1],300,delta=.1)
+
+    def test_low_camera_can_pick_foreground_after_a_tall_resize(self):
+        from panda3d.core import PerspectiveLens
+        from ui.camera3d import OrbitCamera
+        view,_=self.make_view(OrbitCamera((2500,1750,0),yaw=45,pitch=10,distance=1400))
+        view._perspective=PerspectiveLens()
+        for width,height in ((240,1000),(640,1000),(1280,720),(1600,300)):
+            with self.subTest(size=(width,height)):
+                view.frame.winfo_width=lambda:width
+                view.frame.winfo_height=lambda:height
+                view._apply_camera()
+                point=view.point_at_screen(width/2,height,0)
+                self.assertIsNotNone(point,'near plane clipped the foreground')
+                screen=view.screen_position(point,clip=False)
+                self.assertAlmostEqual(screen[0],width/2,delta=.1)
+                self.assertAlmostEqual(screen[1],height,delta=.1)
+
     def test_oblique_orbit_keeps_camera_level(self):
         from panda3d.core import Vec3
         from ui.camera3d import OrbitCamera

@@ -6,7 +6,7 @@ from building_footprints import open_ring,prism_geometry
 from models import BuildablePhase,WorkType,IntersectionKind
 from mobility import vehicle_link_points
 from land_ports import land_port_positions
-from .scene_geometry import road_deck_quads,road_divider_runs,roundabout_deck_quads
+from .scene_geometry import road_deck_quads,road_divider_runs,roundabout_deck_quads,cul_de_sac_deck_quads
 
 
 def box_quads(a,b,c,d,e,f):
@@ -29,26 +29,48 @@ class GeometryBuffer:
     def disc(self,x,y,z,radius,color):
         self.faces([((x,y,z),(x+radius*cos(i*pi/24),y+radius*sin(i*pi/24),z),
                      (x+radius*cos((i+1)*pi/24),y+radius*sin((i+1)*pi/24),z)) for i in range(48)],color)
-    def stroke(self,points,color,width=1,dash=(),plane='xy'):
-        """Expand strokes to triangles, retaining width and dash in either plane."""
+    def stroke(self,points,color,width=1,dash=(),plane='xy',clip=None):
+        """Expand visible strokes only; retain dash phase across clipped spans."""
         points=list(points);axis=1 if plane=='xy' else 2
         pattern=tuple(float(v) for v in dash if float(v)>0)
         if len(pattern)%2:pattern=pattern*2
-        index=0;remaining=pattern[0] if pattern else float('inf')
+        cycle=sum(pattern);phase=0.
         for a,b in zip(points,points[1:]):
             dx,dy=b[0]-a[0],b[axis]-a[axis];length=hypot(dx,dy)
             if not length:continue
             offset=[0.,0.,0.];offset[0]=-dy/length*width/2;offset[axis]=dx/length*width/2
+            low,high=0.,1.
+            if clip is not None:
+                left,bottom,right,top=clip;margin=width/2
+                # Liang-Barsky clipping before dash expansion. A projected
+                # endpoint can be billions of pixels away; skipping its dashes
+                # arithmetically keeps time and memory bounded by the viewport.
+                for p,q in ((-dx,a[0]-left+margin),(dx,right+margin-a[0]),
+                            (-dy,a[axis]-bottom+margin),(dy,top+margin-a[axis])):
+                    if abs(p)<1e-12:
+                        if q<0:high=-1.;break
+                    elif p<0:low=max(low,q/p)
+                    else:high=min(high,q/p)
+            start=max(0.,low)*length
+            stop=min(1.,high)*length-start
+            origin=[a[j]+(b[j]-a[j])*start/length for j in range(3)]
             at=0.
-            while at<length-1e-9:
-                end=min(length,at+remaining)
+            index=0;remaining=float('inf')
+            if pattern:
+                position=(phase+start)%cycle
+                while position>=pattern[index]:
+                    position-=pattern[index];index=(index+1)%len(pattern)
+                remaining=pattern[index]-position
+            while at<stop-1e-9:
+                end=min(stop,at+remaining)
                 if index%2==0:
-                    first=[a[j]+(b[j]-a[j])*at/length for j in range(3)]
-                    last=[a[j]+(b[j]-a[j])*end/length for j in range(3)]
+                    first=[origin[j]+(b[j]-a[j])*at/length for j in range(3)]
+                    last=[origin[j]+(b[j]-a[j])*end/length for j in range(3)]
                     self.quads([tuple(tuple(p[j]+sign*offset[j] for j in range(3))
                                 for p,sign in ((first,1),(last,1),(last,-1),(first,-1)))],color)
                 consumed=end-at;at=end;remaining-=consumed
                 if pattern and remaining<1e-9:index=(index+1)%len(pattern);remaining=pattern[index]
+            if pattern:phase=(phase+length)%cycle
     def arrays(self):
         return (np.asarray(self.triangles,dtype='float32').reshape(-1,7),
                 np.asarray(self.lines,dtype='float32').reshape(-1,7))
@@ -145,8 +167,9 @@ def compile_city(city):
             x,y=port.position
             buf.stroke([(x-sx,y-sy,junction.elevation+.12),(x+sx,y+sy,junction.elevation+.12)],Palette.ROAD_MARKING,2)
     for bulb in city.cul_de_sacs:
-        buf.disc(*bulb.position,bulb.elevation+.02,bulb.radius+2,Palette.ROAD_EDGE)
-        buf.disc(*bulb.position,bulb.elevation+.03,bulb.radius,Palette.ROAD_SURFACE)
+        pavement,curb=cul_de_sac_deck_quads(bulb)
+        buf.quads(pavement,Palette.ROAD_SURFACE)
+        buf.quads(curb,Palette.ROAD_EDGE)
     for road in city.roads:
         if road.phase is BuildablePhase.DEMOLISHING:
             buf.stroke([(*p,road.elevation_at(p)+.15) for p in road.centerline],

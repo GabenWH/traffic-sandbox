@@ -1,7 +1,7 @@
 """One embedded Panda window; C++ owns scene meshes and actor presentation."""
 from __future__ import annotations
 import tkinter as tk
-from math import cos,hypot,radians,sin
+from math import cos,hypot,radians,sin,tan
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (NativeWindowHandle,Point2,Point3,Vec3,WindowProperties,
                          OrthographicLens,PerspectiveLens,loadPrcFileData)
@@ -20,6 +20,8 @@ class _OffscreenFrame:
     def winfo_height(self):return self.height
     def winfo_rootx(self):return 0
     def winfo_rooty(self):return 0
+    def winfo_exists(self):return True
+    def winfo_ismapped(self):return True
     def configure(self,**kwargs):pass
     def bind(self,*args,**kwargs):pass
 
@@ -74,12 +76,21 @@ class PandaWorldView:
         self.native_scene.set_camera(self.base.cam);self._apply_camera()
 
     def _resize(self,_event=None):
-        if self.base.win is None:return
+        if getattr(self,'_closed',False) or self.base.win is None or not self.base.win.isValid():return
+        if not hasattr(self.base.win,'requestProperties'):return
         properties=WindowProperties();properties.setOrigin(0,0)
         properties.setSize(max(2,self.frame.winfo_width()),max(2,self.frame.winfo_height()))
         self.base.win.requestProperties(properties);self._apply_camera()
 
     def step(self):
+        if getattr(self,'_closed',False):return
+        if not self.frame.winfo_exists():
+            self.close();return
+        # Tk may unmap this parent while resizing, minimizing or changing
+        # panels. Do not draw into its native child until it is mapped again.
+        if not self.frame.winfo_ismapped():return
+        if self.base.win is not None and not self.base.win.isValid():
+            self.close();return
         if self.base.win is None:self._open()
         self.base.taskMgr.step()
 
@@ -151,7 +162,7 @@ class PandaWorldView:
         self.base.setBackgroundColor(*panda_rgba(city.terrain.grass_color));self._apply_camera()
 
     def update_road_vehicles(self,simulation):
-        if self.city is not None:self.presenter.update(self.city,simulation)
+        if not getattr(self,'_closed',False) and self.city is not None:self.presenter.update(self.city,simulation)
 
     def set_mode(self,mode):
         if mode not in ('map','perspective'):raise ValueError('Unknown Panda camera mode')
@@ -167,6 +178,11 @@ class PandaWorldView:
             self.native_scene.set_bounds((self.map_view.x,self.map_view.y,self.map_view.x+width/self.map_view.zoom,self.map_view.y+height/self.map_view.zoom))
         else:
             lens=self._perspective;lens.setAspectRatio(width/height)
+            # Improve depth precision without clipping the visible foreground
+            # when a low camera gains a large vertical FOV in a tall window.
+            pitch=radians(self.orbit.pitch)
+            ground_depth=self.orbit.distance*sin(pitch)/(sin(pitch)+cos(pitch)*tan(radians(lens.getVfov()/2)))
+            lens.setNearFar(max(1,min(self.orbit.distance*.2,ground_depth*.5)),20000)
             self.base.camera.setPos(*map_to_panda(self.orbit.position))
             yaw=radians(self.orbit.yaw);up=Vec3(-cos(yaw),sin(yaw),0) if self.orbit.pitch>=90 else Vec3(0,0,1)
             self.base.camera.lookAt(Point3(*map_to_panda(self.orbit.target)),up)
@@ -188,11 +204,12 @@ class PandaWorldView:
         point=ray_to_height((start.x,start.y,start.z),(end.x-start.x,end.y-start.y,end.z-start.z),elevation)
         return None if point is None else panda_to_map((*point,elevation))[:2]
 
-    def screen_position(self,point,elevation=0):
+    def screen_position(self,point,elevation=0,*,clip=True):
         if self.base.win is None:return None
         camera_point=self.base.camera.getRelativePoint(self.base.render,Point3(*map_to_panda((*point,elevation))))
         projected=Point2()
-        if not self.base.camLens.project(camera_point,projected):return None
+        visible=self.base.camLens.project(camera_point,projected)
+        if camera_point.y<=0 or (clip and not visible):return None
         return ((projected.x+1)*self.frame.winfo_width()/2,(1-projected.y)*self.frame.winfo_height()/2)
 
     def nearest_road_endpoint(self,screen_x,screen_y,tolerance=14):

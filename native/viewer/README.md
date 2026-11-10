@@ -62,3 +62,33 @@ Fixed-fleet benchmarks check pose parity and separate metadata publication,
 steady-state presentation and graphics. Fixed snapshots do not advance traffic.
 Headless Mesa graphics timings are software-render measurements, not desktop GPU
 FPS or evidence of 500,000-vehicle capacity.
+
+### Editor resize regressions
+
+Run these with the matching Panda SDK and a display (your normal desktop display
+also exercises your actual driver):
+
+```bash
+python -m unittest tests.test_editor_resizing tests.test_native_overlay_clipping tests.test_viewer_depth tests.test_cross_view_orientation -v
+```
+
+For a headless Linux runner, prefix the command with `xvfb-run -a`. The live
+editor checks are skipped without `DISPLAY`; a headless run alone does not
+verify them. Each editor scenario runs in a separate process with a 90-second
+timeout and stack dumps so a native crash or a stalled event loop fails visibly.
+
+The matrix covers every registered canvas tool in map and perspective modes,
+eight window sizes from 1x1 through 1600x900, narrow/tall/wide layouts, queued
+resizes, hidden and restored parents, and shutdown with a pending resize.
+Behavior checks cover road completion/cancellation/elevation, building placement,
+camera picking, inspection, routes, test traffic, bus lines, demolition,
+new/save/load, graph/profile exports and secondary diagnostic windows. A rapid
+stress case interleaves building clicks with 160 resize cycles. This finite
+matrix is not exhaustive coverage of every function, pixel size, window manager,
+GPU driver or event ordering.
+
+Off-screen editor strokes are clipped before dash tessellation, preserving dash
+phase without allocating geometry for invisible spans. In particular, the
+regression uses a billion-pixel preview endpoint that previously froze the UI
+while generating invisible geometry. Perspective depth precision and the cul-de-sac's disjoint
+asphalt/curb surfaces have separate numerical and geometry checks.

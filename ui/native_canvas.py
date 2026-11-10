@@ -81,7 +81,9 @@ class NativeCanvas:
         return tuple(result)
 
     def flush(self):
-        if not self._dirty:return
+        frame=getattr(self.view,'frame',None)
+        clip=(0,-max(2,frame.winfo_height()),max(2,frame.winfo_width()),0) if frame is not None else None
+        if not self._dirty and clip==getattr(self,'_clip',None):return
         buf=GeometryBuffer();texts=[]
         for kind,coords,o in self._items.values():
             if o.get('state')=='hidden':continue
@@ -99,9 +101,9 @@ class NativeCanvas:
                 points=[(x+(c-a)/2*cos(i*2*pi/24),y+(d-b)/2*sin(i*2*pi/24)) for i in range(24)]
             vertices=[(x,0,-y) for x,y in points]
             if kind=='line':
-                if fill:buf.stroke(vertices,fill,float(o.get('width',1)),o.get('dash',()),plane='xz')
+                if fill:buf.stroke(vertices,fill,float(o.get('width',1)),o.get('dash',()),plane='xz',clip=clip)
             else:
                 if fill and len(vertices)>2:buf.faces([(vertices[0],vertices[i],vertices[i+1]) for i in range(1,len(vertices)-1)],fill)
-                if outline:buf.stroke(vertices+vertices[:1],outline,float(o.get('width',1)),o.get('dash',()),plane='xz')
+                if outline:buf.stroke(vertices+vertices[:1],outline,float(o.get('width',1)),o.get('dash',()),plane='xz',clip=clip)
         self.view.overlay_scene.replace_static(*buf.arrays())
-        self.view.overlay_scene.replace_texts(texts);self._dirty=False
+        self.view.overlay_scene.replace_texts(texts);self._dirty=False;self._clip=clip

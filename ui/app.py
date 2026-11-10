@@ -316,7 +316,7 @@ class FreewaySimulator(
 
     def world_to_screen(self, point):
         if getattr(self,'native_view_active',False) and self.view3d_active:
-            return self.view3d.screen_position(point,0) or (-1e9,-1e9)
+            return self.view3d.screen_position(point,0,clip=False) or (-1e9,-1e9)
         return ViewportMixin.world_to_screen(self,point)
 
     def screen_to_world(self, point: tuple[float, float]) -> tuple[float, float]:
@@ -366,7 +366,11 @@ class FreewaySimulator(
 
     def _handle_3d_key(self, key: str) -> None:
         event={'page_up':'<Prior>','page_down':'<Next>','enter':'<Return>','escape':'<Escape>'}.get(key)
-        if event:self.root.event_generate(event)
+        if event:
+            # Native child focus can leave Tk without a keyboard target after
+            # unmap/restore. Tk silently discards synthetic key events then.
+            self.root.focus_force()
+            self.root.event_generate(event)
 
     def redraw_world(self) -> None:
         FreewaySimulator._sync_road_network(self)
