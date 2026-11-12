@@ -223,10 +223,27 @@ class PandaWorldView:
                     if distance<=tolerance:closest=(point,elevation);tolerance=distance
         return closest
 
+    def show_construction_preview(self, preview):
+        """Present canonical world-space construction geometry in either camera mode."""
+        buf = GeometryBuffer()
+        if preview.kind == "road":
+            path = [(*p, z + 1.5) for p, z in zip(preview.vertices, preview.elevation)]
+            if len(path) >= 2:
+                buf.line(path, Palette.ROUTE_HIGHLIGHT)
+        elif preview.kind == "building":
+            corners = [(*p, z + 1.5) for p, z in zip(preview.vertices, preview.elevation)]
+            if len(corners) == 4:
+                buf.line(corners + [corners[0]], Palette.ROUTE_HIGHLIGHT)
+        else:
+            raise ValueError(f"Unknown construction preview kind: {preview.kind}")
+        self.preview_scene.replace_static(*buf.arrays())
+
     def show_road_preview(self,points,elevations,pointer,pointer_elevation):
-        buf=GeometryBuffer();path=[(*p,z+1) for p,z in zip(points,elevations)]
-        if pointer is not None:path.append((*pointer,pointer_elevation+1))
-        buf.line(path,Palette.ROUTE_HIGHLIGHT);self.preview_scene.replace_static(*buf.arrays())
+        from ui_tools.construction_preview import road_preview
+        self.show_construction_preview(
+            road_preview("legacy-road", points, elevations, pointer, pointer_elevation,
+                         1.0, 1, 0)
+        )
 
     def clear_preview(self):
         buf=GeometryBuffer();self.preview_scene.replace_static(*buf.arrays())
