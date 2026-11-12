@@ -12,13 +12,16 @@ def parse_args(argv=None):
                         help='Constructed-road vehicle simulation engine')
     parser.add_argument('--viewer',choices=('panda','tk'),default='panda',
                         help='Native shared Panda viewer (default) or legacy Tk map')
+    parser.add_argument('--volumetric-clouds', action='store_true',
+                        help='Try the experimental volumetric sky in the 3D view')
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     options = parse_args(argv)
     app = tk.Tk()
-    FreewaySimulator(app, traffic_engine=options.traffic_engine,viewer=options.viewer)
+    FreewaySimulator(app, traffic_engine=options.traffic_engine, viewer=options.viewer,
+                     volumetric_clouds=options.volumetric_clouds)
     app.mainloop()
 
 

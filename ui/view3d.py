@@ -4,7 +4,7 @@ import tkinter as tk
 from math import cos,hypot,radians,sin,tan
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (NativeWindowHandle,Point2,Point3,Vec3,WindowProperties,
-                         OrthographicLens,PerspectiveLens,loadPrcFileData)
+                         OrthographicLens,PerspectiveLens,loadPrcFileData,unloadPrcFile)
 from color_palette import Palette,panda_rgba
 from land_ports import land_port_focus_point
 from native_viewer import NativeScene
@@ -28,16 +28,27 @@ class _OffscreenFrame:
 
 
 class PandaWorldView:
-    def __init__(self,parent=None,*,mode='perspective',offscreen=False,width=960,height=640):
+    def __init__(self,parent=None,*,mode='perspective',offscreen=False,width=960,height=640,
+                 volumetric_clouds=False):
         self.frame=_OffscreenFrame(width,height) if offscreen else tk.Frame(parent,bg=Palette.ROAD_SURFACE)
         loadPrcFileData('','audio-library-name null')
+        self.base=ShowBase(windowType='none')
         if offscreen:
-            loadPrcFileData('',f'load-display p3headlessgl\nwin-size {width} {height}\nsync-video false')
-        self.base=ShowBase(windowType='offscreen' if offscreen else 'none')
+            # Selecting the pipe explicitly keeps the embedded window's default
+            # backend available after an offscreen render in the same process.
+            settings=loadPrcFileData('offscreen-viewer','sync-video false')
+            try:
+                pipe=self.base.makeModulePipe('p3headlessgl')
+                self.base.openMainWindow(type='offscreen',pipe=pipe,size=(width,height),requireWindow=True)
+            except Exception:
+                self.base.destroy()
+                raise
+            finally:
+                unloadPrcFile(settings)
         self.base.disableMouse();self.base.setBackgroundColor(*panda_rgba(Palette.TERRAIN_GRASS))
         self.orbit=OrbitCamera((2500,1750,0));self.map_view=Viewport(0,0,1)
         self.mode=mode;self.city=None;self.overlay_canvas=None
-        self.sky=SkyDome(self.base.render)
+        self.sky=SkyDome(self.base.render,volumetric_clouds=volumetric_clouds)
         self.native_scene=NativeScene(self.base.render,self.base.cam)
         self.presenter=ScenePresenter(self.native_scene)
         self.overlay_scene=NativeScene(self.base.pixel2d)
@@ -73,7 +84,7 @@ class PandaWorldView:
         properties.setParentWindow(NativeWindowHandle.makeInt(self.frame.winfo_id()))
         properties.setOrigin(0,0)
         properties.setSize(max(2,self.frame.winfo_width()),max(2,self.frame.winfo_height()))
-        self.base.openWindow(props=properties,requireWindow=True)
+        self.base.openWindow(props=properties,type='onscreen',requireWindow=True)
         self.base.setupMouse(self.base.win)
         self.native_scene.set_camera(self.base.cam);self._apply_camera()
 
@@ -100,6 +111,7 @@ class PandaWorldView:
         self._process_pointer()
         if self.on_before_render is not None:self.on_before_render()
         if self.overlay_canvas is not None:self.overlay_canvas.flush()
+        if self.sky.clouds is not None:self.sky.clouds.prepare(self.base)
         return task.cont
 
     def _pointer(self):
@@ -192,6 +204,8 @@ class PandaWorldView:
         self.base.cam.node().setLens(lens);self.base.camLens=lens
         if hasattr(self,'sky'):
             self.sky.update(self.base.camera.getPos(self.base.render),self.mode=='perspective')
+            if self.sky.clouds is not None and self.mode=='perspective':
+                self.sky.clouds.set_view(self.base.camera,self.base.render,lens)
         stamp=(self.mode,width,height,self.map_view.x,self.map_view.y,self.map_view.zoom,
                self.orbit.target,self.orbit.yaw,self.orbit.pitch,self.orbit.distance)
         if stamp!=getattr(self,'_camera_stamp',None):
@@ -239,7 +253,7 @@ class PandaWorldView:
         if getattr(self,'_closed',False):return
         self._closed=True
         self.base.taskMgr.remove(self._presentation_task_name)
-        self.native_scene.close();self.overlay_scene.close();self.preview_scene.close();self.sky.close()
+        self.native_scene.close();self.overlay_scene.close();self.preview_scene.close();self.sky.close(self.base)
         if self.base.win is not None:self.base.closeWindow(self.base.win)
         self.base.graphicsEngine.renderFrame();self.base.graphicsEngine.syncFrame()
         self.base.destroy()

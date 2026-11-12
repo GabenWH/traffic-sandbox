@@ -2,7 +2,7 @@
 import unittest
 
 import numpy as np
-from panda3d.core import PNMImage
+from panda3d.core import ConfigVariableString, PNMImage, loadPrcFileData, unloadPrcFile
 
 from city import CityMap, Terrain
 from ui.camera3d import OrbitCamera
@@ -10,6 +10,43 @@ from ui.view3d import PandaWorldView
 
 
 class ViewerSkyTests(unittest.TestCase):
+    def test_offscreen_view_restores_display_pipe_selection(self):
+        config = loadPrcFileData('embedded-pipe-test', 'load-display pandagl')
+        self.addCleanup(unloadPrcFile, config)
+        view = PandaWorldView(offscreen=True, width=160, height=90)
+        self.addCleanup(view.close)
+        self.assertEqual(ConfigVariableString('load-display').getValue(), 'pandagl')
+
+    def test_volumetric_clouds_show_parallax_and_stop_rendering_in_map_view(self):
+        view = PandaWorldView(offscreen=True, width=480, height=270, volumetric_clouds=True)
+        self.addCleanup(view.close)
+        view.orbit = OrbitCamera((500, 350, 100), yaw=45, pitch=1, distance=900)
+        view.set_mode('perspective')
+
+        def sky_pixels():
+            for _ in range(3):
+                view.step()
+            image = PNMImage()
+            self.assertTrue(view.base.win.getScreenshot(image))
+            return np.array([[tuple(image.getXel(x, y)) for x in range(0, 480, 4)]
+                             for y in range(0, 92, 4)])
+
+        first = sky_pixels()
+        clouds = view.sky.clouds
+        self.assertTrue(clouds.buffer.isActive())
+        self.assertEqual((clouds.buffer.getXSize(), clouds.buffer.getYSize()), (240, 135))
+        self.assertGreater(np.mean(first[..., 0] > .72), .02, 'no clouds in the sky')
+        self.assertGreater(np.mean(first[..., 2] - first[..., 0] > .15), .10, 'no blue sky')
+
+        view.orbit.target = (8500, 5350, 100)
+        view._apply_camera()
+        self.assertGreater(np.mean(np.abs(first - sky_pixels())), .02,
+                           'clouds should show parallax when the camera pans')
+
+        view.set_mode('map')
+        view.step()
+        self.assertFalse(clouds.buffer.isActive())
+
     def test_orbit_can_lower_to_the_horizon(self):
         camera = OrbitCamera((0, 0, 0), pitch=10)
         camera.rotate(0, -10)

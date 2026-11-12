@@ -5,6 +5,8 @@ import numpy as np
 from panda3d.core import (Geom, GeomNode, GeomTriangles, GeomVertexData,
                           GeomVertexFormat, GeomVertexWriter, Texture)
 
+from .volumetric_clouds import VolumetricClouds
+
 
 def _noise(width, height, cells_x, cells_y, rng):
     """Smooth, horizontally periodic value noise for a seamless sky."""
@@ -80,7 +82,7 @@ def _sky_texture():
 
 
 class SkyDome:
-    def __init__(self, render):
+    def __init__(self, render, volumetric_clouds=False):
         segments, rings, radius = 64, 16, 5000
         data = GeomVertexData('sky', GeomVertexFormat.getV3t2(), Geom.UH_static)
         vertices, uv = GeomVertexWriter(data, 'vertex'), GeomVertexWriter(data, 'texcoord')
@@ -110,6 +112,7 @@ class SkyDome:
         self.root.setDepthTest(False)
         self.root.setDepthWrite(False)
         self.root.setBin('background', 0)
+        self.clouds = VolumetricClouds(self.root) if volumetric_clouds else None
 
     def update(self, camera_position, perspective):
         if perspective:
@@ -117,6 +120,10 @@ class SkyDome:
             self.root.show()
         else:
             self.root.hide()
+            if self.clouds is not None:
+                self.clouds.deactivate()
 
-    def close(self):
+    def close(self, base):
+        if self.clouds is not None:
+            self.clouds.close(base)
         self.root.removeNode()

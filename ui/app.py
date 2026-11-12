@@ -48,8 +48,10 @@ class FreewaySimulator(
 ):
     """Coordinate models, windows, tools, rendering, and simulation ticks."""
 
-    def __init__(self, root: tk.Tk, *, traffic_engine: str = "cpp", viewer: str = "panda") -> None:
+    def __init__(self, root: tk.Tk, *, traffic_engine: str = "cpp", viewer: str = "panda",
+                 volumetric_clouds: bool = False) -> None:
         self.root = root
+        self.volumetric_clouds = volumetric_clouds
         root.title("Freeway Simulator")
         root.report_callback_exception = self.report_callback_exception
         root.protocol("WM_DELETE_WINDOW", self.exit_app)
@@ -140,7 +142,8 @@ class FreewaySimulator(
             from .view3d import PandaWorldView
             from .native_canvas import NativeCanvas
             self._tk_canvas = self.canvas
-            self.view3d = PandaWorldView(self.viewport_shell,mode='map')
+            self.view3d = PandaWorldView(self.viewport_shell,mode='map',
+                                         volumetric_clouds=self.volumetric_clouds)
             self.view3d.map_view = self.viewport
             self.view3d.set_callbacks(on_click=self._handle_3d_click,
                 on_right_click=self._handle_native_right_click,
@@ -255,7 +258,7 @@ class FreewaySimulator(
                     parent=self.root,
                 )
                 return
-            self.view3d = PandaWorldView(self.viewport_shell)
+            self.view3d = PandaWorldView(self.viewport_shell, volumetric_clouds=self.volumetric_clouds)
             self.view3d.set_callbacks(
                 on_click=self._handle_3d_click,
                 on_right_click=self._handle_native_right_click,
