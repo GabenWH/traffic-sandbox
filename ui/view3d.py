@@ -11,6 +11,7 @@ from native_viewer import NativeScene
 from .scene_buffers import compile_city,GeometryBuffer
 from .scene_presenter import ScenePresenter
 from .sky import SkyDome
+from .landscape_view import LandscapeView
 from .camera3d import OrbitCamera,map_to_panda,panda_to_map,ray_to_height
 from .viewport import Viewport,MIN_ZOOM,MAX_ZOOM,ZOOM_STEP
 
@@ -38,6 +39,7 @@ class PandaWorldView:
         self.orbit=OrbitCamera((2500,1750,0));self.map_view=Viewport(0,0,1)
         self.mode=mode;self.city=None;self.overlay_canvas=None
         self.sky=SkyDome(self.base.render)
+        self.landscape=LandscapeView(self.base.render)
         self.native_scene=NativeScene(self.base.render,self.base.cam)
         self.presenter=ScenePresenter(self.native_scene)
         self.overlay_scene=NativeScene(self.base.pixel2d)
@@ -158,8 +160,9 @@ class PandaWorldView:
 
     def show_city(self,city):
         if self.city is not city:self.orbit.target=(*land_port_focus_point(city),0)
-        triangles,lines=compile_city(city)
+        triangles,lines=compile_city(city,include_ground=False)
         self.native_scene.replace_static(triangles,lines)
+        self.landscape.replace(city)
         self.city=city;self.presenter.invalidate()
         self.base.setBackgroundColor(*panda_rgba(city.terrain.grass_color));self._apply_camera()
 
@@ -239,7 +242,7 @@ class PandaWorldView:
         if getattr(self,'_closed',False):return
         self._closed=True
         self.base.taskMgr.remove(self._presentation_task_name)
-        self.native_scene.close();self.overlay_scene.close();self.preview_scene.close();self.sky.close()
+        self.native_scene.close();self.overlay_scene.close();self.preview_scene.close();self.sky.close();self.landscape.close()
         if self.base.win is not None:self.base.closeWindow(self.base.win)
         self.base.graphicsEngine.renderFrame();self.base.graphicsEngine.syncFrame()
         self.base.destroy()

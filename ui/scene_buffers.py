@@ -125,10 +125,13 @@ def _tree(buf,index,x,y):
              Palette.TREE_CANOPY if tier%2 or not redwood else Palette.TREE_OUTLINE)
 
 
-def compile_city(city):
+def compile_city(city, *, include_ground=True):
     """Return owned contiguous triangle/line buffers, each row XYZ + RGBA."""
     buf=GeometryBuffer()
-    buf.quads([((0,0,-.5),(city.width,0,-.5),(city.width,city.height,-.5),(0,city.height,-.5))],city.terrain.grass_color)
+    from .landscape_geometry import grass_triangles, solid_landscape
+    if include_ground:
+        buf.triangles.extend(map(tuple, grass_triangles(city)))
+    solid_landscape(buf, city.terrain)
     for road in city.roads:
         decks=road_deck_quads(road);buf.quads(decks,Palette.ROAD_SURFACE)
         sides=[]

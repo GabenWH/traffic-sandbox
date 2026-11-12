@@ -17,6 +17,42 @@ The OSM snapshot provides 681 clipped driveable ways, 1,181 routed road segments
 boundary portals as combined car sources and sinks. The existing model applies
 25 mph test-car behavior and OSM one-way/lane tags.
 
+## Landscape and waterways
+
+The starter world has fictional meadows, woods, fields, streams, a river and
+scenic hills. The native map and perspective views share the same landscape;
+ground and hills use a GLSL adaptation of Ferns-Forest's procedural meadow
+shader. The hills are outside the buildable area, so they do not raise roads or
+bury buildings. Landscape geometry is visual and does not block construction or
+simulate water flow. It is saved with the world.
+
+To add mapped landscape to an **existing Arcata save**, with a new Overpass
+extract (network required):
+
+```bash
+python tools/import_arcata_landscape.py \
+  --world arcata-homes.json \
+  --download arcata-landscape.json \
+  --output arcata-homes-with-landscape.json
+```
+
+Alternatively use `--landscape arcata-landscape.json` with an existing OSM
+JSON, XML, or gzipped extract; repeat the flag to combine files. The command
+creates a new save and preserves the source save, camera, and gameplay state.
+It applies the same boundary and coordinate projection used by the Arcata road
+importer; do not use it for a different city's save. To create a new Arcata
+world with landscape and buildings in one step, add `--landscape EXTRACT` or
+`--download-landscape EXTRACT` to `tools/import_arcata_homes.py`.
+
+OSM forest, wood, meadow, grassland, farmland, park, wetland, water and
+waterway tags are supported. Multipolygon holes are retained. Forest trees are
+sampled deterministically for display and avoid existing roads and buildings;
+individual tree positions and unspecified waterway widths are estimates.
+The bundled road/building extracts contain no land-cover dataset, and no
+Arcata elevation model is included; the importer does not invent Arcata hills
+or claim that unmapped ground is water. Water and polygon geometry can extend
+beyond the city boundary when the source feature crosses it.
+
 ## Import OSM buildings and parking
 
 ### Junction controls and roundabouts

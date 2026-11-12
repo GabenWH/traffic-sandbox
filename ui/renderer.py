@@ -73,6 +73,7 @@ class RendererMixin:
             0, 0, canvas_width, canvas_height,
             fill=self.city_map.terrain.grass_color, outline="", tags=STATIC_TAG,
         )
+        self._draw_landscape()
         self._draw_visible_trees()
         self.draw_city_roads()
         self._draw_regional_land_ports()
@@ -88,6 +89,16 @@ class RendererMixin:
             return
         self._draw_legacy_merge_road()
         canvas.tag_lower(STATIC_TAG)
+
+    def _draw_landscape(self) -> None:
+        from .landscape_geometry import AREA_COLORS, AREA_DEPTH, WATER_COLOR
+        for area in sorted(self.city_map.terrain.areas, key=lambda item: AREA_DEPTH[item.kind]):
+            coords = [coordinate for point in area.points for coordinate in self.world_to_screen(point)]
+            self.canvas.create_polygon(*coords, fill=AREA_COLORS[area.kind], outline='', tags=STATIC_TAG)
+        for water in self.city_map.terrain.waterways:
+            coords = [coordinate for point in water.points for coordinate in self.world_to_screen(point)]
+            self.canvas.create_line(*coords, fill=WATER_COLOR,
+                                    width=max(1, water.width * self.camera_zoom), joinstyle='round', tags=STATIC_TAG)
 
     def _draw_visible_trees(self) -> None:
         left, top, right, bottom = self.visible_world_bounds()

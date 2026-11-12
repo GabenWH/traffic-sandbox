@@ -18,6 +18,7 @@ class CrossViewOrientationTests(unittest.TestCase):
         view.orbit=orbit;view.mode='perspective';view.city=None
         view.frame=SimpleNamespace(winfo_width=lambda:800,winfo_height=lambda:600)
         view.native_scene=NativeScene(render,camera);self.addCleanup(view.native_scene.close)
+        view.landscape=SimpleNamespace(replace=lambda _city:None)
         view.presenter=SimpleNamespace(invalidate=lambda:None)
         view._orthographic=lens;view._perspective=lens;view.map_view=Viewport(0,0,1)
         view.on_motion=None

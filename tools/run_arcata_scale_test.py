@@ -232,7 +232,7 @@ def road_lanes(tags: dict[str, str]) -> tuple[int, int]:
     return forward, reverse
 
 
-def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(),
+def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(), landscape_paths=(),
                residents_per_building: int = 4, building_progress=None) -> tuple[CityMap, list[str], dict[str, object]]:
     from tools.osm_junctions import roundabout_components, apply_controls
     paths = list(paths)
@@ -413,6 +413,10 @@ def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(),
         height=max((p[1] for p in projected_endpoints), default=0) - min((p[1] for p in projected_endpoints), default=0),
         terrain=Terrain(trees=[]), roads=roads, intersections=intersections,
     )
+    projected_boundary = [to_feet(point) for point in boundary_points]
+    if projected_boundary:
+        xs, ys = zip(*projected_boundary)
+        city.terrain.bounds = (min(xs), min(ys), max(xs), max(ys))
     control_metadata = apply_controls(city, node_tags, ways, road_refs, junction_keys, to_feet, nodes)
     # Recompile lane-specific controls after assigning their road-port policies.
     city.rebuild_mobility_network()
@@ -455,6 +459,14 @@ def build_city(paths: list[Path], boundary_path: Path, *, building_paths=(),
         metadata.setdefault('imported_homes', 0)
         metadata['building_osm_file_names'] = [Path(path).name for path in building_paths]
         metadata['residents_per_imported_home'] = residents_per_building
+    if landscape_paths:
+        from tools.osm_landscape import import_osm_landscape, boundary_selector
+        metadata['landscape'] = import_osm_landscape(city, landscape_paths, in_boundary, to_feet,
+                                                      touches_boundary=boundary_selector(outer, inner),
+                                                      contains_world=lambda p: in_boundary((
+                                                          lon0+p[0]/(111_320.0*math.cos(math.radians(lat0))*3.28084),
+                                                          lat0+p[1]/(111_132.0*3.28084))))
+        metadata['landscape_osm_file_names'] = [Path(path).name for path in landscape_paths]
     return city, portal_ids, metadata
 
 

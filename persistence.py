@@ -8,6 +8,7 @@ from typing import Any
 
 from building_footprints import triangulate_ring
 from city import Building, CityMap, Parcel, Terrain, ZoneType
+from landscape import LandscapeArea, Waterway, ScenicHill
 from models import (
     Buildable,
     BuildablePhase,
@@ -67,6 +68,10 @@ def world_to_dict(
             "terrain": {
                 "grass_color": city_map.terrain.grass_color,
                 "trees": [[x, y] for x, y in city_map.terrain.trees],
+                "areas": [{"kind": a.kind, "points": [list(p) for p in a.points], "source": a.source} for a in city_map.terrain.areas],
+                "waterways": [{"kind": w.kind, "points": [list(p) for p in w.points], "width": w.width, "source": w.source} for w in city_map.terrain.waterways],
+                "hills": [{"x": h.x, "y": h.y, "radius_x": h.radius_x, "radius_y": h.radius_y, "height": h.height} for h in city_map.terrain.hills],
+                "bounds": list(city_map.terrain.bounds) if city_map.terrain.bounds is not None else None,
             },
             "roads": [
                 {
@@ -189,6 +194,7 @@ def world_from_dict(data: object) -> LoadedWorld:
     terrain = Terrain(
         grass_color=_string(terrain_data.get("grass_color"), "world.terrain.grass_color"),
         trees=_points(terrain_data.get("trees"), "world.terrain.trees"),
+        **_landscape_from_dict(terrain_data),
     )
     city_map = CityMap(
         width=_positive_number(world.get("width"), "world.width"),
@@ -856,3 +862,44 @@ def _operation_from_dict(value):
         return validate_operation(value)
     except ValueError as error:
         raise WorldFormatError(str(error)) from error
+
+
+def _landscape_from_dict(data):
+    """Read optional landscape fields while preserving pre-landscape saves."""
+    def source(row):
+        value = row.get('source', '')
+        if not isinstance(value, str):
+            raise WorldFormatError('Landscape source must be a string.')
+        return value
+    try:
+        areas = []
+        for raw in _list(data.get('areas', []), 'world.terrain.areas'):
+            row = _mapping(raw, 'landscape area')
+            area = LandscapeArea(_string(row.get('kind'), 'area.kind'),
+                                 _points(row.get('points'), 'area.points'), source(row))
+            area.triangles  # validate once and retain tessellation for the renderer
+            areas.append(area)
+        waterways = []
+        for raw in _list(data.get('waterways', []), 'world.terrain.waterways'):
+            row = _mapping(raw, 'waterway')
+            waterways.append(Waterway(_string(row.get('kind'), 'waterway.kind'),
+                                      _points(row.get('points'), 'waterway.points'),
+                                      _positive_number(row.get('width'), 'waterway.width'), source(row)))
+        hills = []
+        for raw in _list(data.get('hills', []), 'world.terrain.hills'):
+            row = _mapping(raw, 'hill')
+            hills.append(ScenicHill(*[_number(row.get(k), 'hill.'+k)
+                                      for k in ('x', 'y', 'radius_x', 'radius_y', 'height')]))
+        bounds = data.get('bounds')
+        if bounds is not None:
+            values = _list(bounds, 'world.terrain.bounds')
+            if len(values) != 4:
+                raise WorldFormatError('Terrain bounds must have four numbers.')
+            bounds = tuple(_number(v, 'terrain.bounds') for v in values)
+            if bounds[0] >= bounds[2] or bounds[1] >= bounds[3]:
+                raise WorldFormatError('Terrain bounds must have positive dimensions.')
+        return dict(areas=areas, waterways=waterways, hills=hills, bounds=bounds)
+    except WorldFormatError:
+        raise
+    except (TypeError, ValueError) as error:
+        raise WorldFormatError(f'Invalid landscape: {error}') from error

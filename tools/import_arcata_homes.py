@@ -48,6 +48,11 @@ def main(argv=None):
                         help='building Overpass JSON or OSM XML extract, repeatable')
     source.add_argument('--download', type=Path, metavar='EXTRACT',
                         help='download building data from Overpass and save the extract at this path')
+    terrain_source = parser.add_mutually_exclusive_group()
+    terrain_source.add_argument('--landscape', action='append', type=Path,
+                                help='OSM land cover/waterway extract, repeatable')
+    terrain_source.add_argument('--download-landscape', type=Path, metavar='EXTRACT',
+                                help='download land cover and waterways from Overpass')
     parser.add_argument('--residents-per-building', type=int, default=4,
                         help='assumed housing capacity per building (default: 4)')
     parser.add_argument('--output', type=Path, required=True, help='path for the new city save')
@@ -58,15 +63,24 @@ def main(argv=None):
         parser.error(f'output already exists: {args.output}')
     if args.download and args.download.exists():
         parser.error(f'extract already exists: {args.download}; use --buildings to reuse it')
+    if args.download_landscape and args.download_landscape.exists():
+        parser.error(f'extract already exists: {args.download_landscape}; use --landscape to reuse it')
     try:
         if args.download:
             print('Downloading Arcata building footprints from OpenStreetMap...', flush=True)
             building_paths = [download_extract(args.boundary, args.download)]
         else:
             building_paths = args.buildings
+        if args.download_landscape:
+            from tools.osm_landscape import download_landscape
+            print('Downloading Arcata landscape from OpenStreetMap...', flush=True)
+            landscape_paths = [download_landscape(args.boundary, args.download_landscape)]
+        else:
+            landscape_paths = args.landscape or []
         roads = args.osm or [ROOT / 'benchmarks/arcata/arcata-roads-2026-06-01.json']
         city, _, metadata = build_city(roads, args.boundary, building_paths=building_paths,
-                                       residents_per_building=args.residents_per_building)
+                                       residents_per_building=args.residents_per_building,
+                                       landscape_paths=landscape_paths)
         if not metadata.get('imported_buildings'):
             raise ValueError('No usable building footprints were found inside the Arcata boundary')
         world = world_to_dict(city, unit_system='imperial', camera_x=0, camera_y=0, camera_zoom=1)
@@ -82,7 +96,7 @@ def main(argv=None):
                       'parking_lots_without_space': metadata['parking_lots_without_space'],
                       'imported_courtyard_buildings': metadata.get('imported_courtyard_buildings',0),
                       'skipped_courtyard_relations': metadata.get('incomplete_courtyard_relations',0)+metadata.get('invalid_courtyard_relations',0),
-                      'road_segments': len(city.roads), 'capacity_per_home': args.residents_per_building,
+                      'road_segments': len(city.roads), 'landscape': metadata.get('landscape', {}), 'capacity_per_home': args.residents_per_building,
                       'source': [str(path) for path in building_paths]}))
     return 0
 

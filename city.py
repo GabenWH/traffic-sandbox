@@ -8,8 +8,9 @@ from math import dist
 from random import Random
 from uuid import uuid4
 
-from building_footprints import contains_point, triangulate_ring
+from building_footprints import contains_point, distance_to_segment, triangulate_ring
 from color_palette import Palette
+from landscape import LandscapeArea, Waterway, ScenicHill, starter_landscape
 from mobility import (
     VEHICLE_LAYER,
     LanePosition,
@@ -63,12 +64,33 @@ class Terrain:
 
     grass_color: str = Palette.TERRAIN_GRASS
     trees: list[tuple[float, float]] = field(default_factory=list)
+    areas: list[LandscapeArea] = field(default_factory=list)
+    waterways: list[Waterway] = field(default_factory=list)
+    hills: list[ScenicHill] = field(default_factory=list)
+    bounds: tuple[float, float, float, float] | None = None
 
     @classmethod
-    def starter_terrain(cls) -> "Terrain":
+    def starter_terrain(cls, width=5000, height=3500) -> "Terrain":
         """Create a repeatable, lightly wooded buildable landscape."""
         random = Random(41)
-        return cls(trees=[(random.randrange(80, 4920), random.randrange(80, 3420)) for _ in range(180)])
+        areas, waterways, hills = starter_landscape(width, height)
+        density = min(1., max(0., width*height/(5000*3500)))
+        trees = []
+        for _ in range(round(180*density)):
+            point = (random.uniform(.016*width, .984*width), random.uniform(.023*height, .977*height))
+            if any(a.kind == 'farmland' and contains_point(a.points, point) for a in areas):
+                continue
+            if any(distance_to_segment(point, a, b) <= w.width/2+12
+                   for w in waterways for a,b in zip(w.points,w.points[1:])):
+                continue
+            trees.append(point)
+        # Cluster additional trees within the two wooded areas.
+        for area in (a for a in areas if a.kind == "forest"):
+            xs, ys = zip(*area.points)
+            for _ in range(round(180*density)):
+                p = (random.uniform(min(xs), max(xs)), random.uniform(min(ys), max(ys)))
+                if contains_point(area.points, p): trees.append(p)
+        return cls(trees=trees, areas=areas, waterways=waterways, hills=hills)
 
 
 @dataclass
@@ -163,7 +185,7 @@ class CityMap:
 
     width: float = 5000
     height: float = 3500
-    terrain: Terrain = field(default_factory=Terrain.starter_terrain)
+    terrain: Terrain | None = None
     roads: list[Road] = field(default_factory=list)
     intersections: list[Intersection] = field(default_factory=list)
     parcels: list[Parcel] = field(default_factory=list)
@@ -176,6 +198,8 @@ class CityMap:
     gameplay_state: dict | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        if self.terrain is None:
+            self.terrain = Terrain.starter_terrain(self.width, self.height)
         self.rebuild_mobility_network()
 
     def zone_parcel(self, parcel: Parcel, zone: ZoneType) -> None:

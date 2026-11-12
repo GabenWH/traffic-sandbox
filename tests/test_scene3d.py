@@ -205,6 +205,7 @@ class Scene3DTests(unittest.TestCase):
         view.base=SimpleNamespace(setBackgroundColor=lambda *args:None)
         view.city=None;view.orbit=SimpleNamespace(target=(0,0,0))
         view.native_scene=NativeScene(NodePath('world'))
+        view.landscape=SimpleNamespace(replace=lambda _city:None)
         view.presenter=SimpleNamespace(invalidate=lambda:None);view._apply_camera=lambda:None
         try:
             view.show_city(city)
