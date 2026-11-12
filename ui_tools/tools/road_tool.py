@@ -10,6 +10,7 @@ from city import Building, Parcel, ZoneType
 from models import BuildablePhase
 from ..buildables import BuildableSpec, buildables_of_kind
 from ..buildables_panel import BuildablesPanel
+from ..construction_preview import road_preview, building_preview
 from ..base import CanvasTool
 from ..dropdown_tool import CanvasToolDropdown
 
@@ -194,14 +195,15 @@ class RoadTool(CanvasTool):
             fill="#ffffff", font=("Arial", 11, "bold"),
             tags="road_preview",
         )
-        preview_points = list(self.points)
-        if self.pointer is not None and (not preview_points or self.pointer != preview_points[-1]):
-            preview_points.append(self.pointer)
-        if len(preview_points) >= 2:
-            details = self.selected_spec.specs
-            road_width = float(details["lane_width"]) * (
-                int(details["forward_lane_count"]) + int(details["reverse_lane_count"])
-            )
+        details = self.selected_spec.specs
+        preview = road_preview(
+            self.selected_spec.id, self.points, self.elevations,
+            self.pointer, self.draft_elevation, float(details["lane_width"]),
+            int(details["forward_lane_count"]), int(details["reverse_lane_count"]),
+        )
+        if len(preview.vertices) >= 2:
+            preview_points = preview.vertices
+            road_width = preview.width
             canvas.create_line(
                 *self.host.world_points(*preview_points),
                 fill="#66d9ff", width=max(2, int(road_width * self.host.camera_zoom)),
@@ -346,10 +348,14 @@ class BuildingTool(CanvasTool):
         if self.pointer is None:
             return
         details = self.selected_spec.specs
-        width, height = float(details["width"]), float(details["height"])
-        x, y = self.pointer
+        preview = building_preview(
+            self.selected_spec.id, self.pointer,
+            float(details["width"]), float(details["height"]),
+        )
+        xs = [p[0] for p in preview.vertices]
+        ys = [p[1] for p in preview.vertices]
         self.host.canvas.create_rectangle(
-            *self.host.world_box(x - width / 2, y - height / 2, x + width / 2, y + height / 2),
+            *self.host.world_box(min(xs), min(ys), max(xs), max(ys)),
             fill=str(details["color"]),
             outline="#ffffff",
             width=2,
