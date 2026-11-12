@@ -182,9 +182,13 @@ class RoadTool(CanvasTool):
 
     def _draw_preview(self) -> None:
         if getattr(self.host, "view3d_active", False):
-            self.host.view3d.show_road_preview(
-                self.points, self.elevations, self.pointer, self.draft_elevation,
+            details = self.selected_spec.specs
+            preview = road_preview(
+                self.selected_spec.id, self.points, self.elevations,
+                self.pointer, self.draft_elevation, float(details["lane_width"]),
+                int(details["forward_lane_count"]), int(details["reverse_lane_count"]),
             )
+            self.host.view3d.show_construction_preview(preview.for_projection("3d"))
             self._preview_dirty = False
             return
         canvas = self.host.canvas
@@ -271,17 +275,26 @@ class BuildingTool(CanvasTool):
             self._escape_binding = None
         self.host.canvas.configure(cursor="")
         self.host.canvas.delete("building_preview")
+        if getattr(self.host, "view3d", None) is not None:
+            self.host.view3d.clear_preview()
         if self.panel is not None:
             self.panel.hide()
         self.panel = None
         self.pointer = None
 
+    def _world_point(self, event: Any) -> tuple[float, float] | None:
+        if getattr(self.host, "view3d_active", False):
+            return self.host.road_point_from_event(event, 0.0)
+        return self.host.screen_to_world((event.x, event.y))
+
     def on_canvas_motion(self, event: Any) -> None:
-        self.pointer = self.host.screen_to_world((event.x, event.y))
+        self.pointer = self._world_point(event)
         self._draw_preview()
 
     def on_canvas_click(self, event: Any) -> None:
-        self.place_building(self.host.screen_to_world((event.x, event.y)))
+        point = self._world_point(event)
+        if point is not None:
+            self.place_building(point)
 
     def place_building(self, position: tuple[float, float]) -> Building | None:
         details = self.selected_spec.specs
@@ -346,12 +359,17 @@ class BuildingTool(CanvasTool):
     def _draw_preview(self) -> None:
         self.host.canvas.delete("building_preview")
         if self.pointer is None:
+            if getattr(self.host, "view3d", None) is not None:
+                self.host.view3d.clear_preview()
             return
         details = self.selected_spec.specs
         preview = building_preview(
             self.selected_spec.id, self.pointer,
             float(details["width"]), float(details["height"]),
         )
+        if getattr(self.host, "view3d_active", False):
+            self.host.view3d.show_construction_preview(preview.for_projection("3d"))
+            return
         xs = [p[0] for p in preview.vertices]
         ys = [p[1] for p in preview.vertices]
         self.host.canvas.create_rectangle(
