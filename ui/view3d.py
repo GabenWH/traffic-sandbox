@@ -10,6 +10,7 @@ from land_ports import land_port_focus_point
 from native_viewer import NativeScene
 from .scene_buffers import compile_city,GeometryBuffer
 from .scene_presenter import ScenePresenter
+from .sky import SkyDome
 from .camera3d import OrbitCamera,map_to_panda,panda_to_map,ray_to_height
 from .viewport import Viewport,MIN_ZOOM,MAX_ZOOM,ZOOM_STEP
 
@@ -36,6 +37,7 @@ class PandaWorldView:
         self.base.disableMouse();self.base.setBackgroundColor(*panda_rgba(Palette.TERRAIN_GRASS))
         self.orbit=OrbitCamera((2500,1750,0));self.map_view=Viewport(0,0,1)
         self.mode=mode;self.city=None;self.overlay_canvas=None
+        self.sky=SkyDome(self.base.render)
         self.native_scene=NativeScene(self.base.render,self.base.cam)
         self.presenter=ScenePresenter(self.native_scene)
         self.overlay_scene=NativeScene(self.base.pixel2d)
@@ -188,6 +190,8 @@ class PandaWorldView:
             self.base.camera.lookAt(Point3(*map_to_panda(self.orbit.target)),up)
             self.native_scene.set_bounds(None)
         self.base.cam.node().setLens(lens);self.base.camLens=lens
+        if hasattr(self,'sky'):
+            self.sky.update(self.base.camera.getPos(self.base.render),self.mode=='perspective')
         stamp=(self.mode,width,height,self.map_view.x,self.map_view.y,self.map_view.zoom,
                self.orbit.target,self.orbit.yaw,self.orbit.pitch,self.orbit.distance)
         if stamp!=getattr(self,'_camera_stamp',None):
@@ -235,7 +239,7 @@ class PandaWorldView:
         if getattr(self,'_closed',False):return
         self._closed=True
         self.base.taskMgr.remove(self._presentation_task_name)
-        self.native_scene.close();self.overlay_scene.close();self.preview_scene.close()
+        self.native_scene.close();self.overlay_scene.close();self.preview_scene.close();self.sky.close()
         if self.base.win is not None:self.base.closeWindow(self.base.win)
         self.base.graphicsEngine.renderFrame();self.base.graphicsEngine.syncFrame()
         self.base.destroy()

@@ -118,6 +118,13 @@ class RoadElevationTests(unittest.TestCase):
 
         self.assertEqual(world_from_dict(saved).camera_3d, camera)
 
+    def test_save_round_trip_preserves_low_angle_3d_camera(self) -> None:
+        city = CityMap(terrain=Terrain(trees=[]))
+        camera = {"target": [250, 350, 0], "yaw": 120, "pitch": 1, "distance": 900}
+        saved = world_to_dict(city, unit_system="imperial", camera_x=0, camera_y=0,
+                              camera_zoom=1, camera_3d=camera)
+        self.assertEqual(world_from_dict(saved).camera_3d, camera)
+
     def test_save_rejects_invalid_3d_camera_pitch(self) -> None:
         city = CityMap(terrain=Terrain(trees=[]))
         saved = world_to_dict(

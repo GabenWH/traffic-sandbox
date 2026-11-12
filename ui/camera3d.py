@@ -39,7 +39,7 @@ class OrbitCamera:
 
     def rotate(self, yaw_change: float, pitch_change: float) -> None:
         self.yaw = (self.yaw + yaw_change) % 360
-        self.pitch = max(10.0, min(90.0, self.pitch + pitch_change))
+        self.pitch = max(1.0, min(90.0, self.pitch + pitch_change))
 
     def zoom(self, factor: float) -> None:
         self.distance = max(60.0, min(10000.0, self.distance * factor))
