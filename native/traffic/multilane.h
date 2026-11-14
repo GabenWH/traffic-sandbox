@@ -196,7 +196,7 @@
         c.s.route=new_route;c.s.distance=position;
         c.geometry=c.control_cursor=c.route_cursor=c.round_cursor=c.section_cursor=c.section_first=c.section_stop=0;
         c.s.dwell=0;c.s.entry=-1;c.yellow_movement=-1;c.yellow_go=false;
-        arrivals.erase(c.s.handle);waiting.erase(c.s.handle);
+        erase_arrival(c);waiting.erase(c.s.handle);
         if(winner==c.s.handle) {winner=winner_connection=-1;hard=false;}
         geometry(c);c.cruise=cruise(c);
         lane_events.push_back({c.s.handle,c.s.route,old_key,key,c.lane_source_distance,0,3,5,

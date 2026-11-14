@@ -1,4 +1,4 @@
-"""Regression coverage for native merge and intersection claim indexes."""
+"""Regression coverage for native merge and intersection traffic indexes."""
 
 from pathlib import Path
 import subprocess
@@ -23,7 +23,7 @@ class NativeTrafficIndexTests(unittest.TestCase):
         result = subprocess.run([str(self.executable), *args], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_merge_candidates_and_claim_lifetimes(self):
+    def test_merge_candidates_and_intersection_bookkeeping(self):
         self.run_native()
 
     def test_merge_observations_scale_with_local_traffic(self):
@@ -31,3 +31,6 @@ class NativeTrafficIndexTests(unittest.TestCase):
 
     def test_claim_checks_scale_with_local_traffic(self):
         self.run_native('claim')
+
+    def test_arrival_checks_scale_with_local_traffic(self):
+        self.run_native('arrival')
