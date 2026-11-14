@@ -3,7 +3,7 @@
 Recipe/care rates are fictional scenario units. No diagnostic or medical model
 is implied by a completed care visit. Road movement is owned by shared C++.
 """
-from collections import Counter,deque
+from collections import Counter,deque,defaultdict
 from dataclasses import dataclass,asdict
 from town_simulation import TownSimulation
 from models import ResourceInventory
@@ -71,6 +71,22 @@ class ServiceTown(TownSimulation):
                    if j['destination']==site and j['resource']==resource and j['stage']!='return') + sum(
             v['amount'] for v in self.visits.values() if v['purpose']=='shopping'
             and v['origin']==site and v['resource']==resource)
+
+    def _incoming_totals(self):
+        """Ephemeral query snapshot; keep live checks at reservation commit.
+
+        Sum jobs and visits separately in their original insertion order, just
+        like incoming(), including Python's compensated float summation.
+        """
+        jobs,visits=defaultdict(list),defaultdict(list)
+        for job in self.jobs.values():
+            if job['stage']!='return':
+                jobs[job['destination'],job['resource']].append(job['amount'])
+        for visit in self.visits.values():
+            if visit['purpose']=='shopping':
+                visits[visit['origin'],visit['resource']].append(visit['amount'])
+        return {key:sum(jobs.get(key,()))+sum(visits.get(key,()))
+                for key in jobs.keys()|visits.keys()}
 
     def request_shopping(self, person_id, site, resource='food', target=3.0):
         p=self.residents[person_id]
@@ -174,7 +190,7 @@ class ServiceTown(TownSimulation):
         # Legacy scenario adapter. Authored cities maintain attendance on events.
         self.staff=Counter(p.workplace for p in self.residents.values() if p.state=='work')
 
-    def _economy(self,dt):
+    def _economy(self,dt,*,households=True):
         self._refresh_staff()
         for b in self.businesses.values():
             inv=self.sites[b.site]['building'].inventory.amounts
@@ -184,20 +200,13 @@ class ServiceTown(TownSimulation):
                 self._record_production(b,amount)
                 if b.output=='food':self.produced+=amount
                 elif b.output=='grain':self.harvested+=amount
-        for sid,site in self.sites.items():
-            n=self._resident_count(sid)
-            if not n:continue
-            inv=site['building'].inventory.amounts
-            wanted=n*3*dt/86400
-            credit=min(wanted,self.meal_credit[sid]);self.meal_credit[sid]-=credit
-            wanted-=credit
-            used=site['building'].inventory.consume('food',wanted)[1] if wanted>0 else 0
-            self.consumed+=used;self.unmet+=wanted-used
+        if households:self._consume_households(dt)
         for site,queue in self.meal_queues.items():
             inv=self.sites[site]['building'].inventory.amounts
             self.meal_capacity[site]=min(self.staff[site],self.meal_capacity[site]+self.staff[site]*dt/60)
             for _ in range(min(len(queue),int(self.meal_capacity[site]+1e-9))):
                 if inv.get('food',0)<1:break
+                self._before_meal_served()
                 pid=queue.popleft();self.sites[site]['building'].consume_resource('food',1)
                 self.meal_capacity[site]=max(0,self.meal_capacity[site]-1)
                 self.meals_served+=1;self.consumed+=1
@@ -220,6 +229,19 @@ class ServiceTown(TownSimulation):
                     self.care_tasks.remove(task);self.treated+=1
                     self._note('care_completed',person=task['person'],site=clinic)
                     self._leave_service(task['person'])
+
+    def _before_meal_served(self):
+        pass
+
+    def _consume_households(self,dt):
+        for sid,site in self.sites.items():
+            n=self._resident_count(sid)
+            if not n:continue
+            wanted=n*3*dt/86400
+            credit=min(wanted,self.meal_credit[sid]);self.meal_credit[sid]-=credit
+            wanted-=credit
+            used=site['building'].inventory.consume('food',wanted)[1] if wanted>0 else 0
+            self.consumed+=used;self.unmet+=wanted-used
 
     def _logistics(self):
         for site,(vid,finish,operation) in list(self.bay_active.items()):
@@ -257,13 +279,15 @@ class ServiceTown(TownSimulation):
                 else:self.fleet.dispatch(vid,job['source'])
         requests=[]
         self._choose_shoppers()
+        # Shopping above can add reservations. Rebuild after those mutations.
+        incoming_totals=self._incoming_totals()
         outstanding=set()
         for sid,site in self.sites.items():
             targets=({'food':self._resident_count(sid)*3} if self._resident_count(sid) else {})
             if sid in self.businesses:targets.update(self.businesses[sid].targets)
             for resource,target in targets.items():
                 available=site['building'].inventory.amounts.get(resource,0)
-                incoming=self.incoming(sid,resource)
+                incoming=incoming_totals.get((sid,resource),0)
                 needed=site['building'].inventory.shortage(resource,target,incoming)
                 if available+incoming<target*.5 and needed>0:
                     requests.append(dict(site=sid,resource=resource,amount=needed))

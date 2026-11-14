@@ -60,6 +60,7 @@ class CitySimulation(ServiceTown):
         self.imported_resources = 0.0
         self.resource_journal = Counter()
         self._last_economy = self._last_construction = self._last_construction_work = self.time
+        self._last_household_economy = self.time
         self._construction_arrivals = []
         self.parking_trips = ParkingTrips(self)
         self._bind_arrivals()
@@ -116,6 +117,7 @@ class CitySimulation(ServiceTown):
         signature = tuple((b.id, b.phase, b.residents, b.jobs, b.parking_lot_id, repr(b.operation)) for b in self.city.buildings)
         if signature == self._building_signature:
             return
+        self._settle_households(self.time)
         self._settle_economy(self.time)
         ensure_parking(self.city)
         self._building_signature = tuple((b.id, b.phase, b.residents, b.jobs, b.parking_lot_id, repr(b.operation)) for b in self.city.buildings)
@@ -216,6 +218,7 @@ class CitySimulation(ServiceTown):
         return max(0,capacity-committed)
 
     def invite_household(self, home, size=4, *, car=False):
+        self._settle_households(self.time)
         self._settle_economy(self.time)
         if isinstance(size,bool) or not isinstance(size,int) or size<1 or size>4 or self.vacancy(home)<size:
             raise ValueError('Household needs 1..4 people and a suitable housing vacancy')
@@ -320,6 +323,7 @@ class CitySimulation(ServiceTown):
                 except ValueError:pass
 
     def relocate(self,hid,target):
+        self._settle_households(self.time)
         self._settle_economy(self.time)
         h=self.households[hid]
         if h.moving_to or target==h.home or self.vacancy(target)<len(h.members):
@@ -361,6 +365,8 @@ class CitySimulation(ServiceTown):
         if self.parking_trips.person_arrived(p):
             return
         self._settle_economy(self.time)
+        if p.state=='relocating' or (p.state=='visiting_return' and self.visits.get(p.id,{}).get('purpose')=='shopping'):
+            self._settle_households(self.time)
         if p.state=='relocating':
             h=self.households[self._membership[p.id]]
             if p.id not in h.arrived:h.arrived.append(p.id)
@@ -556,12 +562,18 @@ class CitySimulation(ServiceTown):
         # Updated only on resident arrivals/departures and restored from residents.
         pass
 
+    def request_shopping(self,person_id,site,resource='food',target=3.0):
+        self._settle_households(self.time)
+        return super().request_shopping(person_id,site,resource,target)
+
     def _choose_shoppers(self):
+        self._settle_households(self.time)
+        incoming_totals=self._incoming_totals()
         for h in self.households.values():
             if h.moving_to:continue
             target=self._resident_count(h.home)*3
             stock=self.sites[h.home]['building'].inventory
-            if stock.amounts.get('food',0)+self.incoming(h.home,'food')>=target*.5:continue
+            if stock.amounts.get('food',0)+incoming_totals.get((h.home,'food'),0)>=target*.5:continue
             shopper=next((pid for pid in h.members if self.residents[pid].state=='home'),None)
             if shopper is None:continue
             options=[sid for sid,b in self.businesses.items() if b.kind=='market'
@@ -569,22 +581,42 @@ class CitySimulation(ServiceTown):
             options.sort(key=lambda sid:self.travel_seconds(self.sites[h.home]['walk_point'],self.sites[sid]['walk_point']))
             for sid in options:
                 try:
-                    if self.request_shopping(shopper,sid,'food',target):break
+                    if self.request_shopping(shopper,sid,'food',target):
+                        # A later household can share this address. Commit still
+                        # uses live incoming(), then refresh only the changed key.
+                        incoming_totals[h.home,'food']=self.incoming(h.home,'food')
+                        break
                 except (ValueError,RuntimeError):continue
 
+    def _logistics(self):
+        # Usually a no-op after the minute event; also protects direct passes.
+        self._settle_households(self.time)
+        super()._logistics()
+
     def _economy(self,dt):
-        super()._economy(dt)
+        # Attendance changes need exact production time, not a citywide food scan.
+        super()._economy(dt,households=False)
+        self.counters['economy']+=1
+
+    def _before_meal_served(self):
+        self._settle_households(self.time)
+
+    def _settle_households(self,time):
+        dt=time-self._last_household_economy
+        if dt<=1e-8:return
+        self._last_household_economy=time
+        self._consume_households(dt)
         for h in self.households.values():
             if h.moving_to:
                 need=len(h.members)*3*dt/DAY
                 credit=min(need,h.meal_credit);h.meal_credit-=credit;need-=credit
                 used=min(need,h.cargo.get('food',0));h.cargo['food']=h.cargo.get('food',0)-used
                 self.consumed+=used;self.unmet+=need-used
-        self.counters['economy']+=1
 
     def _run_event(self,kind,value):
         key,value=value;self._scheduled.discard(key)
         if kind=='economy':
+            self._settle_households(self.time)
             self._settle_economy(self.time)
             self._logistics();self._wake_economy()
         elif kind=='construction':
@@ -766,6 +798,7 @@ class CitySimulation(ServiceTown):
 
     def import_resources(self,site,resource,amount):
         if site not in self.sites or not isfinite(amount) or amount<=0:raise ValueError('Delivery requires a site and positive finite amount')
+        if resource=='food':self._settle_households(self.time)
         self._settle_economy(self.time)
         self.sites[site]['building'].inventory.add(resource,amount);self.imported_resources+=amount
         self._wake_economy()

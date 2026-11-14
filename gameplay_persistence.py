@@ -194,6 +194,7 @@ METRICS=('produced','consumed','unmet','deliveries','workers_arrived','initial_r
 def dump_city(city):
     # Flush completed movement events into logical records before taking state.
     city._arrivals()
+    city._settle_households(city.time)
     managed=set(city.fleet.vehicles)|set(city.transit.buses)
     return dict(schema='city.gameplay.v1',time=city.time,resident_construction_started=city._resident_construction_started,
         residents=[asdict(p) for p in city.residents.values()],households=[asdict(h) for h in city.households.values()],
@@ -210,7 +211,8 @@ def dump_city(city):
             departures=city._commute_departures,learning=city.fleet.routing.learning.to_dict(),
             travel=deepcopy(city.fleet._travel),work_start=city.work_start,work_end=city.work_end),
         suspended_walkers=city._suspended_walkers,resuming_vehicles=city._resuming_vehicles,resuming_buses=city._resuming_buses,
-        last_economy=city._last_economy,last_construction=city._last_construction,last_construction_work=city._last_construction_work,candidate_cursor=city._candidate_cursor)
+        last_economy=city._last_economy,last_household_economy=city._last_household_economy,
+        last_construction=city._last_construction,last_construction_work=city._last_construction_work,candidate_cursor=city._candidate_cursor)
 
 
 def restore_city(city,raw):
@@ -264,6 +266,10 @@ def restore_city(city,raw):
         for key,value in data['metrics'].items():setattr(city,key,value)
         city.resource_journal=Counter(data.get('resource_journal',{}))
         city.counters=Counter(data['counters']);city._last_economy=data['last_economy']
+        city._last_household_economy=data.get('last_household_economy',city._last_economy)
+        if (isinstance(city._last_household_economy,bool) or not isfinite(city._last_household_economy)
+                or not 0<=city._last_household_economy<=city.time):
+            raise ValueError('Invalid saved household economy clock')
         city._last_construction=data['last_construction'];city._last_construction_work=data.get('last_construction_work',data['last_construction']);city._candidate_cursor=data['candidate_cursor']
         city._suspended_walkers={int(k):v for k,v in data.get('suspended_walkers',{}).items()}
         city._resuming_vehicles=data.get('resuming_vehicles',{})

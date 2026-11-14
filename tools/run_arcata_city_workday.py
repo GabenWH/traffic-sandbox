@@ -111,6 +111,7 @@ def build_scenario(city, *, cars=1000, seed=42, start_hour=6, population=None,co
     runtime.time=runtime.transit.time=runtime.transit.traffic.elapsed_time=start
     runtime.transit.engine._call('nt_clock',start,0.,0.)
     runtime._last_economy=runtime._last_construction=runtime._last_construction_work=start
+    runtime._last_household_economy=start
     drivers=[]
     for home in homes:
         for size in sizes[home.id]:
