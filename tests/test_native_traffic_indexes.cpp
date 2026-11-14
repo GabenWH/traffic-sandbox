@@ -1,5 +1,8 @@
 #include "../native/traffic/engine.cpp"
 #include <cassert>
+#include <ctime>
+#include <iostream>
+#include <string_view>
 #include <initializer_list>
 
 namespace {
@@ -117,9 +120,48 @@ void test_claim_lifetimes_and_topology_replacement() {
     assert(engine.blocked_by_claims(query, 0));
 }
 
+double decision_cpu_seconds(int junctions, bool merge) {
+    Engine engine(25);
+    std::vector<NTConnection> network;
+    for (int i = 0; i < junctions; ++i) {
+        // Red signals still evaluate merge observations but bypass claim checks.
+        // The uncontrolled through scenario isolates the claim checks.
+        network.push_back({i, merge ? 2 : 0, 0, 0, merge ? 3*i+2 : -1, 1, 0, 80, 0});
+    }
+    assert(nt_network_sparse(&engine, network.data(), junctions, nullptr, 0) == 0);
+    for (int i = 0; i < junctions; ++i) {
+        const int lane = 3*i;
+        assert(nt_connection_key(&engine, i, lane+1) == 0);
+        int approach = add_route(engine, 300, {{0, 80, 0, lane}, {80, 100, 0, lane+1},
+                                               {100, 300, 0, lane+2}}, {{80, 100, -1, i, lane}});
+        int downstream = add_route(engine, 200, {{0, 200, 0, lane+2}});
+        add_car(engine, 2*i, approach, ("approach-"+std::to_string(i)).c_str(), 50);
+        add_car(engine, 2*i+1, downstream, ("downstream-"+std::to_string(i)).c_str(), 50);
+    }
+    assert(nt_step(&engine, 0) == 0);
+    const int ticks = junctions == 64 ? 256 : 16;
+    const auto start = std::clock();
+    for (int tick = 0; tick < ticks; ++tick) assert(nt_step(&engine, 0) == 0);
+    return double(std::clock() - start) / CLOCKS_PER_SEC / ticks;
+}
+
+int check_scaling(bool merge) {
+    // Local traffic is identical at each junction. Allow up to 4x more work
+    // per junction for larger working sets and sorting. A fleet-wide scan
+    // repeated per junction grows roughly 16x per junction at these sizes.
+    const double small = decision_cpu_seconds(64, merge);
+    const double large = decision_cpu_seconds(1024, merge);
+    constexpr double growth_budget = 64;
+    std::cout << (merge ? "Merge" : "Claim") << " CPU per tick at 64/1024 junctions: "
+              << small * 1000 << " / " << large * 1000 << " ms ("
+              << large / small << "x, budget " << growth_budget << "x)\n";
+    return large > small * growth_budget;
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 2) return check_scaling(std::string_view(argv[1]) == "merge");
     test_merge_observation_order_and_future_visits();
     test_claim_lifetimes_and_topology_replacement();
 }
