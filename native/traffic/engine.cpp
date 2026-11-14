@@ -26,6 +26,7 @@ double clamp(double x, double lo, double hi) { return std::max(lo, std::min(hi, 
 struct Route {
     bool terminal_flexible=false, start_flexible=false;
     bool private_lane_alternative=false;
+    bool sections_ordered_by_start=true;
     std::vector<NTPoint> points;
     std::vector<NTSection> sections;
     std::vector<NTMovement> movements;
@@ -33,6 +34,12 @@ struct Route {
     double length = 0;
     std::vector<int> edge_ids;
     double cost=0;
+
+    auto future_sections(double distance) const {
+        if (!sections_ordered_by_start) return sections.begin();
+        return std::lower_bound(sections.begin(), sections.end(), distance,
+            [](const NTSection& section, double position) { return section.start < position; });
+    }
 };
 struct PedestrianLane {
     std::vector<NTPoint> points;
@@ -72,6 +79,18 @@ struct Arrival { int connection; double time; };
 struct Entry { Car* car; double position; int segment; };
 struct MergeVehicle { Car* car; double position; };
 struct Reservation { double distance, time; };
+struct ReservedMerge { Car* car; size_t movement; double time; };
+struct MergeLane {
+    std::vector<MergeVehicle> approaching, occupants;
+    std::vector<ReservedMerge> reservations;
+};
+struct MergeSnapshot {
+    explicit MergeSnapshot(const std::vector<Car*>& cars) : cars(cars) {}
+    const std::vector<Car*>& cars;
+    // Zero until first use. No merge query means no need to build the index.
+    double look = 0;
+    std::unordered_map<int, MergeLane> lanes;
+};
 struct Merge {
     double distance=0, length=0, cruise=0;
     double lateral_duration=0;
@@ -97,6 +116,8 @@ public:
     bool hard=false;
     std::vector<NTConnection> connections;
     std::unordered_map<uint64_t,unsigned char> relations;
+    std::vector<std::vector<int>> movements_blocked_by_claim;
+    std::vector<int> claim_block_counts;
     std::vector<std::vector<int>> signal_blocked_by_occupant;
     std::vector<std::vector<int>> signal_entry_blocked_by_occupant;
     std::vector<int> signal_block_counts, signal_entry_block_counts;
@@ -153,14 +174,53 @@ public:
     static uint64_t relation_key(int a,int b) {return (uint64_t(uint32_t(a))<<32)|uint32_t(b);}
     bool conflict(int a,int b) { auto it=relations.find(relation_key(a,b));return it!=relations.end() && (it->second&1); }
     bool yields(int a,int b) { auto it=relations.find(relation_key(a,b));return it!=relations.end() && (it->second&2); }
-    void release(Car& c,int m) { c.claims.erase(std::remove(c.claims.begin(),c.claims.end(),m),c.claims.end()); c.latest_claim=c.claims.empty()?-1:c.claims.back(); }
-    void claim(Car& c,int m) { if(!has(c,m)) c.claims.push_back(m); c.latest_claim=c.claims.back(); arrivals.erase(c.s.handle); }
-    bool blocked_by_claims(Car& c,int m) {
-        for(const auto& owner:external_claims)
-            for(int other:owner.second) if(conflict(m,other)) return true;
-        for(auto& pair:cars) if(pair.second.get()!=&c)
-            for(int other:pair.second->claims) if(conflict(m,other)) return true;
-        return false;
+    void adjust_claim_count(int movement, int delta) {
+        if (movement < 0 || size_t(movement) >= movements_blocked_by_claim.size()) return;
+        for (int blocked : movements_blocked_by_claim[movement]) claim_block_counts[blocked] += delta;
+    }
+    void rebuild_claim_conflicts() {
+        const size_t count = connections.size();
+        movements_blocked_by_claim.assign(count, {});
+        claim_block_counts.assign(count, 0);
+        // The sparse conflict table is built per intersection by the caller.
+        // Reverse it so a change to a claim updates only the movements it blocks.
+        for (const auto& relation : relations) {
+            if (!(relation.second & 1)) continue;
+            auto candidate = size_t(relation.first >> 32);
+            auto occupant = size_t(uint32_t(relation.first));
+            if (candidate < count && occupant < count)
+                movements_blocked_by_claim[occupant].push_back(int(candidate));
+        }
+        for (const auto& pair : cars)
+            for (int movement : pair.second->claims) adjust_claim_count(movement, 1);
+        for (const auto& pair : external_claims)
+            for (int movement : pair.second) adjust_claim_count(movement, 1);
+    }
+    void release(Car& c, int movement) {
+        auto claim = std::find(c.claims.begin(), c.claims.end(), movement);
+        if (claim == c.claims.end()) return;
+        adjust_claim_count(movement, -1);
+        c.claims.erase(claim);
+        c.latest_claim = c.claims.empty() ? -1 : c.claims.back();
+    }
+    void clear_claims(Car& c) {
+        for (int movement : c.claims) adjust_claim_count(movement, -1);
+        c.claims.clear();
+        c.latest_claim = -1;
+    }
+    void claim(Car& c, int movement) {
+        if (!has(c, movement)) {
+            c.claims.push_back(movement);
+            adjust_claim_count(movement, 1);
+        }
+        c.latest_claim = c.claims.back();
+        arrivals.erase(c.s.handle);
+    }
+    bool blocked_by_claims(const Car& c, int movement) {
+        int blockers = claim_block_counts[movement];
+        if (!blockers) return false;
+        for (int owned : c.claims) blockers -= conflict(movement, owned);
+        return blockers > 0;
     }
     bool same_approach(int a,int b) const {
         const auto& x=connections.at(a);const auto& y=connections.at(b);
@@ -414,34 +474,116 @@ public:
         return {best,gap};
     }
 #include "merge_policy.h"
-    Merge observe_merge(Car& c,const NTMovement& m,const std::vector<Car*>& order) {
-        Merge result;result.distance=std::max(0.0,m.end-c.s.distance);result.length=c.s.length;result.cruise=c.cruise;
-        auto& con=connections[m.connection];
-        double vmax=c.s.speed;for(Car* other:order) vmax=std::max(vmax,other->s.speed);
-        double look=std::max(180.0,8*vmax);
+    void prepare_merge_snapshot(MergeSnapshot& snapshot) {
+        if (snapshot.look > 0) return;
+        double fastest = 0;
+        for (const Car* car : snapshot.cars) fastest = std::max(fastest, car->s.speed);
+        snapshot.look = std::max(180.0, 8 * fastest);
+
+        for (Car* car : snapshot.cars) {
+            auto [key, position] = occupancy(*car);
+            if (key >= 0) snapshot.lanes[key].occupants.push_back({car, position});
+
+            const auto& r = route(*car);
+            // Keep the first upcoming visit to each lane in route order.
+            for (auto it = r.future_sections(car->s.distance); it != r.sections.end(); ++it) {
+                double offset = car->s.distance - it->start;
+                if (offset > 0) continue;
+                // An unordered route needs its first visit even outside range.
+                if (r.sections_ordered_by_start && offset < -snapshot.look) break;
+                auto& approaching = snapshot.lanes[it->key].approaching;
+                if (approaching.empty() || approaching.back().car != car)
+                    approaching.push_back({car, offset});
+            }
+
+            if (car->s.entry < 0) continue;
+            for (size_t index = 0; index < r.movements.size(); ++index) {
+                const auto& movement = r.movements[index];
+                int target = connections[movement.connection].target;
+                if (target < 0 || car->s.distance + car->s.length / 2 < movement.start ||
+                    car->s.distance - car->s.length / 2 >= movement.end) continue;
+                double clear = arrival(movement.end + car->s.length / 2 - car->s.distance,
+                                       car->s.speed, car->s.entry);
+                snapshot.lanes[target].reservations.push_back({car, index, clear});
+            }
+        }
+        for (auto& [key, lane] : snapshot.lanes) {
+            auto& occupants = lane.occupants;
+            std::sort(occupants.begin(), occupants.end(), [](const auto& a, const auto& b) {
+                return a.position < b.position;
+            });
+        }
+    }
+    bool waiting_at_merge(Car& car, int intersection) {
+        const double front = car.s.distance + car.s.length / 2;
+        const auto& movements = route(car).movements;
+        return std::any_of(movements.begin(), movements.end(), [&](const NTMovement& movement) {
+            const auto& connection = connections[movement.connection];
+            return connection.intersection == intersection && connection.target >= 0 &&
+                front <= movement.start + 1e-8 && !has(car, movement.connection) &&
+                !occupies_signal(car, movement.connection);
+        });
+    }
+    Merge observe_merge(Car& c, const NTMovement& m, MergeSnapshot& snapshot) {
+        prepare_merge_snapshot(snapshot);
+        Merge result;
+        result.distance = std::max(0.0, m.end - c.s.distance);
+        result.length = c.s.length;
+        result.cruise = c.cruise;
+        const auto& con = connections[m.connection];
+        const double look = snapshot.look;
         std::vector<NTSection> downstream;
-        for(auto& s:route(c).sections) if(s.start>=m.end-1e-8 && s.start<=m.end+look) downstream.push_back(s);
-        for(Car* op:order) {
-            auto& o=*op; if(&o==&c) continue;
-            if(o.s.entry>=0) for(auto& om:route(o).movements) {
-                auto& oc=connections[om.connection];
-                if(oc.target<0 || o.s.distance+o.s.length/2<om.start || o.s.distance-o.s.length/2>=om.end) continue;
-                for(auto& s:downstream) if(s.key==oc.target) {
-                    result.reservations.push_back({s.start-m.end,arrival(om.end+o.s.length/2-o.s.distance,o.s.speed,o.s.entry)});break;
-                }
+        const auto& joining_route = route(c);
+        for (auto it = joining_route.future_sections(m.end - 1e-8); it != joining_route.sections.end(); ++it) {
+            if (it->start > m.end + look && joining_route.sections_ordered_by_start) break;
+            if (it->start >= m.end - 1e-8 && it->start <= m.end + look) downstream.push_back(*it);
+        }
+
+        auto target = snapshot.lanes.find(con.target);
+        if (target != snapshot.lanes.end()) {
+            for (const auto& approach : target->second.approaching)
+                if (approach.car != &c && std::abs(approach.position) <= look &&
+                    !waiting_at_merge(*approach.car, con.intersection))
+                    result.vehicles.push_back(approach);
+        }
+        std::set<int> projected_lanes;
+        std::vector<std::pair<const ReservedMerge*, double>> reservations;
+        for (const auto& section : downstream) {
+            if (!projected_lanes.insert(section.key).second) continue;
+            auto lane = snapshot.lanes.find(section.key);
+            if (lane == snapshot.lanes.end()) continue;
+            for (const auto& reservation : lane->second.reservations)
+                if (reservation.car != &c) reservations.emplace_back(&reservation, section.start - m.end);
+            const auto& occupants = lane->second.occupants;
+            auto project = [&](const MergeVehicle& occupant) {
+                return section.start - m.end + occupant.position - section.offset;
+            };
+            auto first = std::lower_bound(occupants.begin(), occupants.end(), -look,
+                [&](const MergeVehicle& occupant, double minimum) { return project(occupant) < minimum; });
+            for (auto it = first; it != occupants.end(); ++it) {
+                double position = project(*it);
+                if (position > look) break;
+                Car& other = *it->car;
+                if (&other == &c) continue;
+                // An upcoming target visit takes precedence even when it is
+                // too far ahead to appear in the approaching index.
+                const auto& other_route = route(other);
+                if (std::any_of(other_route.future_sections(other.s.distance), other_route.sections.end(),
+                                [&](const NTSection& segment) {
+                    return segment.key == con.target && other.s.distance <= segment.start;
+                })) continue;
+                if (!waiting_at_merge(other, con.intersection)) result.vehicles.push_back({&other, position});
             }
-            bool waiting_merge=false;
-            for(auto& om:route(o).movements) if(connections[om.connection].intersection==con.intersection &&
-                connections[om.connection].target>=0 && o.s.distance+o.s.length/2<=om.start+1e-8 &&
-                !has(o,om.connection) && !occupies_signal(o,om.connection)) {waiting_merge=true;break;}
-            if(waiting_merge) continue;
-            double position=inf;
-            for(auto& s:route(o).sections) if(s.key==con.target && o.s.distance<=s.start) {position=o.s.distance-s.start;break;}
-            if(position==inf) {
-                auto occ=occupancy(o);
-                if(occ.first>=0) for(auto& s:downstream) if(s.key==occ.first) {position=s.start-m.end+occ.second-s.offset;break;}
-            }
-            if(std::abs(position)<=look) result.vehicles.push_back({&o,position});
+        }
+        // Keep the original roster order for phantom-leader ties and traces.
+        std::sort(result.vehicles.begin(), result.vehicles.end(), [](const auto& a, const auto& b) {
+            return a.car->id < b.car->id;
+        });
+        std::sort(reservations.begin(), reservations.end(), [](const auto& a, const auto& b) {
+            return std::tie(a.first->car->id, a.first->movement) < std::tie(b.first->car->id, b.first->movement);
+        });
+        for (const auto& reservation : reservations) {
+            result.reservations.push_back({reservation.second, reservation.first->time});
         }
         std::set<Car*> observed;
         for(auto& s:downstream) {
@@ -458,23 +600,23 @@ public:
         }
         return result;
     }
-    bool physical_merge(Car& c,const NTMovement& m,const std::vector<Car*>& order) {
-        auto obs=observe_merge(c,m,order);
+    bool physical_merge(Car& c,const NTMovement& m,MergeSnapshot& snapshot) {
+        auto obs=observe_merge(c,m,snapshot);
         if(!obs.reservations.empty()) return false;
         for(auto& v:obs.vehicles) if(std::max(v.car->s.speed,v.car->cruise)>0.1 ||
             std::abs(v.position)<(c.s.length+v.car->s.length)/2+4) return false;
         return true;
     }
-    bool path_clear(Car& c,int mi,const std::vector<Car*>& order) {
+    bool path_clear(Car& c,int mi,MergeSnapshot& snapshot) {
         auto& m=route(c).movements[mi];
         if(blocked(c,m.connection) || lead(c,c.s.distance).second<4 || lead(c,m.end).second<4) return false;
-        if(connections[m.connection].target>=0 && !physical_merge(c,m,order)) return false;
+        if(connections[m.connection].target>=0 && !physical_merge(c,m,snapshot)) return false;
         double end=m.end;
         for(auto& following:route(c).movements) {
             if(following.start<m.end) continue;
             if(following.start-end>=c.s.length+4) break;
             if(blocked(c,following.connection) || lead(c,following.end).second<4) return false;
-            if(connections[following.connection].target>=0 && !physical_merge(c,following,order)) return false;
+            if(connections[following.connection].target>=0 && !physical_merge(c,following,snapshot)) return false;
             end=following.end;
         }
         return true;
@@ -492,7 +634,7 @@ public:
         if(!best) return -1;
         winner=best->car->s.handle;winner_connection=best->connection;return winner;
     }
-    Decision decide(Car& c,Intent& i,double dt,double cruise_speed,int temporary,const std::vector<Car*>& order) {
+    Decision decide(Car& c,Intent& i,double dt,double cruise_speed,int temporary,MergeSnapshot& snapshot) {
         Decision d;d.desired=cruise_speed;std::string following;
         if(i.leader) {
             double available=i.lead_gap-(c.s.style?12+1.2*c.s.speed:6+0.8*c.s.speed);
@@ -501,7 +643,7 @@ public:
         }
         double physical=d.desired;Choice choice; c.phantom.clear();
         if(i.merge) {
-            choice=merge_choice(c,observe_merge(c,route(c).movements[i.movement],order),d.desired);
+            choice=merge_choice(c,observe_merge(c,route(c).movements[i.movement],snapshot),d.desired);
             d.desired=std::min(d.desired,choice.desired);d.reason=choice.reason;c.phantom=choice.phantom;
         }
         const int movement_connection=i.movement<0?-1:route(c).movements[i.movement].connection;
@@ -691,6 +833,9 @@ public:
             if(e==eligible.end() || e->second.connection!=it->second.connection) it=arrivals.erase(it);else ++it;
         }
         for(auto& e:eligible) arrivals.emplace(e);
+        // Lane changes and approach claim releases are complete. Route and
+        // vehicle poses stay fixed until after all merge observations.
+        MergeSnapshot merge_snapshot(order);
         std::vector<Candidate> candidates;
         for(Car* c:order) {
             bool wait=c->s.speed<=0.1 && (c->s.state==3 || c->s.state==4);
@@ -698,7 +843,7 @@ public:
             int mi=next_control(*c);if(mi<0) continue;
             int con=route(*c).movements[mi].connection;
             if(connections[con].control==2) continue;
-            bool clear=(connections[con].target>=0 || contenders.count(c->s.handle)) && c->reason!="following queued car" && path_clear(*c,mi,order);
+            bool clear=(connections[con].target>=0 || contenders.count(c->s.handle)) && c->reason!="following queued car" && path_clear(*c,mi,merge_snapshot);
             candidates.push_back({c,con,clear});
         }
         int temporary=choose(candidates);
@@ -724,7 +869,7 @@ public:
                         if(f.start<m.end) continue;
                         if(f.start-end>=c.s.length+4) break;
                         if(connections[f.connection].target>=0) {
-                            auto choice=merge_choice(c,observe_merge(c,f,order),cruise(c));
+                            auto choice=merge_choice(c,observe_merge(c,f,merge_snapshot),cruise(c));
                             if(!choice.clear || blocked(c,f.connection)) {i.priority=false;i.decision.reason="waiting before short link for the next yield";break;}
                         }
                         end=f.end;
@@ -735,7 +880,7 @@ public:
             double v=cruise(c);
             if(c.s.entry>=0) for(auto& m:route(c).movements)
                 if((has(c,m.connection) || occupies_signal(c,m.connection)) && connections[m.connection].target>=0 && c.s.distance+c.s.length/2>=m.start && c.s.distance-c.s.length/2<m.end) v=std::min(v,c.s.entry);
-            i.decision=decide(c,i,dt,v,temporary,order);
+            i.decision=decide(c,i,dt,v,temporary,merge_snapshot);
             if(c.lane_source>=0) c.s.signal=c.lane_signal;
             if(c.lane_desired<inf) {
                 i.decision.desired=std::min(i.decision.desired,c.lane_desired);
@@ -745,7 +890,7 @@ public:
             }
             if(trace_enabled) {
                 NTTrace row{c.s.handle,i.movement<0?-1:route(c).movements[i.movement].connection,int(i.priority),int(i.claimed),int(trace_vehicles.size()),0,0,c.s.distance,c.s.speed};
-                if(i.merge) {auto observed=observe_merge(c,route(c).movements[i.movement],order);row.reservations=int(observed.reservations.size());
+                if(i.merge) {auto observed=observe_merge(c,route(c).movements[i.movement],merge_snapshot);row.reservations=int(observed.reservations.size());
                     for(auto other:observed.vehicles) {trace_vehicles.push_back(other.car->s.handle);}
                     row.vehicle_count=int(observed.vehicles.size());}
                 trace.push_back(row);
@@ -833,7 +978,7 @@ public:
         }
         bool winner_done=std::find(done.begin(),done.end(),winner)!=done.end();
         for(int h:done) {
-            auto& c=car(h);c.claims.clear();c.latest_claim=-1;
+            auto& c=car(h);clear_claims(c);
             for(int movement:c.signal_occupancy) adjust_signal_occupancy(movement,-1);
             c.signal_occupancy.clear();arrivals.erase(h);
             if(c.stop_at_end) {
@@ -1111,7 +1256,7 @@ int nt_network(void* p,const NTConnection* cs,int n,const unsigned char* conflic
     e.connections.assign(cs,cs+n);e.relations.clear();
     for(int i=0;i<n;++i) for(int j=0;j<n;++j) {int f=conflicts[size_t(i)*n+j]+2*yields[size_t(i)*n+j];if(f) e.relations[e.relation_key(i,j)]=static_cast<unsigned char>(f);}
     // Connection occupancy keys are supplied as a negative incoming code on a synthetic movement? No: target mapping is separate through route registration.
-    e.connection_keys.resize(n,-1);e.signal_aspects.assign(n,0);e.rebuild_signal_conflicts();
+    e.connection_keys.resize(n,-1);e.signal_aspects.assign(n,0);e.rebuild_claim_conflicts();e.rebuild_signal_conflicts();
     for(auto& pair:e.cars) e.update_signal_occupancy(*pair.second);
     return 0;});}
 int nt_network_sparse(void* p,const NTConnection* cs,int n,const NTRelation* pairs,int count){return guarded([&]{
@@ -1121,7 +1266,7 @@ int nt_network_sparse(void* p,const NTConnection* cs,int n,const NTRelation* pai
     std::vector<NTConnection> connections;if(n) connections.assign(cs,cs+n);
     for(auto& c:connections) {require(c.intersection>=0 && c.control>=0 && c.control<=2,"invalid connection");for(double v:{c.hx,c.hy,c.px,c.py}) check_finite(v);}
     e.connections=std::move(connections);e.relations=std::move(relations);e.connection_keys.resize(n,-1);
-    e.signal_aspects.assign(n,0);e.rebuild_signal_conflicts();
+    e.signal_aspects.assign(n,0);e.rebuild_claim_conflicts();e.rebuild_signal_conflicts();
     for(auto& pair:e.cars) e.update_signal_occupancy(*pair.second);
     return 0;});}
 int nt_route(void* p,const NTPoint* pts,int np,const NTSection* ss,int ns,const NTMovement* ms,int nm){return guarded([&]{
@@ -1130,6 +1275,8 @@ int nt_route(void* p,const NTPoint* pts,int np,const NTSection* ss,int ns,const 
         if(!r.points.empty()){r.length+=std::hypot(pts[i].x-r.points.back().x,pts[i].y-r.points.back().y);r.ends.push_back(r.length);}r.points.push_back(pts[i]);}}
     require(r.length>0,"degenerate route");if(ns) r.sections.assign(ss,ss+ns);if(nm) r.movements.assign(ms,ms+nm);
     for(auto& s:r.sections){check_finite(s.start);check_finite(s.end);check_finite(s.offset);require(s.end>=s.start && s.key>=0,"invalid route section");}
+    r.sections_ordered_by_start = std::is_sorted(r.sections.begin(), r.sections.end(),
+        [](const NTSection& a, const NTSection& b) { return a.start < b.start; });
     for(auto& m:r.movements){require(m.connection>=0 && static_cast<size_t>(m.connection)<e.connections.size(),"unknown movement");check_finite(m.start);check_finite(m.end);check_finite(m.signal_start);}
     // Infer each connector's shared occupancy key from its end and section type.
     // Python sends its connection occupancy key in the explicit ABI registration below.
@@ -1158,7 +1305,7 @@ int nt_yellow(void* p,int h,int movement,int go){return guarded([&]{auto& e=engi
     require(go==0 || go==1,"invalid yellow commitment");auto& c=e.car(h);c.yellow_movement=movement;c.yellow_go=go!=0;return 0;});}
 int nt_place(void* p,int h,double d){return guarded([&]{check_finite(d);auto& e=engine(p);auto& c=e.car(h);c.s.distance=clamp(d,0,e.route(c).length);c.geometry=c.control_cursor=c.route_cursor=c.round_cursor=c.section_cursor=c.section_first=c.section_stop=0;e.geometry(c);e.update_signal_occupancy(c);e.index_dirty=true;return 0;});}
 int nt_resize(void* p,int h,double l,double w){return guarded([&]{check_finite(l);check_finite(w);require(l>0 && w>0,"invalid dimensions");auto& e=engine(p);auto& c=e.car(h);c.s.length=l;c.s.width=w;c.section_first=c.section_stop=0;e.update_signal_occupancy(c);e.index_dirty=true;return 0;});}
-int nt_remove(void* p,int h){return guarded([&]{auto& e=engine(p);auto& c=e.car(h);for(int movement:c.signal_occupancy)e.adjust_signal_occupancy(movement,-1);e.cars.erase(h);e.arrivals.erase(h);e.waiting.clear();e.stall=0;e.winner=e.winner_connection=-1;e.hard=false;e.index_dirty=true;return 0;});}
+int nt_remove(void* p,int h){return guarded([&]{auto& e=engine(p);auto& c=e.car(h);e.clear_claims(c);for(int movement:c.signal_occupancy)e.adjust_signal_occupancy(movement,-1);e.cars.erase(h);e.arrivals.erase(h);e.waiting.clear();e.stall=0;e.winner=e.winner_connection=-1;e.hard=false;e.index_dirty=true;return 0;});}
 int nt_stop_at_end(void* p,int h,int enabled){return guarded([&]{auto& e=engine(p);auto& c=e.car(h);
     require(enabled==0 || enabled==1,"invalid stop flag");
     require(!enabled || !e.route(c).sections.empty(),"loading stop needs lane occupancy");
@@ -1169,7 +1316,11 @@ int nt_remove_obstacle(void* p,const char* id){return guarded([&]{require(id,"mi
     return int(engine(p).remove_obstacle(id));});}
 int nt_external_claim(void* p,int h,int con){return guarded([&]{auto& e=engine(p);
     require(h<0,"external claim handle must be negative");require(con>=0 && static_cast<size_t>(con)<e.connections.size(),"unknown external claim");
-    auto& claims=e.external_claims[h];if(std::find(claims.begin(),claims.end(),con)==claims.end()) claims.push_back(con);return 0;});}
+    auto& claims=e.external_claims[h];
+    if(std::find(claims.begin(),claims.end(),con)==claims.end()) {
+        claims.push_back(con);e.adjust_claim_count(con,1);
+    }
+    return 0;});}
 int nt_claim(void* p,int h,int con){return guarded([&]{auto& e=engine(p);require(con>=0 && static_cast<size_t>(con)<e.connections.size(),"unknown claim");e.claim(e.car(h),con);return 0;});}
 int nt_arrival(void* p,int h,int con,double t){return guarded([&]{auto& e=engine(p);e.car(h);check_finite(t);require(con>=0 && static_cast<size_t>(con)<e.connections.size(),"unknown arrival");e.arrivals[h]={con,t};return 0;});}
 int nt_clock(void* p,double t,double stall,double threshold){return guarded([&]{check_finite(t);check_finite(stall);check_finite(threshold);require(t>=0 && stall>=0 && threshold>=0,"invalid clock");auto& e=engine(p);e.time=t;e.stall=stall;e.threshold=threshold;return 0;});}
