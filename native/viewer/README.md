@@ -23,10 +23,20 @@ or `usr/include/panda3d/`. On macOS the official SDK headers normally reside in
 `/Library/Developer/Panda3D/include`. Set `PANDA3D_LIBRARY_DIR` when the matching
 runtime libraries live outside the installed Python `panda3d` package.
 
+Without an explicit SDK path, the loader checks `build/panda-sdk/usr/include/panda3d`
+and then the standard system SDK locations, selecting headers whose Panda
+version and Eigen setting match the loaded Python runtime. An Eigen checkout under
+`build/panda-sdk/eigen-*` is also discovered. Explicit `PANDA3D_INCLUDE_DIR`,
+`PANDA3D_SDK` and `EIGEN3_INCLUDE_DIR` settings take precedence and are not
+silently replaced by system paths. If the header version or Eigen setting differs,
+startup reports the mismatch before compiling the viewer.
+
 `CXX` selects a GCC/Clang-style C++ compiler; `PANDA3D_CXXFLAGS` adds build flags.
 The loader detects the old libstdc++ string ABI used by Linux manylinux wheels.
 SDK headers and runtime must have compatible versions and build options. The
-build helper currently supports Linux/macOS toolchains, like the native traffic
+checks cannot detect every build-option difference, so use headers from the same
+Panda distribution/build as the loaded runtime. The build helper currently
+supports Linux/macOS toolchains, like the native traffic
 build; an MSVC build configuration is not supplied.
 The instancing shader requires OpenGL 3.3. This migration was verified on Linux
 with EGL and embedded GLX windows; macOS graphics execution is not yet verified.

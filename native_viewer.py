@@ -9,6 +9,7 @@ from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -37,21 +38,56 @@ class _Stats(C.Structure):
 
 def _sdk_paths():
     import panda3d
+    from panda3d import core
     library=Path(os.environ.get('PANDA3D_LIBRARY_DIR',Path(panda3d.__file__).parent))
-    roots=[Path(os.environ['PANDA3D_SDK'])] if os.environ.get('PANDA3D_SDK') else []
-    includes=[Path(os.environ['PANDA3D_INCLUDE_DIR'])] if os.environ.get('PANDA3D_INCLUDE_DIR') else []
-    for root in roots:
-        includes.extend([root/'include',root/'include/panda3d',root/'usr/include/panda3d'])
-    includes.extend([Path('/usr/include/panda3d'),Path('/usr/local/include/panda3d'),
-                     Path('/Library/Developer/Panda3D/include')])
-    include=next((p for p in includes if (p/'nodePath.h').is_file()),None)
+    project_sdk=Path(__file__).resolve().parent/'build/panda-sdk'
+    explicit_include=os.environ.get('PANDA3D_INCLUDE_DIR')
+    explicit_sdk=os.environ.get('PANDA3D_SDK')
+    if explicit_include:
+        includes=[Path(explicit_include)]
+    elif explicit_sdk:
+        root=Path(explicit_sdk)
+        includes=[root/'include',root/'include/panda3d',root/'usr/include/panda3d']
+    else:
+        includes=[project_sdk/'usr/include/panda3d',Path('/usr/include/panda3d'),
+                  Path('/usr/local/include/panda3d'),Path('/Library/Developer/Panda3D/include')]
+    runtime_version=core.PandaSystem.get_version_string()
+    runtime_eigen=core.PandaSystem.get_global_ptr().has_system('eigen')
+    mismatches=[]
+    include=None
+    for candidate in includes:
+        if not (candidate/'nodePath.h').is_file():continue
+        version_header=candidate/'pandaVersion.h'
+        match=re.search(r'^\s*#\s*define\s+PANDA_VERSION_STR\s+"([^"]+)"',
+                        version_header.read_text() if version_header.is_file() else '',re.MULTILINE)
+        version=match.group(1) if match else 'unknown'
+        config=candidate/'dtool_config.h'
+        if not config.is_file():
+            mismatches.append(f'{candidate} (SDK {version}, missing dtool_config.h)');continue
+        sdk_eigen=bool(re.search(r'^\s*#\s*define\s+HAVE_EIGEN(?:\s|$)',
+                                 config.read_text(),re.MULTILINE))
+        if version==runtime_version and sdk_eigen==runtime_eigen:
+            include=candidate;break
+        mismatches.append(f'{candidate} (SDK {version}, Eigen {"enabled" if sdk_eigen else "disabled"})')
     if include is None:
+        if mismatches:
+            raise RuntimeError(f'Panda3D C++ SDK version or Eigen setting does not match the loaded Python runtime '
+                               f'{runtime_version} (Eigen {"enabled" if runtime_eigen else "disabled"}): '
+                               f'{", ".join(mismatches)}. '
+                               'Install a matching SDK with compatible build options and set '
+                               'PANDA3D_INCLUDE_DIR; see native/viewer/README.md.')
+        if explicit_include or explicit_sdk:
+            raise RuntimeError(f'Panda3D SDK headers not found at {explicit_include or explicit_sdk}. '
+                               'Check PANDA3D_INCLUDE_DIR or PANDA3D_SDK; see native/viewer/README.md.')
         raise RuntimeError('The native viewer requires Panda3D C++ SDK headers matching the Python runtime. '
                            'Install the Panda3D SDK and set PANDA3D_INCLUDE_DIR; see native/viewer/README.md.')
-    eigen=[Path(os.environ['EIGEN3_INCLUDE_DIR'])] if os.environ.get('EIGEN3_INCLUDE_DIR') else []
-    eigen.extend([include.parent/'eigen3',Path('/usr/include/eigen3'),Path('/usr/local/include/eigen3'),Path('/opt/homebrew/include/eigen3')])
+    if os.environ.get('EIGEN3_INCLUDE_DIR'):
+        eigen=[Path(os.environ['EIGEN3_INCLUDE_DIR'])]
+    else:
+        eigen=[include.parent/'eigen3',*sorted(project_sdk.glob('eigen-*')),
+               Path('/usr/include/eigen3'),Path('/usr/local/include/eigen3'),Path('/opt/homebrew/include/eigen3')]
     extra=next((p for p in eigen if (p/'Eigen/Core').is_file()),None)
-    if '#define HAVE_EIGEN 1' in (include/'dtool_config.h').read_text() and extra is None:
+    if sdk_eigen and extra is None:
         raise RuntimeError('This Panda3D SDK requires Eigen headers. Install eigen3 or set EIGEN3_INCLUDE_DIR.')
     return include,library,extra
 
@@ -77,7 +113,8 @@ def _library():
         if hasattr(panda,'_ZN8NodePathC1ERKSsP6Thread'):
             flags.append('-D_GLIBCXX_USE_CXX11_ABI=0')
     fingerprint=b''.join(p.read_bytes() for p in sources+headers)+str((include,library,eigen,compiler,flags)).encode()
-    fingerprint+=(include/'dtool_config.h').read_bytes()+core.PandaSystem.get_version_string().encode()
+    fingerprint+=(include/'dtool_config.h').read_bytes()+(include/'pandaVersion.h').read_bytes()
+    fingerprint+=core.PandaSystem.get_version_string().encode()
     digest=sha256(fingerprint).hexdigest()[:20]
     folder=root/'build/native-viewer';folder.mkdir(parents=True,exist_ok=True)
     target=folder/('viewer-'+digest+('.dylib' if sys.platform=='darwin' else '.so'))
