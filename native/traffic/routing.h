@@ -16,12 +16,31 @@ struct RoutingGraph {
     RoutingGraph(int n,const NTRouteEdge* rows,int count):nodes(n) {
         if(n<=0 || count<0 || (count && !rows)) throw std::invalid_argument("invalid routing graph size");
         incoming.resize(n);
+        for(int i=0;i<count;++i) add(rows[i],true);
+    }
+
+    // Keep original edge indices for path reconstruction, but only expose
+    // eligible incoming edges to Dijkstra. No policy work on a route query.
+    RoutingGraph(int n,const NTCycleEdge* rows,int count,int mode,double clearance_ft):
+        RoutingGraph(n,nullptr,0) {
+        if(count<0 || (count && !rows) || (mode!=NT_BICYCLE && mode!=NT_CARGO_BIKE) ||
+           !std::isfinite(clearance_ft) || clearance_ft<=0)
+            throw std::invalid_argument("invalid cycle graph profile");
         for(int i=0;i<count;++i) {
-            auto edge=rows[i];
-            if(edge.source<0 || edge.source>=n || edge.destination<0 || edge.destination>=n ||
-               !std::isfinite(edge.cost) || edge.cost<0) throw std::invalid_argument("invalid routing edge");
-            edges.push_back(edge);incoming[edge.destination].push_back(i);
+            const auto& row=rows[i];
+            if((row.allowed & ~(NT_BICYCLE|NT_CARGO_BIKE)) ||
+               !std::isfinite(row.clear_width_ft) || row.clear_width_ft<0)
+                throw std::invalid_argument("invalid cycle edge permission");
+            add(row.edge,(row.allowed & mode) &&
+                (mode==NT_BICYCLE || row.clear_width_ft>=clearance_ft));
         }
+    }
+private:
+    void add(const NTRouteEdge& edge,bool allowed) {
+        if(edge.source<0 || edge.source>=nodes || edge.destination<0 || edge.destination>=nodes ||
+           !std::isfinite(edge.cost) || edge.cost<0) throw std::invalid_argument("invalid routing edge");
+        if(allowed) incoming[edge.destination].push_back(static_cast<int>(edges.size()));
+        edges.push_back(edge);
     }
 };
 using RoutingGraphOwner=std::shared_ptr<const RoutingGraph>;

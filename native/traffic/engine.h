@@ -132,6 +132,10 @@ const NTTrace* nt_trace(void*, int*);
 const int* nt_trace_vehicles(void*, int*);
 struct NTRouteEdge { int source, destination; double cost; };
 void* nt_routing_graph(int, const NTRouteEdge*, int);
+// Cycle policy is per directed edge. Unknown clear width is 0 (feet).
+enum NTCycleUse { NT_BICYCLE = 1, NT_CARGO_BIKE = 2 };
+struct NTCycleEdge { NTRouteEdge edge; int allowed; double clear_width_ft; };
+void* nt_cycle_graph(int, const NTCycleEdge*, int, int, double);
 void nt_routing_graph_destroy(void*);
 void* nt_routing_tree(void*, const int*, const double*, int, const double*, int);
 void nt_routing_tree_destroy(void*);

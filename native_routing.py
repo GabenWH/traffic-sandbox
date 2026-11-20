@@ -13,12 +13,17 @@ class _Edge(C.Structure):
     _fields_=[('source',C.c_int),('destination',C.c_int),('cost',C.c_double)]
 
 
+class _CycleEdge(C.Structure):
+    _fields_ = [('edge', _Edge), ('allowed', C.c_int), ('clear_width_ft', C.c_double)]
+
+
 @lru_cache(maxsize=1)
 def _library():
     from native_traffic import _library as traffic_library
     lib=traffic_library()
     signatures={
         'nt_routing_graph':(C.c_void_p,[C.c_int,C.POINTER(_Edge),C.c_int]),
+        'nt_cycle_graph':(C.c_void_p,[C.c_int,C.POINTER(_CycleEdge),C.c_int,C.c_int,C.c_double]),
         'nt_routing_graph_destroy':(None,[C.c_void_p]),
         'nt_routing_tree':(C.c_void_p,[C.c_void_p,C.POINTER(C.c_int),C.POINTER(C.c_double),C.c_int,C.POINTER(C.c_double),C.c_int]),
         'nt_routing_tree_destroy':(None,[C.c_void_p]),
@@ -44,7 +49,10 @@ class NativeRouteGraph:
         rows=tuple(edges);self.node_count=node_count;self.edge_count=len(rows)
         self._lib=_library()
         data=np.fromiter(rows,dtype=np.dtype([('source','i4'),('destination','i4'),('cost','f8')],align=True),count=len(rows))
-        self._handle=self._lib.nt_routing_graph(node_count,data.ctypes.data_as(C.POINTER(_Edge)),len(rows))
+        self._own(self._lib.nt_routing_graph(node_count,data.ctypes.data_as(C.POINTER(_Edge)),len(rows)))
+
+    def _own(self, handle):
+        self._handle=handle
         if not self._handle:raise ValueError(self._lib.nt_error().decode())
         self._release=finalize(self,self._lib.nt_routing_graph_destroy,self._handle)
 
@@ -57,6 +65,16 @@ class NativeRouteGraph:
         ptr=self._lib.nt_routing_tree(self._handle,nodes,finals,len(nodes),weights,len(costs) if costs is not None else 0)
         if not ptr:raise ValueError(self._lib.nt_error().decode())
         return NativeRouteTree(self._lib,ptr,self.node_count)
+
+
+class NativeCycleGraph(NativeRouteGraph):
+    """Native eligibility filter with the same immutable route-tree contract."""
+    def __init__(self, node_count, rows, *, cargo, clearance_ft):
+        self.node_count, self.edge_count = node_count, len(rows)
+        self._lib = _library()
+        data = (_CycleEdge * len(rows))(*rows)
+        self._own(self._lib.nt_cycle_graph(node_count, data, len(rows),
+                                           2 if cargo else 1, clearance_ft))
 
 
 class NativeRouteTree:

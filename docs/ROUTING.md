@@ -180,3 +180,51 @@ dataset is imported by this change. Access permissions beyond pedestrian versus
 vehicle, path surfaces, stairs, wheelchair access and bicycle rules are not yet
 represented. Path junction links still use the inferred pedestrian connectors
 described above.
+
+## Explicit shared-path bicycle routing (simulation API)
+
+Walking access does **not** imply cycling access. A scenario author can grant
+permission to ride selected directed sidewalk/path segments and junction
+connectors on the current pedestrian network. The router reuses their existing
+geometry, including zero-length junction links between coincident lane ends.
+It cannot invent a crossing or join two paths merely because they touch.
+
+```python
+from cycle_routing import CycleAccess, cycle_endpoint
+
+# Two existing, connected pedestrian lanes. Mark the reverse movements
+# separately only if travel in that direction is also approved.
+a, b = (cycle_endpoint(spine_lane, end) for end in ('start', 'end'))
+c, d = (cycle_endpoint(loading_lane, end) for end in ('start', 'end'))
+shared = CycleAccess(bicycle=True, cargo=True, clear_width_ft=8)
+delivery = CycleAccess(cargo=True, clear_width_ft=6)
+router = city.pedestrian_network.cycle_router(
+    {(a, b): shared, (b, c): delivery, (c, d): delivery},
+    cargo_clearance_ft=4,
+)
+bike = router.route(a, b)               # Path(nodes, edges, cost in feet)
+cargo = router.route(a, d, cargo=True)  # uses approved delivery access
+assert router.route(a, d) is None       # ordinary bikes cannot use loading access
+```
+
+Use measured **usable** width for cargo permissions and choose the required
+envelope (bike, load and margin) for the scenario. Unknown width blocks cargo,
+even with permission. Modeled center-path widths also cap the available width;
+a street's vehicle lane widths are not its sidewalk widths. Equality is a fit.
+These are routing constraints, not evidence of safe passing or sufficient
+turning radius. Delivery-only links are for the cargo profile, not pedestrians'
+walking policy or a delivery dispatch system.
+
+Compile once per policy and **world revision**. A snapshot holds original
+geometry and caches native reverse shortest-path trees by mode/destination.
+After a road edit discard the snapshot and re-review the approvals: the same
+structural lane-end IDs may now describe different geometry. No permissions
+are saved into the city or inferred from OSM. Unknown or ambiguous approved
+edges are rejected. Unreachable, unapproved or identical endpoints return
+`None`; there is deliberately no nearest-access snap. These are lane-end route
+queries, not moving bicycle agents, rider/pedestrian yielding, parking, or
+dismount behavior. Calling this API does not alter walker, motor or bus routes.
+
+The modeled Harbor Beach regression, including a pedestrian-only beach shortcut,
+a narrow shared spine and a wider route to the market loading edge, runs with
+`python -m unittest discover -s tests -p test_cycle_routing.py`.

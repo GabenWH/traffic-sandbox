@@ -1289,6 +1289,11 @@ void* nt_routing_graph(int nodes,const NTRouteEdge* edges,int count) {
     catch(const std::exception& ex) {error=ex.what();return nullptr;}
     catch(...) {error="routing graph allocation failed";return nullptr;}
 }
+void* nt_cycle_graph(int nodes,const NTCycleEdge* edges,int count,int mode,double clearance_ft) {
+    try {error.clear();return new RoutingGraphOwner(std::make_shared<RoutingGraph>(nodes,edges,count,mode,clearance_ft));}
+    catch(const std::exception& ex) {error=ex.what();return nullptr;}
+    catch(...) {error="cycle graph allocation failed";return nullptr;}
+}
 void nt_routing_graph_destroy(void* ptr) {delete static_cast<RoutingGraphOwner*>(ptr);}
 void* nt_routing_tree(void* ptr,const int* targets,const double* finals,int count,const double* weights,int size) {
     try {error.clear();require(ptr!=nullptr,"missing routing graph");

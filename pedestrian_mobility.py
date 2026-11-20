@@ -62,9 +62,14 @@ class PackedWalkLinks(Sequence):
         return WalkLink(self.kinds[int(self.kind_codes[index])],PackedPoints._view(self.points[self.offsets[index]:self.offsets[index+1]]))
 
 
-def _node(lane, end):
+def pedestrian_lane_node(lane, end):
+    """Structural address shared by walking and cycle routing."""
+    if end not in ('start', 'end'):
+        raise ValueError("Endpoint must be a lane 'start' or 'end'")
     return ('pedestrian_lane', lane.id, end)
 
+
+_node = pedestrian_lane_node  # existing walking callers
 
 def _part(points, start, end):
     if start <= end:
@@ -78,12 +83,15 @@ class PedestrianNetwork:
         self._native = None
         self._compile_lock = Lock()
         self.lanes = []
+        self._center_path_widths = {}
         by_road = {}
         for road in roads:
             by_road[road.id] = road.pedestrian_lanes
             for lane in road.pedestrian_lanes:
                 points = lane.points
                 self.lanes.append(lane)
+                if lane.side == 'center':
+                    self._center_path_widths[lane.id] = road.width
                 a, b = _node(lane, 'start'), _node(lane, 'end')
                 self.layer.positions[a], self.layer.positions[b] = points[0], points[-1]
                 length = polyline_length(points)
@@ -105,6 +113,12 @@ class PedestrianNetwork:
                         self.layer.graph.add_edge(source, destination, dist(start,finish),
                                                   WalkLink('junction', packed_points((start,finish))))
         self.layer.pack()
+
+    def cycle_router(self, permissions, *, cargo_clearance_ft):
+        """Compile an opt-in routing snapshot over this revision's directed links."""
+        from cycle_routing import CycleRouter
+        return CycleRouter(self.layer, self._center_path_widths, permissions,
+                           cargo_clearance_ft=cargo_clearance_ft)
 
     def prepare(self):
         if not self.lanes:
